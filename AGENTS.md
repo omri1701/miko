@@ -18,7 +18,7 @@ Mobile-first English/Hebrew rota: React, TypeScript, Next.js App Router, Supabas
   never silently change models/providers or require API billing.
 - Load only relevant skills: code-change-validation for code/config or PR checks;
   scheduling-regression for scheduling behavior; security-review for access,
-  database or CI trust boundaries; feature-delivery for authorized Git delivery.
+  database or CI trust boundaries; feature-delivery for authorized Git delivery; implement-issue for "implement #N".
   Read docs/AI_DEVELOPMENT.md only for AI setup or troubleshooting.
 - Run focused local checks and add regressions for changed behavior. Expand for
   correctness, database integrity or security; diagnose failures before retrying.
