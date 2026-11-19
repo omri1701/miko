@@ -14,7 +14,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 MODELS = {"gpt-6.1-sol": {"low", "medium", "high"}, "gpt-6-luna": {"high"}}
-SKILLS = {"scheduling-regression", "code-change-validation", "security-review", "feature-delivery"}
+SKILLS = {"scheduling-regression", "code-change-validation", "security-review", "feature-delivery", "implement-issue"}
 # Claude Code expands `@path` imports into context and runs !`cmd` in skills; instruction-only PRs allow neither.
 IMPORT = re.compile(r"(?<![\w`])@[^\s`]+")
 
