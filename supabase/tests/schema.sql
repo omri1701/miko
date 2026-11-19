@@ -2,8 +2,8 @@
 DO $schema$
 DECLARE t record; f record;
 BEGIN
-  IF (SELECT count(*) FROM pg_tables WHERE schemaname='public' AND tablename LIKE 'duty_%') <> 18 THEN
-    RAISE EXCEPTION 'Expected exactly 18 application tables';
+  IF (SELECT count(*) FROM pg_tables WHERE schemaname='public' AND tablename LIKE 'duty_%') <> 19 THEN
+    RAISE EXCEPTION 'Expected exactly 19 application tables';
   END IF;
   IF (SELECT count(*) FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace
       WHERE n.nspname='duty_private' OR (n.nspname='public' AND p.proname LIKE 'duty_%')) <> 135 THEN
@@ -61,7 +61,7 @@ BEGIN
   IF EXISTS (SELECT 1 FROM public.duty_members) OR EXISTS (SELECT 1 FROM public.duty_assignments)
     OR EXISTS (SELECT 1 FROM public.duty_constraints) OR EXISTS (SELECT 1 FROM public.duty_months)
     OR EXISTS (SELECT 1 FROM public.duty_publications) OR EXISTS (SELECT 1 FROM public.duty_swap_requests)
-    OR EXISTS (SELECT 1 FROM public.duty_compensation_events) OR EXISTS (SELECT 1 FROM public.duty_allocations)
+    OR EXISTS (SELECT 1 FROM public.duty_compensation_events) OR EXISTS (SELECT 1 FROM public.duty_compensation_snapshots) OR EXISTS (SELECT 1 FROM public.duty_allocations)
     OR EXISTS (SELECT 1 FROM public.duty_notification_settings) OR EXISTS (SELECT 1 FROM public.duty_push_subscriptions)
     OR EXISTS (SELECT 1 FROM public.duty_push_notifications) OR EXISTS (SELECT 1 FROM public.duty_push_deliveries)
     OR EXISTS (SELECT 1 FROM public.duty_calendar_feeds) THEN
