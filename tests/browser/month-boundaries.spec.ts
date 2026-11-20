@@ -1,4 +1,4 @@
-import {test,expect,ids,touchEvent, switchLanguage} from './fixtures';
+import {test,expect,ids,touchEvent, switchLanguage, editConstraintDay} from './fixtures';
 import {webkit,devices} from '@playwright/test';
 import {blocks,ownerMonth} from '../../lib/rota/engine';
 
@@ -99,7 +99,7 @@ for(const iphone of [false,true])for(const split of [false,true])for(const lang 
       for(let i=0;i<13;i++)await page.getByRole('button',{name:'Next month',exact:true}).click();
       await availabilityTab.click();
       await expect(days.last()).toHaveClass(/\bno\b/);
-      await days.last().click();await expect(page.getByRole('dialog').locator('textarea')).toHaveValue('Actual Saturday');
+      await editConstraintDay(page,days.last());await expect(page.getByRole('dialog').locator('textarea')).toHaveValue('Actual Saturday');
       expect({months:backend.raw.months,assignments:backend.raw.assignments,publications:backend.raw.publications}).toEqual(schedule);
     } finally {await browser?.close();}
   });

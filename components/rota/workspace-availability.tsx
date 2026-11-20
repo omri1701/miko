@@ -1,6 +1,7 @@
+import {useRef, useState} from 'react';
 import {Lock} from 'lucide-react';
 import {MonthTitle} from './month-title';
-import {useMonthArrival} from './month-stage';
+import {useMonthArrival, type MonthStageHandle} from './month-stage';
 import {Select, SelectTrigger, SelectValue, SelectContent, SelectItem} from '@/components/ui/select';
 import {Chip} from '@/components/ui/chip';
 import {AvailabilityEditor} from '@/components/rota/availability-editor';
@@ -19,9 +20,12 @@ export function WorkspaceAvailability({state, month, monthLabel, onMonth, person
   const counts = Object.values(mine).reduce((n, kind) => ({...n, [kind]: (n[kind] ?? 0) + 1}), {} as Record<string, number>);
   // A name swipe refreshes the grid in place, blurred to sharp (owner round 4).
   const {ref: arrivalRef, mark: markArrival} = useMonthArrival<HTMLDivElement>(month);
+  // The chevrons play the grid's slide; a grid swipe changes the month itself (#94).
+  const stage = useRef<MonthStageHandle>(null), [nameArrival, setNameArrival] = useState<'roll' | 'blur'>('roll');
+  const navigate = (n: number) => {if (stage.current) stage.current.go(n); else onMonth(n);};
   return <section className="availability-screen">
     <div className="month-bar">
-      <MonthTitle month={month} label={monthLabel} t={t} onChange={onMonth} onSwipe={n => {markArrival(); onMonth(n);}}
+      <MonthTitle month={month} label={monthLabel} t={t} onChange={navigate} arrival={nameArrival} onSwipe={n => {markArrival(); onMonth(n);}}
         status={constraintsClosed ? <Chip tone="neutral" size="sm" className="month-status"><Lock/>{t('Closed', 'סגור')}</Chip> : <Chip tone="brand" size="sm" className="month-status">{t(`Due ${shortDate(deadline, lang)}`, `עד ${shortDate(deadline, lang)}`)}</Chip>}/>
       {isManager && <div className="month-actions">
         <Select value={person} onValueChange={setPerson}>
@@ -34,6 +38,6 @@ export function WorkspaceAvailability({state, month, monthLabel, onMonth, person
       <Chip tone="danger" size="sm"><i className="dot"/>{t(`${counts.no ?? 0} unavailable`, `${counts.no ?? 0} לא זמין`)}</Chip>
       <Chip tone="ok" size="sm"><i className="dot"/>{t(`${counts.prefer ?? 0} preferred`, `${counts.prefer ?? 0} מועדף`)}</Chip>
     </div>
-    <div ref={arrivalRef}><AvailabilityEditor state={state} month={month} person={person} cells={dateCells} lang={lang} disabled={constraintsClosed} onSave={saveConstraints}/></div>
+    <div ref={arrivalRef}><AvailabilityEditor state={state} month={month} person={person} cells={dateCells} lang={lang} disabled={constraintsClosed} onSave={saveConstraints} stage={stage} onMonth={(n, swiped) => {setNameArrival(swiped ? 'blur' : 'roll'); onMonth(n);}}/></div>
   </section>;
 }

@@ -1,4 +1,4 @@
-import {test, expect, duty, touchEvent, ids, NOW, switchLanguage} from './fixtures';
+import {test, expect, duty, touchEvent, ids, NOW, switchLanguage, editConstraintDay} from './fixtures';
 import type {Page} from '@playwright/test';
 
 // Tabs (decision 2026-11-06): Home · Schedule · Availability · Team.
@@ -39,11 +39,11 @@ test('mobile cells have only note dots and outside taps discard local edits', as
   const cell = (await noted.boundingBox())!, number = (await noted.locator('strong').boundingBox())!;
   expect(Math.abs(number.x + number.width / 2 - cell.x - cell.width / 2)).toBeLessThan(1);
   expect(Math.abs(number.y + number.height / 2 - cell.y - cell.height / 2)).toBeLessThan(1);
-  await noted.click();
+  await editConstraintDay(page, noted);
   await page.getByLabel('Description (optional)').fill('Unsaved edit');
   await page.mouse.click(5, 5);
   await expect(page.getByRole('dialog')).toBeHidden();
-  await noted.click();
+  await editConstraintDay(page, noted);
   await expect(page.getByLabel('Description (optional)')).toHaveValue('Synthetic vacation');
   await page.keyboard.press('Escape');
   await expect(noted).toBeFocused();
