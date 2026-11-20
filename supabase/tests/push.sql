@@ -176,6 +176,39 @@ select pg_temp.check(duty_private.push_schedule('2027-04-15 05:29Z')=0,'08:29: n
 select pg_temp.check(duty_private.push_schedule('2027-04-15 05:30Z')=1 and pg_temp.sent('3','remind_morning')=1 and pg_temp.sent('2','remind_morning')=0,'08:30: only who wants it');
 select pg_temp.check((select params from public.duty_push_notifications where member_id='76000000-0000-0000-0000-000000000003' and kind='remind_morning')
  ='{"day":"2027-04-15","role":"secondary","endDay":"2027-04-16"}','reminder params');
+-- #86: the clock reads only the days a reminder can be due. current_duties_between must
+-- return exactly the duties of the original full definition (inlined here) starting in the
+-- window: the owning month's current version, or the version holding a date whose owning month
+-- has none, never another version. Saturday belongs to Friday's month.
+savepoint ranged;
+create function pg_temp.reference(p_from date, p_to date) returns setof date language sql as $$
+ select a.day from public.duty_assignments a join public.duty_months m on m.current_publication_id=a.publication_id
+ where (m.month=duty_private.duty_owner(a.day) or not exists(select 1 from public.duty_months owner
+  where owner.month=duty_private.duty_owner(a.day) and owner.current_publication_id is not null)) and a.day between p_from and p_to$$;
+create function pg_temp.same() returns boolean language sql as $$
+ select bool_and(array(select day from duty_private.current_duties_between(d::date-1,d::date+1) order by day)
+  =array(select pg_temp.reference(d::date-1,d::date+1) order by 1))
+ from generate_series('2027-04-01'::date,'2027-05-31','1 day') d$$;
+create function pg_temp.days() returns text language sql as $$select string_agg(day::text,',' order by day) from duty_private.current_duties()$$;
+insert into public.duty_months(month,deadline) values('2027-05','2027-04-20');
+-- April's live version also holds Friday 30 April, Saturday 1 May and Monday 3 May (May has no version yet);
+-- an older April version holds 16 April.
+insert into public.duty_assignments(publication_id,day,end_day,primary_id) values
+ ('76000000-0000-0000-0000-0000000000a1','2027-04-30','2027-05-01','76000000-0000-0000-0000-000000000002'),
+ ('76000000-0000-0000-0000-0000000000a1','2027-05-01','2027-05-02','76000000-0000-0000-0000-000000000003'),
+ ('76000000-0000-0000-0000-0000000000a1','2027-05-03','2027-05-04','76000000-0000-0000-0000-000000000003'),
+ ('76000000-0000-0000-0000-0000000000a2','2027-04-16','2027-04-17','76000000-0000-0000-0000-000000000003');
+select pg_temp.check(pg_temp.same() and pg_temp.days()='2027-04-15,2027-04-20,2027-04-30,2027-05-01,2027-05-03'
+ and (select count(*) from duty_private.current_duties_between('2027-05-02','2027-05-04'))=1
+ and not exists(select 1 from duty_private.current_duties_between('2027-04-16','2027-04-16')),'ranged duties: May''s date from April''s version while May has none');
+-- Once May has its own live version, May's dates come only from it.
+insert into public.duty_publications(id,month,version,published_by) values('76000000-0000-0000-0000-0000000000b1','2027-05',1,'76000000-0000-0000-0000-000000000001');
+insert into public.duty_assignments(publication_id,day,end_day,primary_id) values
+ ('76000000-0000-0000-0000-0000000000b1','2027-05-04','2027-05-05','76000000-0000-0000-0000-000000000002');
+update public.duty_months set status='published',current_publication_id='76000000-0000-0000-0000-0000000000b1',publication_sequence=1 where month='2027-05';
+select pg_temp.check(pg_temp.same() and pg_temp.days()='2027-04-15,2027-04-20,2027-04-30,2027-05-01,2027-05-04'
+ and (select string_agg(day::text,',') from duty_private.current_duties_between('2027-05-02','2027-05-04'))='2027-05-04','ranged duties: May''s dates from May''s own version');
+rollback to savepoint ranged;
 -- A run three hours late misses the window instead of reminding late.
 select pg_temp.check(duty_private.push_schedule('2027-04-19 18:00Z')=0,'21:00 the evening before 20 April: past the 18:00 window');
 

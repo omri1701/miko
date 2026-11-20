@@ -209,6 +209,18 @@ node --test tests/push.test.mjs
 pnpm exec playwright test settings.spec.ts
 ```
 
+### Database efficiency pass (#86)
+
+Migration `20261120005236_db_efficiency.sql` is expand-only and changes no RPC, grant or
+behaviour. The push clock reads only the three days a reminder can be due
+(`duty_private.current_duties_between`, private, no client grant) instead of every current
+published duty on each 15-minute run. `duty_allocations` gets a row-id primary key (its
+`allocation_id` is shared by a draft and its publication). The redundant partial index
+`duty_swaps_pending_month` is dropped; `duty_swaps_pending_pair` serves those lookups. The
+other indexes the Supabase advisor reports as unused each back a foreign key and stay;
+`tests/schema.sql` now requires a primary key on every application table and a leading index
+on every foreign key. `tests/push.sql` checks the ranged duties against the full definition.
+
 ## Unmerged migrations in local development
 
 `pnpm start:dev` connects to hosted **DEV**; it does not apply branch migrations there.
