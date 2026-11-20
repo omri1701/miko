@@ -4,11 +4,11 @@
 // deployments, DUTY_SUPABASE_TARGET (set by the local launchers) otherwise. With neither (tests, plain
 // `next start`) the unchanged navy brand applies.
 export type BrandEnvironment = 'prod' | 'dev' | 'local';
-/** dark replaces the logo's navy (icon background), light replaces its cyan lines. */
+/** dark is the logo's navy (icon background, same in every environment); light replaces ONLY its cyan lines. */
 export const BRAND_ENVIRONMENTS: Record<BrandEnvironment, {dark: string; light: string; nameSuffix: string}> = {
   prod: {dark: '#090442', light: '#19f2f7', nameSuffix: ''},
-  dev: {dark: '#064e2b', light: '#5df2a0', nameSuffix: ' Dev'},
-  local: {dark: '#3b4048', light: '#d5d9df', nameSuffix: ' Local'},
+  dev: {dark: '#090442', light: '#3ddc84', nameSuffix: ' Dev'},
+  local: {dark: '#090442', light: '#9aa0a6', nameSuffix: ' Local'},
 };
 export function brandEnvironment(env: Record<string, string | undefined>): BrandEnvironment {
   if (env.VERCEL_ENV) return env.VERCEL_ENV === 'production' ? 'prod' : 'dev'; // Preview follows Development.
