@@ -162,7 +162,7 @@ test('concurrent mutations are rejected; a later save uses the refreshed revisio
 
 test('failed saves preserve the original RPC error and recover before unlocking', async () => {
   const f = fixture(); await f.workspace.connect(f.client, user('admin'));
-  f.responses.set('duty_rename_self', () => Promise.resolve({error: {message: 'The team data changed.', code: '40001'}}));
+  f.responses.set('duty_rename_self', () => Promise.resolve({error: {message: 'The team data changed.', code: 'PT409'}}));
   const recovery = deferred(); f.responses.set('duty_load', () => recovery.promise);
   const save = f.workspace.mutate('duty_rename_self', {p_name: 'Renamed'});
   const failed = assert.rejects(save, /The team data changed\./);

@@ -137,7 +137,7 @@ for (const failure of ['network','revision conflict','external success'] as cons
    backend.raw.members.find(m=>m.id===ids.b)!.name='External Birch';
    backend.raw.revision!++;
   }
-  await route.fulfill(failure==='external success'?{json:null}:{status:failure==='network'?503:409,json:{code:failure==='network'?'503':'40001',message:failure==='network'?'Service temporarily unavailable.':'Workspace changed. Refresh and try again.'}});
+  await route.fulfill(failure==='external success'?{json:null}:{status:failure==='network'?503:409,json:{code:failure==='network'?'503':'PT409',message:failure==='network'?'Service temporarily unavailable.':'Workspace changed. Refresh and try again.'}});
  });
  try{
   await drop(page,info.project.name==='mobile');await started.wait;

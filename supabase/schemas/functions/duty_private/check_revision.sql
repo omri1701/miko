@@ -1,3 +1,6 @@
+-- Stale-revision and other "refresh first" refusals use SQLSTATE PT409 (HTTP 409), never
+-- 40001/40P01: PostgREST re-runs a transaction that fails with a serialization or deadlock
+-- code, and a stale p_revision can never match, so the request looped forever (#86).
 CREATE FUNCTION duty_private.check_revision(p_revision bigint) RETURNS void
     LANGUAGE plpgsql SECURITY DEFINER
     SET search_path TO ''
@@ -8,7 +11,7 @@ begin
  select revision into current_revision from public.duty_workspace where id for update;
  -- Membership may have changed while waiting for the workspace lock.
  if not duty_private.is_member() then raise exception 'Your membership is not approved' using errcode='42501'; end if;
- if current_revision is distinct from p_revision then raise exception 'The team data changed. Refresh and try again.' using errcode='40001'; end if;
+ if current_revision is distinct from p_revision then raise exception 'The team data changed. Refresh and try again.' using errcode='PT409'; end if;
 end $$;
 
 
