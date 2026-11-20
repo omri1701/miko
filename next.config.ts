@@ -1,5 +1,6 @@
 import type { NextConfig } from "next";
 import { fileURLToPath } from "node:url";
+import { brandEnvironment } from "./lib/brand-environment.ts";
 import { LOCAL_PROXY_PATHS, configuredDevOrigin, configuredLocalTunnel } from "./lib/supabase/environment.ts";
 
 const devOrigin = configuredDevOrigin(process.env);
@@ -9,6 +10,8 @@ const localTunnel = configuredLocalTunnel(process.env);
 const tunnelOrigin = devOrigin ?? localTunnel?.origin;
 
 const nextConfig: NextConfig = {
+  // Logo/icon colour and installed app name per environment (issue #93), from existing variables only.
+  env: { NEXT_PUBLIC_BRAND_ENV: brandEnvironment(process.env) },
   outputFileTracingIncludes: {
     '/api/solver-spike/asset/*': ['./node_modules/highs/build/highs.mjs', './node_modules/highs/build/highs.wasm', './node_modules/highs/LICENSE'],
     '/api/scheduling/asset/*': ['./node_modules/highs/build/highs.mjs', './node_modules/highs/build/highs.wasm', './node_modules/highs/LICENSE'],
