@@ -7,7 +7,8 @@ CREATE FUNCTION duty_private.push_enqueue(p_member uuid, p_kind text, p_key text
     AS $$
 declare s public.duty_notification_settings; wanted boolean;
 begin
- if p_member is null or not exists(select 1 from public.duty_members where id=p_member and auth_user_id is not null and status='approved' and active)
+ -- Of the Viewers (#90), only Viewer-admins are notified.
+ if p_member is null or not exists(select 1 from public.duty_members m join public.duty_roles r on r.code=m.role where m.id=p_member and m.auth_user_id is not null and m.status='approved' and m.active and (not m.viewer or r.can_manage))
   or not exists(select 1 from public.duty_push_subscriptions where member_id=p_member) then return false; end if;
  select * into s from public.duty_notification_settings where member_id=p_member;
  wanted:=case

@@ -6,7 +6,7 @@ import {Checkbox} from '@/components/ui/checkbox';
 import {EditorDialog} from '@/components/rota/editor-dialog';
 import {DayCard,DayCards,DayHeading,KeepChoice,SplitJoinRow,WeekendLayoutSwitch,useWeekendLayout,type Half} from '@/components/rota/weekend-cards';
 import {Select,SelectTrigger,SelectValue,SelectContent,SelectItem} from '@/components/ui/select';
-import {addDays,blocks,noWeekendPlacements,ownerMonth,unavailable,weekendAssignments,setWeekendAssignments,weekendCounts,type State,type Duty,type Assignment} from '@/lib/rota/engine';
+import {addDays,blocks,noWeekendPlacements,takesDuties,ownerMonth,unavailable,weekendAssignments,setWeekendAssignments,weekendCounts,type State,type Duty,type Assignment} from '@/lib/rota/engine';
 
 /** Edits one duty. A weekend opens as one card with a "One weekend | Two days" switch; two days
  * edits each date like a regular day. Saving identical halves joins them (normalizeWeekends). */
@@ -52,7 +52,7 @@ export function DutyEditor({state,duty,month,lang,onClose,onMonth,onSave,onRemov
  function setLayout(next:'one'|'two'){if(next==='two')layout.split();else join()}
  function picker(label:string,aria:string,h:Half|'both',emergency=false){
   const a=get(h==='sat'?'sat':'fri'),current=emergency?a.secondary:a.primary,block=weekend?h==='both'?duty:day(h==='fri'?friday:saturday):duty;
-  return <label className="field-label">{label}<Select disabled={busy} value={current||'none'} onValueChange={v=>{const id=v==='none'?undefined:v;update(h,x=>emergency?{...x,secondary:id}:{...x,primary:id??''})}}><SelectTrigger className="picker" aria-label={aria}><SelectValue/></SelectTrigger><SelectContent><SelectItem value="none">{emergency?t('Not needed','לא נדרש'):t('Leave unassigned','ללא שיבוץ')}</SelectItem>{state.team.filter(p=>p.active||p.id===current).map(p=><SelectItem key={p.id} value={p.id}>{p.name}{unavailable(block,p.id,state.constraints).length?t(' · unavailable',' · לא זמין'):''}{skips(p.id)?t(' · no weekends',' · ללא סופי שבוע'):''}</SelectItem>)}</SelectContent></Select></label>
+  return <label className="field-label">{label}<Select disabled={busy} value={current||'none'} onValueChange={v=>{const id=v==='none'?undefined:v;update(h,x=>emergency?{...x,secondary:id}:{...x,primary:id??''})}}><SelectTrigger className="picker" aria-label={aria}><SelectValue/></SelectTrigger><SelectContent><SelectItem value="none">{emergency?t('Not needed','לא נדרש'):t('Leave unassigned','ללא שיבוץ')}</SelectItem>{state.team.filter(p=>takesDuties(p)||p.id===current).map(p=><SelectItem key={p.id} value={p.id}>{p.name}{unavailable(block,p.id,state.constraints).length?t(' · unavailable',' · לא זמין'):''}{skips(p.id)?t(' · no weekends',' · ללא סופי שבוע'):''}</SelectItem>)}</SelectContent></Select></label>
  }
  function lockButton(h:Half|'both',aria:{lock:string;unlock:string}){
   const a=get(h==='sat'?'sat':'fri'),locked=!!a.locked;

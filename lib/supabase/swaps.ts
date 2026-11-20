@@ -6,7 +6,7 @@ export function publishedSwapDuties(raw:Snapshot,month:string,today:string){
  const publication=raw.months.find(m=>m.month===month)?.current_publication_id;
  return raw.assignments.filter(a=>publication&&a.publication_id===publication&&a.day>=today&&
   (dayOf(a.day)===6?addDays(a.day,-1):a.day).slice(0,7)===month&&
-  raw.members.some(m=>m.id===a.primary_id&&m.active&&m.status==='approved')).sort((a,b)=>a.day.localeCompare(b.day));
+  raw.members.some(m=>m.id===a.primary_id&&m.active&&!m.viewer&&m.status==='approved')).sort((a,b)=>a.day.localeCompare(b.day));
 }
 
 export function eligibleSwapTarget(source:DutyRow|undefined,target:DutyRow|undefined){
@@ -89,7 +89,7 @@ export type SwapBlock=
 export function swapTargetBlock(raw:Snapshot,month:string,source:DutyRow,target:DutyRow,conflicts:SwapConflict[]):SwapBlock|null{
  const inside=(d:DutyRow,day:string)=>day>=d.day&&day<d.end_day;
  // validate_swap refuses a pair whose emergency cover left the team.
- if([source.secondary_id,target.secondary_id].some(id=>id&&!raw.members.some(m=>m.id===id&&m.active&&m.status==='approved')))return {kind:'inactive'};
+ if([source.secondary_id,target.secondary_id].some(id=>id&&!raw.members.some(m=>m.id===id&&m.active&&!m.viewer&&m.status==='approved')))return {kind:'inactive'};
  // The swap's own person first, then the other primary, then emergency cover.
  const mine=conflicts.find(c=>c.member===source.primary_id&&inside(target,c.day));
  if(mine)return {kind:'takes-target',person:mine.member!,day:mine.day};

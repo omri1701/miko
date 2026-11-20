@@ -12,7 +12,7 @@ export function CalendarSettings({remote, lang}: {remote: TeamWorkspace; lang: '
     <SectionTitle><span id="settings-calendar-title">{t('Calendar', 'לוח שנה')}</span></SectionTitle>
     <Card>
       {me && me.status === 'approved' && me.active
-        ? <CalendarSubscription lang={lang} memberId={me.id} readOnly={remote.readOnly}/>
+        ? <CalendarSubscription lang={lang} memberId={me.id} readOnly={remote.settingsReadOnly}/>
         : <p className="muted small">{t('Available once an admin approves you.', 'יהיה זמין אחרי שמנהל יאשר אותך.')}</p>}
     </Card>
   </section>;

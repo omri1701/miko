@@ -31,7 +31,7 @@ export function PublicationHistory({remote,month,open,onOpenChange,lang}:{remote
  async function confirm(){if(!action)return;try{if(action.kind==='restore')await remote.restore(action.id);else await remote.deleteVersion(action.id);setAction(null);setError('');if(action.kind==='restore')onOpenChange(false)}catch(e){setError(userMessage((e as Error).message,t))}}
  const when=(iso:string)=>new Date(iso).toLocaleString(lang==='en'?'en-GB':'he-IL',{timeZone:'Asia/Jerusalem',dateStyle:'medium',timeStyle:'short'});
  return <Sheet open={open} onOpenChange={onOpenChange} lang={lang} desktop="center" size="lg" className="history-sheet" title={t('Versions','גרסאות')} description={t('Restoring makes a draft; publish it when ready.','שחזור יוצר טיוטה; מפרסמים כשמוכנים.')}
-  footer={versions.length>0&&<div className="sheet-actions">
+  footer={versions.length>0&&!remote.viewer&&<div className="sheet-actions">
    <Button variant="secondary" disabled={remote.readOnly||remote.saving||deleteBlocked} onClick={()=>{setAction({id:viewed.id,kind:'delete'});setError('')}}>{t('Delete version','מחיקת גרסה')}</Button>
    <Button disabled={remote.readOnly||remote.saving||restoreBlocked} onClick={()=>{setAction({id:viewed.id,kind:'restore'});setError('')}}>{t('Restore as draft','שחזור כטיוטה')}</Button>
   </div>}>

@@ -26,6 +26,11 @@ CREATE TABLE public.duty_members (
     -- Set once, only by duty_private.link_temporary_member (decision 2026-11-07): the sign-up
     -- that took over this former temporary member. The row keeps its id, so no history moves.
     linked_user_id uuid,
+    -- A Viewer (decision 2026-11-20, #90) sees the schedule but never takes part: never
+    -- scheduled, no constraints, no points or debts (like an inactive member, but still
+    -- signed in). A Viewer-admin is a read-only admin: duty_private.is_overseer() reads, never
+    -- is_manager() writes. Only duty_private.set_viewer writes it.
+    viewer boolean DEFAULT false NOT NULL,
     CONSTRAINT duty_members_identity_check CHECK ((is_temporary AND email IS NULL AND role = 'engineer' AND status = 'approved') OR (NOT is_temporary AND email IS NOT NULL)),
     CONSTRAINT duty_members_link_check CHECK ((linked_user_id IS NULL OR NOT is_temporary)),
     CONSTRAINT duty_members_color_check CHECK ((color ~ '^#[0-9a-fA-F]{6}$'::text)),

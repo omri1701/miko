@@ -146,7 +146,7 @@ export function SwapCard({r,swaps,remote,lang}:{r:SwapRequest;swaps:SwapActions;
    </div>
    <Chip tone={status[1]} size="sm" className="swap-status">{status[0]}</Chip>
   </div>
-  {pending&&<div className="swap-card-actions">
+  {pending&&!remote.viewer&&<div className="swap-card-actions">
    {incoming&&<><Button size="sm" disabled={!!refused||remote.readOnly} onClick={()=>swaps.startAccept(r)}>{t('Accept','קבלה')}</Button><Button size="sm" variant="secondary" disabled={remote.readOnly} onClick={()=>swaps.decline(r)}>{t('Decline','סירוב')}</Button></>}
    {admin&&<><Button size="sm" disabled={remote.readOnly} onClick={()=>swaps.openApprove(r)}>{t('Approve','אישור')}</Button><Button size="sm" variant="secondary" disabled={remote.readOnly} onClick={()=>swaps.reject(r)}>{t('Reject','דחייה')}</Button></>}
    {swapStarter(r)===me&&<Button size="sm" variant="ghost" disabled={remote.readOnly} onClick={()=>swaps.cancel(r)}>{t('Cancel request','ביטול הבקשה')}</Button>}

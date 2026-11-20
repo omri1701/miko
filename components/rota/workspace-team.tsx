@@ -76,7 +76,7 @@ export function WorkspaceTeam({remote, state, metrics, month, monthLabel, onMont
         <SectionTitle>{t('Join requests', 'בקשות הצטרפות')}</SectionTitle>
         <Card inset>
           {pending.length ? pending.map((m) => <ListRow key={m.id} className={temporaryMembers.length > 0 ? 'membership-request can-link' : 'membership-request'} title={m.name} subtitle={m.email}
-            trail={<span className="row-buttons">
+            trail={!remote.viewer && <span className="row-buttons">
               <Button size="sm" disabled={remote.readOnly} onClick={() => remote.review(m.id, 'approved').then(() => toast.success(t('Approved', 'אושר'))).catch(fail)}>{t('Approve', 'אישור')}</Button>
               {temporaryMembers.length > 0 && <Button size="sm" variant="secondary" disabled={remote.readOnly} aria-haspopup="dialog" onClick={() => setLinking(m)}><Link2/>{t('Link to a temporary member…', 'קישור לחבר צוות זמני…')}</Button>}
               <Button size="sm" variant="ghost" disabled={remote.readOnly} onClick={() => remote.review(m.id, 'rejected').catch(fail)}>{t('Decline', 'דחייה')}</Button>
@@ -98,6 +98,11 @@ export function WorkspaceTeam({remote, state, metrics, month, monthLabel, onMont
           const locked = Object.entries(state.assignments).some(([day, a]) => a.primary === member.id && a.locked && [5, 6].includes(dayOf(day)) && drafts.includes((dayOf(day) === 6 ? addDays(day, -1) : day).slice(0, 7)));
           if (value && locked) toast.warning(t('A locked weekend is kept. Unlock it in the calendar to free it.', 'סוף שבוע נעול נשמר. אפשר לבטל את הנעילה בלוח כדי לשחרר אותו.'));
         }).catch(fail);
+      }}
+      onViewer={value => {
+        if (!member) return;
+        // Like deactivating: existing duties stay where they are until reassigned by hand.
+        remote.setViewer(member.id, value).then(() => {if (value) toast(t('Existing duties are kept for review', 'שיבוצים קיימים נשמרים לבדיקה'));}).catch(fail);
       }}
       onActive={value => {if (member) setActive(member.id, value);}}
       // An admin's colour override travels with the team rows of the checked schedule save.

@@ -52,6 +52,17 @@ assignments involving inactive members require manager review before publication
 Temporary engineers participate in the same fairness and compensation rules as
 regular engineers.
 
+**Viewers** (#90): the member sheet's **Viewer** switch (admins only) makes an approved
+member someone who sees the schedule but never takes part: never scheduled (Generate and
+Plan the month leave them out, publishing refuses them, swaps and published edits never
+pick them), no constraints, and no points or debts. It works like deactivating, except
+that they keep signing in: their scheduled duties stay where they are for the admin to
+reassign by hand. Viewers see no edit actions (hidden, not disabled) and get no
+notifications. An admin who is a Viewer is a **read-only admin**: they see what admins see
+(drafts, everyone's constraints and notes, plans, balances, approvals) but cannot edit,
+generate, publish or approve; at least one admin who is not a Viewer must remain. The
+database enforces all of it.
+
 When a temporary member later signs up, link the two instead of approving a second
 member: on their join request choose **Link to a temporary member…**, pick the member
 (inactive ones are listed separately), then confirm. Linking cannot be undone. The two
@@ -226,7 +237,7 @@ Constraints deadline, Special block, Clear board, Cancel draft); a reopened mont
 Draft / Published switch. **Availability** is the grid with a due chip and, for admins, the
 member picker. **Team** shows this month's coverage, the ordered team (hold the grip to
 reorder, Up/Down on the keyboard), points and the live net balance; a tap opens the member
-sheet (points, balance, and for admins role, No weekends, Active and colour), a swipe on a
+sheet (points, balance, and for admins role, No weekends, Viewer, Active and colour), a swipe on a
 row reveals Deactivate / Activate (works with a mouse too; a long swipe triggers it), and
 deactivated members slide into a collapsed Inactive group. Join requests stay in Team.
 **Plan the month** keeps the pie and the − / + counters, larger and animated. **Settings**:

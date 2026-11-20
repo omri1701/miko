@@ -57,5 +57,5 @@ begin
  end loop;
  -- Most recent first; only engineers who can still take the duty.
  return coalesce((select jsonb_agg(v order by n desc) from jsonb_array_elements_text(chain) with ordinality o(v,n)
-  where exists(select 1 from public.duty_members where id::text=v and active and status='approved')),'[]');
+  where exists(select 1 from public.duty_members where id::text=v and active and status='approved' and not viewer)),'[]');
 end $$;
