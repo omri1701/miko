@@ -22,6 +22,16 @@ async function expectBlocked(page: Page, day: string, reason: string) {
   await expect(cell).toHaveAccessibleName(new RegExp(reason.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '$'));
   await expect(cell).not.toHaveClass(/drag-target/);
 }
+// #92: red, still pickable, and says who marked which date (never the note).
+async function expectRed(page: Page, day: string, reason: string) {
+  const cell = duty(page, day);
+  await expect(cell).toHaveClass(/swap-constrained/);
+  await expect(cell).toHaveAttribute('data-swap-state', 'constrained');
+  await expect(cell).not.toHaveClass(/swap-blocked/);
+  await expect(cell).not.toHaveAttribute('aria-disabled', 'true');
+  await expect(cell).toHaveAttribute('title', reason);
+  await expect(cell).toHaveAccessibleName(new RegExp(reason.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '$'));
+}
 async function expectGreen(page: Page, day: string) {
   await expect(duty(page, day)).toHaveClass(/drag-target/);
   await expect(duty(page, day)).not.toHaveClass(/swap-blocked/);
@@ -39,53 +49,57 @@ async function hold(page: Page, from: string, to: string, touch: boolean) {
 }
 
 for (const lang of ['en', 'he'] as const) {
-  test(`engineer: "you can't" and "they can't" days are greyed with a reason ${lang}`, async ({page, openApp, backend}) => {
+  // #92: a date a primary marked unavailable is red but stays pickable; emergency cover's stays grey.
+  test(`engineer: "you marked" and "they marked" days are red and pickable; cover stays grey ${lang}`, async ({page, openApp, backend}) => {
     const t = say(lang);
-    // Alex is unavailable on 5 Nov (Drew's day); Blair on 2 Nov (Alex's own day).
+    // Alex is unavailable on 5 Nov (Drew's day); Blair on 2 Nov (Alex's own day); cover Eden on 10 Nov.
     backend.raw.constraints.push({member_id: ids.a, day: '2026-11-05', kind: 'no', note: 'Alex private note'},
-      {member_id: ids.b, day: '2026-11-02', kind: 'no', note: 'Blair private note'});
+      {member_id: ids.b, day: '2026-11-02', kind: 'no', note: 'Blair private note'},
+      {member_id: ids.e, day: '2026-11-10', kind: 'no', note: 'Cover private note'});
+    backend.raw.assignments.find(d => d.day === '2026-11-10' && d.publication_id)!.secondary_id = ids.e;
     await openApp('a'); await language(page, lang);
     await startSwap(page, '2026-11-02');
     await targetReady(page, '2026-11-05');
-    await expectBlocked(page, '2026-11-05', t('You can’t take 5 Nov', 'אין לך אפשרות לקחת את 5 בנוב׳'));
-    await expectBlocked(page, '2026-11-03', t('Blair Birch can’t take your day', 'לBlair Birch אין אפשרות לקחת את הכוננות שלך'));
+    await expectRed(page, '2026-11-05', t('You marked 5 Nov as unavailable', 'סימנת את 5 בנוב׳ כלא זמין'));
+    await expectRed(page, '2026-11-03', t('Blair Birch marked 2 Nov as unavailable', 'Blair Birch סימן/ה את 2 בנוב׳ כלא זמין'));
+    await expectBlocked(page, '2026-11-10', t('Emergency cover can’t take 10 Nov', 'לכונן החירום אין אפשרות ב־10 בנוב׳'));
     await expectGreen(page, '2026-11-12');
     await expect(page.locator('#published-swap-help')).toHaveText(t('Choose the duty to swap with. Greyed days say why. Escape cancels.', 'בחרו את הכוננות להחלפה. ימים אפורים מסבירים למה. Escape לביטול.'));
-    // Keyboard: Space on a greyed day explains; a green day opens the request.
+    await expectTapHint(page, '2026-11-10', t('Emergency cover can’t take 10 Nov', 'לכונן החירום אין אפשרות ב־10 בנוב׳'));
+    // Keyboard: Space on a red day opens the request, which names the dates and can be sent.
     await duty(page, '2026-11-05').focus(); await page.keyboard.press('Space');
-    await expect(page.locator('[data-sonner-toast]').filter({hasText: t('You can’t take 5 Nov', 'אין לך אפשרות לקחת את 5 בנוב׳')})).toBeVisible();
-    await expect(page.getByRole('dialog')).toHaveCount(0);
-    await expectTapHint(page, '2026-11-03', t('Blair Birch can’t take your day', 'לBlair Birch אין אפשרות לקחת את הכוננות שלך'));
-    // Private notes are never shown.
-    for (const note of ['Synthetic vacation', 'Alex private note', 'Blair private note']) await expect(page.locator('body')).not.toContainText(note);
-    await duty(page, '2026-11-12').click();
-    await expect(page.getByRole('dialog', {name: t('Ask to swap', 'בקשת החלפה')})).toBeVisible();
+    const dialog = page.getByRole('dialog', {name: t('Ask to swap', 'בקשת החלפה')});
+    await expect(dialog.getByRole('note').filter({hasText: t('You marked 5 Nov as unavailable', 'סימנת את 5 בנוב׳ כלא זמין')})).toBeVisible();
+    await expect(dialog.getByRole('alert')).toHaveCount(0);
     await expect(page.getByRole('button', {name: t('Confirm Request', 'אישור בקשה'), exact: true})).toBeEnabled();
-    expect(backend.calls.filter(c => c.name === 'duty_request_swap')).toHaveLength(0);
+    // Private notes are never shown.
+    for (const note of ['Synthetic vacation', 'Alex private note', 'Blair private note', 'Cover private note']) await expect(page.locator('body')).not.toContainText(note);
+    await page.getByRole('button', {name: t('Confirm Request', 'אישור בקשה'), exact: true}).click();
+    await expect(dialog).toBeHidden();
+    expect(backend.raw.swapRequests![0]).toMatchObject({requester_id: ids.a, to_day: '2026-11-05', requester_waived_days: ['2026-11-05'], status: 'awaiting_engineer'});
+    expect(backend.raw.constraints.some(c => c.member_id === ids.a && c.day === '2026-11-05')).toBe(true);
   });
 
-  test(`admin swapping two others reads names, by the editor button or by dragging ${lang}`, async ({page, openApp, backend}, info) => {
+  test(`admin swapping two others reads names on red days, by the editor button or by dragging ${lang}`, async ({page, openApp, backend}, info) => {
     const t = say(lang);
     backend.raw.months[0].status = 'published';
-    // Blair can't take 5 Nov (Drew's); Casey can't take Blair's 3 Nov.
+    // Blair marked 5 Nov (Drew's) unavailable; Casey marked Blair's 3 Nov.
     backend.raw.constraints.push({member_id: ids.b, day: '2026-11-05', kind: 'no', note: 'Admin-only note'},
       {member_id: ids.c, day: '2026-11-03', kind: 'no', note: 'Another note'});
     await openApp('admin'); await language(page, lang);
     await (await openDutySheet(page, '2026-11-03')).getByRole('button', {name: t('Edit', 'עריכה'), exact: true}).click();
     await page.getByRole('dialog', {name: t('Edit duty', 'עריכת כוננות')}).getByRole('button', {name: t('Swap with another duty…', 'החלפה עם כוננות אחרת…'), exact: true}).click();
     await expect(duty(page, '2026-11-03')).toHaveAttribute('aria-pressed', 'true');
-    await expectBlocked(page, '2026-11-05', t('Blair Birch can’t take 5 Nov', 'לBlair Birch אין אפשרות לקחת את 5 בנוב׳'));
-    await expectBlocked(page, '2026-11-04', t('Casey Cedar can’t take Blair Birch’s day', 'לCasey Cedar אין אפשרות לקחת את הכוננות של Blair Birch'));
+    await targetReady(page, '2026-11-05');
+    await expectRed(page, '2026-11-05', t('Blair Birch marked 5 Nov as unavailable', 'Blair Birch סימן/ה את 5 בנוב׳ כלא זמין'));
+    await expectRed(page, '2026-11-04', t('Casey Cedar marked 3 Nov as unavailable', 'Casey Cedar סימן/ה את 3 בנוב׳ כלא זמין'));
     await expectGreen(page, '2026-11-09');
-    await expectTapHint(page, '2026-11-05', t('Blair Birch can’t take 5 Nov', 'לBlair Birch אין אפשרות לקחת את 5 בנוב׳'));
     await expect(page.locator('body')).not.toContainText('Admin-only note');
     await page.keyboard.press('Escape');
-    // Dropping on a greyed day explains instead of opening a proposal.
+    // Dropping on a red day opens the proposal, which can still be sent.
     await hold(page, '2026-11-03', '2026-11-04', info.project.name === 'mobile');
-    await expect(page.locator('[data-sonner-toast]').filter({hasText: t('Casey Cedar can’t take Blair Birch’s day', 'לCasey Cedar אין אפשרות לקחת את הכוננות של Blair Birch')})).toBeVisible();
-    await expect(page.getByRole('dialog')).toHaveCount(0);
-    await hold(page, '2026-11-03', '2026-11-09', info.project.name === 'mobile');
     await expect(page.getByRole('dialog', {name: t('Propose swap', 'הצעת החלפה')})).toBeVisible();
+    await expect(page.getByRole('dialog').getByRole('note').filter({hasText: t('Casey Cedar marked 3 Nov as unavailable', 'Casey Cedar סימן/ה את 3 בנוב׳ כלא זמין')})).toBeVisible();
     await expect(page.getByRole('button', {name: t('Send to both', 'שליחה לשניהם'), exact: true})).toBeEnabled();
   });
 
@@ -107,7 +121,9 @@ for (const lang of ['en', 'he'] as const) {
 }
 
 test('a greyed day is grey once: nothing is green or selectable while checking, and a refetch keeps it grey', async ({page, openApp, backend}) => {
-  backend.raw.constraints.push({member_id: ids.a, day: '2026-11-05', kind: 'no', note: ''});
+  // Emergency cover's unavailability still greys (a party's own is red since #92).
+  backend.raw.constraints.push({member_id: ids.e, day: '2026-11-05', kind: 'no', note: ''});
+  backend.raw.assignments.find(d => d.day === '2026-11-05' && d.publication_id)!.secondary_id = ids.e;
   let release!: () => void;
   backend.availabilityGate = new Promise(r => {release = r;});
   // Controlled timers drive the 30-second team refresh that rechecks the targets.

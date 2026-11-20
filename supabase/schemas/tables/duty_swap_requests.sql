@@ -21,6 +21,8 @@ CREATE TABLE public.duty_swap_requests (
     accepted_at timestamp with time zone,
     proposed_by uuid,
     requester_accepted_at timestamp with time zone,
+    requester_waived_days date[] DEFAULT '{}'::date[] NOT NULL,
+    other_waived_days date[] DEFAULT '{}'::date[] NOT NULL,
     CONSTRAINT duty_swap_requests_check CHECK ((requester_id <> other_id)),
     CONSTRAINT duty_swap_requests_check1 CHECK ((from_day <> to_day)),
     CONSTRAINT duty_swap_requests_explanation_check CHECK ((length(explanation) <= 1000)),

@@ -20,8 +20,11 @@ begin
  if a.publication_id is null or b.publication_id is distinct from a.publication_id then raise exception 'Choose duties in the same current publication'; end if;
  perform duty_private.validate_swap(a.id,b.id,a.publication_id,false);
  select month into m from public.duty_months where current_publication_id=a.publication_id;
- insert into public.duty_swap_requests(month,source_publication_id,from_duty_id,to_duty_id,requester_id,other_id,from_day,from_end_day,to_day,to_end_day,explanation,proposed_by)
+ insert into public.duty_swap_requests(month,source_publication_id,from_duty_id,to_duty_id,requester_id,other_id,from_day,from_end_day,to_day,to_end_day,explanation,proposed_by,requester_waived_days)
  values(m,a.publication_id,a.id,b.id,a.primary_id,b.primary_id,a.day,a.end_day,b.day,b.end_day,trim(coalesce(p_explanation,'')),
-  case when a.primary_id<>me then me end);
+  case when a.primary_id<>me then me end,
+  -- Sending is the requester's consent (#92): it waives their own constraints on the duty they
+  -- take, as they stand now. An admin's proposal waits for the requester's own Accept.
+  case when a.primary_id=me then coalesce((select array_agg(c.day order by c.day) from public.duty_constraints c where c.kind='no' and c.member_id=a.primary_id and c.day>=b.day and c.day<b.end_day),'{}') else '{}' end);
  update public.duty_workspace set revision=revision+1 where id;
 end $$;

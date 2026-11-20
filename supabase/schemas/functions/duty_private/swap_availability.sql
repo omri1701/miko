@@ -22,7 +22,8 @@ begin
    raise exception 'Choose duties starting today or later';
   end if;
  end if;
- -- Exactly the conflicts validate_swap refuses: which date, never the note. Members
+ -- Every unavailability the swap meets: which date, never the note. A primary's own can be
+ -- waived by their consent (#92); emergency cover's needs an admin override. Members
  -- learn the two primaries by name; emergency cover stays anonymous to them.
  return coalesce((select jsonb_agg(jsonb_build_object('member',case when admin or c.member_id in (a.primary_id,b.primary_id) then c.member_id end,'day',c.day) order by c.day,c.member_id)
   from public.duty_constraints c where c.kind='no' and

@@ -72,14 +72,15 @@ for (const lang of ['en', 'he'] as const) test(`streak bars and locked holiday m
 });
 
 // Decision 2026-11-05: a day the server would refuse is greyed before the pick; usable days stay green.
+// #92: a date a primary marked unavailable is red instead, and stays pickable.
 for (const lang of ['en', 'he'] as const) test(`swap target hints ${lang}`, async ({page, openApp, backend}) => {
   backend.raw.constraints.push({member_id: ids.b, day: '2026-11-09', kind: 'no', note: 'Synthetic private note'});
   await openApp('a');
   if (lang === 'he') await switchLanguage(page, 'he');
   await schedule(page, lang);
   await pickSwap(page, '2026-11-09', '2026-11-05', lang);
-  await expect(duty(page, '2026-11-04')).toHaveClass(/swap-blocked/);
-  await expect(duty(page, '2026-11-03')).toHaveClass(/swap-blocked/);
+  await expect(duty(page, '2026-11-04')).toHaveClass(/swap-constrained/);
+  await expect(duty(page, '2026-11-03')).toHaveClass(/swap-constrained/);
   await expect(duty(page, '2026-11-05')).toHaveClass(/drag-target/);
   await snapshot(page, `swap-target-hints-${lang}`);
 });

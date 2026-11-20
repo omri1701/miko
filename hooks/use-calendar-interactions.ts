@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { useHoldDrag } from '@/hooks/use-hold-drag';
 import { useMobileLayout } from '@/hooks/use-mobile-layout';
-import { publishedSwapDuties, eligibleSwapTarget, swapTargetBlock, swapBlockText, type SwapBlock, type SwapConflict } from '@/lib/supabase/swaps';
+import { publishedSwapDuties, eligibleSwapTarget, swapTargetBlock, swapBlockText, swapTargetWarning, swapWarningText, type SwapBlock, type SwapConflict } from '@/lib/supabase/swaps';
 import { ownerMonth, swapDraft, type State, type Duty } from '@/lib/rota/engine';
 import { shortDate } from '@/lib/date-format';
 import type { TeamWorkspace } from '@/hooks/use-team-workspace';
@@ -85,10 +85,17 @@ export function useCalendarInteractions({
   };
   function blockText(block: SwapBlock, from: string) {
     const members = remote.snapshot!.members;
-    return swapBlockText(block, { me: meId, lang, sourceOwner: publishedDuty(from)?.primary_id ?? null,
-      name: (id) => members.find((m) => m.id === id)?.name ?? (lang === 'he' ? 'חבר צוות' : 'A team member'),
-      day: (d) => shortDate(d, lang) });
+    return swapBlockText(block, { me: meId, lang, name: (id) => memberName(members, id), day: (d) => shortDate(d, lang) });
   }
+  const memberName = (members: { id: string; name: string }[], id: string) =>
+    members.find((m) => m.id === id)?.name ?? (lang === 'he' ? 'חבר צוות' : 'A team member');
+  /** Red but still pickable (#92): a primary marked one of the target's dates unavailable. Shown
+   * only for a target the server accepts; their consent waives it, the constraint stays. */
+  const swapWarning = (from: string, to: string) => {
+    if (swapBlock(from, to) !== null) return null;
+    const warning = swapTargetWarning(publishedDuty(from)!, publishedDuty(to)!, conflicts(publishedDuty(to)!.id) ?? []);
+    return warning && swapWarningText(warning, { me: meId, lang, name: (id) => memberName(remote.snapshot!.members, id), day: (d) => shortDate(d, lang) });
+  };
   /** The reason a target is greyed, for its tooltip and accessible name. */
   const swapHint = (from: string, to: string) => {
     const block = swapBlock(from, to);
@@ -233,6 +240,7 @@ export function useCalendarInteractions({
     requestTarget,
     swapBlock,
     swapHint,
+    swapWarning,
     dragContainer,
     ignoreDragClick,
     selectCalendarDuty,
