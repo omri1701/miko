@@ -211,7 +211,7 @@ pnpm exec playwright test settings.spec.ts
 
 ### Database efficiency pass (#86)
 
-Migration `20261120005236_db_efficiency.sql` is expand-only and changes no RPC, grant or
+Migration `20261120085509_db_efficiency.sql` is expand-only and changes no RPC, grant or
 behaviour. The push clock reads only the three days a reminder can be due
 (`duty_private.current_duties_between`, private, no client grant) instead of every current
 published duty on each 15-minute run. `duty_allocations` gets a row-id primary key (its
