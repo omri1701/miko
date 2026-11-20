@@ -122,8 +122,9 @@ export const MonthStage = forwardRef<MonthStageHandle, {month: string; rtl: bool
       onPointerDown={e => {
         if (busy.current || !e.isPrimary || e.button !== 0) return;
         const target = e.target as HTMLElement, touch = e.pointerType === 'touch';
-        // A mouse press on a duty that can be dragged belongs to the duty drag.
-        if (!touch && target.closest('.can-swap,button:not(.day-cell),a,input,select')) return;
+        // A mouse press on a duty that can be dragged belongs to the duty drag, and on a Constraints
+        // day to its range selection.
+        if (!touch && target.closest('.can-swap,.availability-day[data-gesture-key],button:not(.day-cell),a,input,select')) return;
         g.current = {id: e.pointerId, x: e.clientX, y: e.clientY, t: performance.now(), live: false, touch, dx: 0};
       }}
       onPointerMove={e => {

@@ -48,12 +48,12 @@ for(const iphone of [false,true])for(const split of [false,true])for(const lang 
       await expect(grid.locator('[data-date="2028-01-01"]')).toHaveCount(0);
       await availabilityTab.click();
       const days=page.locator('.availability-day');
-      await expect(days.first().locator('strong')).toHaveText('2');
+      await expect(days.first().locator('.day-number')).toHaveText('2');
       await expect(days).toHaveCount(35);
       await nav.first().click();
       await expect(days).toHaveCount(35);
       const saturday=days.last(),friday=days.nth(33);
-      await expect(saturday.locator('strong')).toHaveText('1');
+      await expect(saturday.locator('.day-number')).toHaveText('1');
       await expect(saturday).toBeEnabled();
       await expect(saturday).toHaveAttribute('data-gesture-key','2028-01-01');
       await expect(days.first()).toBeDisabled();

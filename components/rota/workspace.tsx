@@ -292,6 +292,10 @@ export function RotaWorkspace({remote, lang, setLang}: {remote: TeamWorkspace; l
     return <WorkspaceCalendar preview state={state} calendarState={s} calendarBlocks={visibleCalendarBlocks(s, m)} dateCells={calendarDates(m)} today={today} month={m} lang={lang} t={t} fmt={fmt}
       nickname={nickname} meId={meId} readOnly={remote.readOnly} requesting={!draftView} interactions={interactions} onSelect={() => {}} selectedDay={null}/>;
   };
+  // Constraints copies the Schedule calendar's layout from this (#95 rule 4): the shown month as the
+  // Schedule tab draws it, a neighbour as its peek does.
+  const scheduleFor = (m: string) => m !== month ? neighbour(m) : <WorkspaceCalendar preview state={state} calendarState={calendarState} calendarBlocks={calendarBlocks} dateCells={dateCells} today={today} month={month} lang={lang} t={t} fmt={fmt}
+    nickname={nickname} meId={meId} readOnly={remote.readOnly} requesting={requesting} interactions={interactions} onSelect={() => {}} selectedDay={null}/>;
   const swaps = useSwapActions(remote, lang);
   const notices: ReactNode = <>
     {isManager && viewingDraft && generationClosed && monthDetails.status === 'draft' && <p className="note-line">{closedReason}</p>}
@@ -344,7 +348,7 @@ export function RotaWorkspace({remote, lang, setLang}: {remote: TeamWorkspace; l
           </TabsContent>
           <TabsContent value="availability">
             <WorkspaceAvailability state={state} month={month} monthLabel={monthLabel} onMonth={changeMonth} person={person} setPerson={setPerson} dateCells={dateCells} lang={lang} isManager={isManager} meId={meId}
-              constraintsClosed={constraintsClosed || remote.readOnly} deadline={monthDetails.deadline} t={t} saveConstraints={saveConstraints}/>
+              constraintsClosed={constraintsClosed || remote.readOnly} deadline={monthDetails.deadline} t={t} saveConstraints={saveConstraints} schedule={scheduleFor}/>
           </TabsContent>
           <TabsContent value="team">
             <WorkspaceTeam remote={remote} state={state} metrics={metrics} month={month} monthLabel={monthLabel} onMonth={changeMonth} meId={meId} isManager={isManager} lang={lang} t={t} update={update}/>

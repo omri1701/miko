@@ -152,3 +152,57 @@ test('#95 rule 3: an admin still reads an engineer’s note, as today', async ({
   if (info.project.name === 'mobile') await expect(page.getByRole('dialog').locator('.constraint-note-full')).toHaveText('Synthetic vacation');
   else await expect(page.getByRole('dialog').getByRole('textbox')).toHaveValue('Synthetic vacation');
 });
+
+type Box = {x: number; y: number; width: number; height: number};
+const boxes = (page: Page, selector: string) => page.locator(selector).evaluateAll(els => els.map(e => {
+  const r = e.getBoundingClientRect();
+  return {date: (e as HTMLElement).dataset.date!, combined: e.classList.contains('combined-weekend'), box: {x: r.x, y: r.y, width: r.width, height: r.height}};
+}));
+const near = (a: Box, b: Box, label: string) => {for (const k of ['x', 'y', 'width', 'height'] as const) expect(Math.abs(a[k] - b[k]), `${label} ${k}`).toBeLessThanOrEqual(.5);};
+
+for (const lang of ['en', 'he'] as const) for (const who of ['a', 'admin'] as const) test(`#95 rule 4: every day box sits exactly where Schedule draws it, ${who} ${lang}`, async ({page, openApp}) => {
+  const he = lang === 'he';
+  await openApp(who);
+  if (he) await switchLanguage(page, 'he');
+  await page.getByRole('tab', {name: he ? 'לוח' : 'Schedule', exact: true}).click();
+  await expect(page.locator('.month-pane .calendar-grid').first()).toBeVisible();
+  const schedule = await boxes(page, '.month-pane:not(.month-peek) .calendar-grid > button[data-date]');
+  await page.getByRole('tab', {name: tabName(he), exact: true}).click();
+  await expect(page.locator('.availability-grid')).toBeVisible();
+  const constraints = new Map((await boxes(page, '.month-pane:not(.month-peek) .availability-grid > button[data-date]')).map(c => [c.date, c.box]));
+  expect(schedule.length).toBeGreaterThan(20);
+  for (const cell of schedule) {
+    const own = constraints.get(cell.date)!;
+    if (!cell.combined) {near(own, cell.box, cell.date); continue;}
+    // A combined Friday–Saturday duty is one box over the two day boxes.
+    const saturday = constraints.get(new Date(Date.parse(cell.date + 'T12:00:00Z') + 864e5).toISOString().slice(0, 10))!;
+    const left = Math.min(own.x, saturday.x), right = Math.max(own.x + own.width, saturday.x + saturday.width);
+    near({x: left, y: own.y, width: right - left, height: own.height}, cell.box, cell.date);
+    expect(Math.abs(saturday.y - own.y)).toBeLessThanOrEqual(.5);
+  }
+});
+
+test('#95 rule 5: the counts cover only the shown month and follow the month change', async ({page, openApp, backend}, info) => {
+  backend.raw.months.push({month: '2026-12', deadline: '2026-11-24', status: 'draft', generated: false, current_publication_id: null, publication_sequence: 0});
+  backend.raw.constraints.push(
+    {member_id: ids.a, day: '2026-11-20', kind: 'prefer', note: ''},
+    {member_id: ids.a, day: '2026-12-03', kind: 'no', note: ''}, {member_id: ids.a, day: '2026-12-15', kind: 'no', note: ''},
+    {member_id: ids.a, day: '2026-11-30', kind: 'no', note: ''});
+  await openConstraints(page, openApp, false);
+  const summary = page.locator('.availability-summary');
+  await expect(summary).toContainText('2 unavailable');
+  await expect(summary).toContainText('1 preferred');
+  await page.getByRole('button', {name: 'Next month', exact: true}).click();
+  await expect(heading(page)).toHaveText('December 2026');
+  // 30 November shows in December's first week but belongs to November.
+  await expect(summary).toContainText('2 unavailable');
+  await expect(summary).toContainText('0 preferred');
+  if (info.project.name !== 'mobile') return;
+  const grid = (await page.locator('.constraint-editor .month-stage').boundingBox())!;
+  const g = await press(page, grid.x + grid.width / 2, grid.y + 30, true);
+  await g.move(grid.width * .6);
+  await g.end();
+  await expect(heading(page)).toHaveText('November 2026');
+  await expect(summary).toContainText('2 unavailable');
+  await expect(summary).toContainText('1 preferred');
+});

@@ -224,8 +224,11 @@ with a slide, and Escape cancels a pick. Admins get one state-driven primary act
 (**Plan the month → Review plan / Publish → Reopen**) and a ⋯ menu (Plan the month, Versions,
 Constraints deadline, Special block, Clear board, Cancel draft); a reopened month adds a
 Draft / Published switch. **Availability** is the grid with a due chip and, for admins, the
-member picker; its grid swipes between months like the calendar (the chevrons slide it too),
-and on PC it fills the content width with day cells sized to the window so notes read. **Team** shows this month's coverage, the ordered team (hold the grip to
+member picker. Its grid is the Schedule calendar's own surface: the same panel, weekday row,
+columns and row heights (copied from that month's Schedule calendar, rendered hidden
+underneath), so switching tabs leaves every day box in place on PC and phones; notes show in
+the cells on PC. It swipes between months like the calendar (the chevrons slide it too). The
+Unavailable / Preferred counts sit under the grid and count only the shown month's days. **Team** shows this month's coverage, the ordered team (hold the grip to
 reorder, Up/Down on the keyboard), points and the live net balance; a tap opens the member
 sheet (points, balance, and for admins role, No weekends, Active and colour), a swipe on a
 row reveals Deactivate / Activate (works with a mouse too; a long swipe triggers it), and

@@ -1,5 +1,5 @@
 'use client';
-import {useLayoutEffect,useRef,useState,type Ref} from 'react';
+import {useLayoutEffect,useRef,useState,type CSSProperties,type ReactNode,type Ref} from 'react';
 import {Pencil,Trash2} from 'lucide-react';
 import {EditorDialog} from '@/components/rota/editor-dialog';
 import {useMobileLayout} from '@/hooks/use-mobile-layout';
@@ -10,16 +10,42 @@ import {useHoldDrag} from '@/hooks/use-hold-drag';
 import {dates,addDays,type State} from '@/lib/rota/engine';
 import {calendarDates,calendarOwnerMonth} from '@/lib/rota/calendar-dates';
 import {MonthStage,type MonthStageHandle} from '@/components/rota/month-stage';
+import {CalendarSurface} from '@/components/rota/calendar-presentation';
 type EditKind='no'|'prefer'|'clear';
-/** One month of day cells. The neighbour month (`preview`) is the same grid, read-only, while it slides in. */
-function AvailabilityGrid({state,month,person,cells,lang,disabled,selection=[],preview=false,bind,onTap}:{state:State;month:string;person:string;cells:string[];lang:'en'|'he';disabled:boolean;selection?:string[];preview?:boolean;bind?:Ref<HTMLDivElement>;onTap?:(d:string)=>void}){
+/** One month of day cells on the Schedule calendar's own surface (#95): the same panel, weekday
+ * row, columns and borders, and the row heights of that month's Schedule calendar (`schedule`,
+ * rendered hidden underneath and measured), so switching tabs leaves every day box in place. The
+ * neighbour month (`preview`) is the same grid, read-only, while it slides in. */
+function AvailabilityGrid({state,month,person,cells,lang,disabled,mobile,schedule,selection=[],preview=false,bind,onTap}:{state:State;month:string;person:string;cells:string[];lang:'en'|'he';disabled:boolean;mobile:boolean;schedule?:ReactNode;selection?:string[];preview?:boolean;bind?:Ref<HTMLDivElement>;onTap?:(d:string)=>void}){
  const t=(a:string,b:string)=>lang==='en'?a:b;
- return <div ref={bind} className={`availability-grid${preview?'':' gesture-grid'}`}>{cells.map(d=>{const status=state.constraints[person]?.[d],outside=calendarOwnerMonth(d)!==month,selected=selection.includes(d),n=state.constraintNotes?.[person]?.[d],label=status==='no'?t('Unavailable','לא זמין'):status==='prefer'?t('Preferred','מועדף'):t('Available','זמין');return <button key={d} type="button" data-date={d} data-gesture-key={!outside&&!preview?d:undefined} disabled={disabled||outside} tabIndex={preview?-1:undefined} onClick={onTap&&(()=>onTap(d))} aria-pressed={selected} aria-label={`${shortDate(d,lang)} · ${label}${n?' · '+n:''}`} className={['availability-day',outside?'outside':'',status??'',selected?'date-selected':''].join(' ')}><span className="availability-weekday">{new Date(d+'T12:00:00Z').toLocaleDateString(lang==='en'?'en-GB':'he-IL',{weekday:'short'})}</span><strong>{Number(d.slice(-2))}</strong>{n?.trim()&&<span className="mobile-note-dot" aria-hidden="true"/>}<span className="availability-description">{n||''}</span></button>})}</div>;
+ const ghost=useRef<HTMLDivElement>(null),[rows,setRows]=useState('');
+ useLayoutEffect(()=>{
+  const grid=ghost.current?.querySelector<HTMLElement>('.calendar-grid');
+  if(!grid){setRows('');return}
+  const read=()=>setRows(getComputedStyle(grid).gridTemplateRows);
+  read();
+  const observer=new ResizeObserver(read);observer.observe(grid);
+  return()=>observer.disconnect();
+ },[schedule]);
+ return <div className="availability-layers" style={rows?{'--schedule-rows':rows} as CSSProperties:undefined}>
+  {schedule&&<div ref={ghost} className="schedule-ghost" aria-hidden="true" inert>{schedule}</div>}
+  <CalendarSurface lang={lang} dir={mobile&&lang==='he'?'rtl':'ltr'} gridRef={bind} gridClassName={`availability-grid${preview?'':' gesture-grid'}`}>{cells.map(d=>{
+   const outside=calendarOwnerMonth(d)!==month,status=outside?undefined:state.constraints[person]?.[d],selected=selection.includes(d),n=outside?undefined:state.constraintNotes?.[person]?.[d];
+   const label=status==='no'?t('Unavailable','לא זמין'):status==='prefer'?t('Preferred','מועדף'):t('Available','זמין');
+   return <button key={d} type="button" data-date={d} data-gesture-key={!outside&&!preview?d:undefined} disabled={disabled||outside} tabIndex={preview||outside?-1:undefined} onClick={onTap&&(()=>onTap(d))} aria-pressed={selected} aria-label={`${shortDate(d,lang)} · ${label}${n?' · '+n:''}`}
+    className={['day-cell','availability-day',outside?'outside':'',status??'',selected?'date-selected':''].join(' ')}>
+    <span className="date-line"><span className="day-number">{Number(d.slice(-2))}</span></span>
+    {n?.trim()&&<span className="mobile-note-dot" aria-hidden="true"/>}
+    {n?.trim()&&<span className="availability-description">{n}</span>}
+   </button>})}</CalendarSurface>
+ </div>;
 }
 /** `onMonth` makes the grid swipe between months (#94): the same stage as the Schedule calendar,
  * mirrored in Hebrew, axis-locked so vertical scrolling stays native. `stage` lets the chevrons play
  * the same slide. On phones a tap on an unavailable day with a note reads the note first (#95). */
-export function AvailabilityEditor({state,month,person,cells,lang,disabled,onSave,onMonth,stage}:{state:State;month:string;person:string;cells:string[];lang:'en'|'he';disabled:boolean;onSave:(days:string[],kind:EditKind,note:string)=>boolean|void|Promise<boolean|void>;onMonth?:(offset:number,swiped:boolean)=>void;stage?:Ref<MonthStageHandle>}){
+export function AvailabilityEditor({state,month,person,cells,lang,disabled,onSave,onMonth,stage,schedule,footer}:{state:State;month:string;person:string;cells:string[];lang:'en'|'he';disabled:boolean;onSave:(days:string[],kind:EditKind,note:string)=>boolean|void|Promise<boolean|void>;onMonth?:(offset:number,swiped:boolean)=>void;stage?:Ref<MonthStageHandle>;
+ /** That month's Schedule calendar, for the row heights (#95 rule 4). */schedule?:(month:string)=>ReactNode;
+ /** Shown under the grid with the selection count (#95: nothing sits between the month bar and the grid). */footer?:ReactNode}){
  const mobile=useMobileLayout();
  const t=(a:string,b:string)=>lang==='en'?a:b;
  const [selection,setSelection]=useState<string[]>([]),[kind,setKind]=useState<'no'|'prefer'>('no'),[note,setNote]=useState(''),[open,setOpen]=useState(false),[saving,setSaving]=useState(false);
@@ -62,7 +88,7 @@ export function AvailabilityEditor({state,month,person,cells,lang,disabled,onSav
  }
  const title=(d:string)=>shortDate(d,lang);
  const restoreFocus=(e:Event)=>{e.preventDefault();container.current?.querySelector<HTMLButtonElement>(`[data-gesture-key="${lastSelected.current}"]`)?.focus()};
- const grid=<AvailabilityGrid state={state} month={month} person={person} cells={cells} lang={lang} disabled={disabled} selection={selection} bind={bindContainer} onTap={toggle}/>;
+ const grid=<AvailabilityGrid state={state} month={month} person={person} cells={cells} lang={lang} disabled={disabled} mobile={mobile} schedule={schedule?.(month)} selection={selection} bind={bindContainer} onTap={toggle}/>;
  const rangeTitle=dateRange(selection,lang),count=new Set(selection).size;
  const selectionCount=lang==='en'?`${count} ${count===1?'day':'days'} selected`:count===1?'נבחר יום אחד':`נבחרו ${count} ימים`;
  function warning(value:EditKind){
@@ -70,7 +96,9 @@ export function AvailabilityEditor({state,month,person,cells,lang,disabled,onSav
   const change=t('This will replace existing availability on all selected dates.','פעולה זו תחליף את הזמינות הקיימת בכל התאריכים שנבחרו.');
   return change+(hasNotes?(note.trim()?t(' Existing descriptions will be replaced with the new description.',' התיאורים הקיימים יוחלפו בתיאור החדש.'):t(' The description is blank: existing descriptions will be cleared.',' התיאור ריק: התיאורים הקיימים יימחקו.')):'');
  }
- return <div className="constraint-editor" dir={mobile&&lang==='he'?'rtl':'ltr'}><div className="availability-tools" dir={lang==='he'?'rtl':'ltr'}><p className="gesture-hint" role="status" aria-atomic="true">{count?selectionCount:' '}</p></div>
+ return <div className="constraint-editor">
+ {onMonth?<MonthStage ref={stage} month={month} rtl={lang==='he'} onChange={onMonth} preview={m=><AvailabilityGrid preview state={state} month={m} person={person} cells={calendarDates(m)} lang={lang} disabled={disabled} mobile={mobile} schedule={schedule?.(m)}/>}>{grid}</MonthStage>:grid}
+ <div className="availability-tools" dir={lang==='he'?'rtl':'ltr'}>{footer}<p className="gesture-hint" role="status" aria-atomic="true">{count?selectionCount:' '}</p></div>
  <EditorDialog open={open} onClose={close} saving={saving} lang={lang} title={<bdi>{rangeTitle}</bdi>} description={<span className="constraint-range-help">{selection.length>1?t('Applies to all selected dates','חל על כל התאריכים שנבחרו'):t('Choose availability for this date.','בחרו זמינות לתאריך זה.')}</span>} className="availability-dialog" onCloseAutoFocus={restoreFocus}>
   {conflicts(kind)&&<p className="constraint-notes-help" role="status">{warning(kind)} {t('You will be asked to confirm before saving.','לפני השמירה יידרש אישור.')}</p>}
   <div className="constraint-choices">
@@ -94,8 +122,5 @@ export function AvailabilityEditor({state,month,person,cells,lang,disabled,onSav
   <p className="constraint-note-full" dir="auto">{reading?state.constraintNotes?.[person]?.[reading]:''}</p>
   <div className="editor-actions"><Button onClick={()=>{const d=reading;if(!d)return;setReading(null);select([d]);edit([d])}}><Pencil size={16}/>{t('Edit','עריכה')}</Button></div>
  </EditorDialog>
- <div className="mobile-availability-legend" aria-hidden="true"><span><i className="availability-marker no"/>{t('Unavailable','לא זמין')}</span><span><i className="availability-marker prefer"/>{t('Preferred','מועדף')}</span></div>
- <div className="mobile-availability-weekdays" aria-hidden="true">{(lang==='en'?['Sun','Mon','Tue','Wed','Thu','Fri','Sat']:['א׳','ב׳','ג׳','ד׳','ה׳','ו׳','ש׳']).map(d=><span key={d}>{d}</span>)}</div>
- {onMonth?<MonthStage ref={stage} month={month} rtl={lang==='he'} onChange={onMonth} preview={m=><AvailabilityGrid preview state={state} month={m} person={person} cells={calendarDates(m)} lang={lang} disabled={disabled}/>}>{grid}</MonthStage>:grid}
  </div>
 }

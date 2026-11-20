@@ -36,9 +36,10 @@ test('mobile cells have only note dots and outside taps discard local edits', as
   await expect(page.locator('.availability-day .availability-marker')).toHaveCount(0);
   await expect(noted.locator('.mobile-note-dot')).toHaveCount(1);
   await expect(page.locator('.availability-day[data-gesture-key="2026-11-05"] .mobile-note-dot')).toHaveCount(0);
-  const cell = (await noted.boundingBox())!, number = (await noted.locator('strong').boundingBox())!;
+  const cell = (await noted.boundingBox())!, number = (await noted.locator('.day-number').boundingBox())!;
   expect(Math.abs(number.x + number.width / 2 - cell.x - cell.width / 2)).toBeLessThan(1);
-  expect(Math.abs(number.y + number.height / 2 - cell.y - cell.height / 2)).toBeLessThan(1);
+  // The date sits at the top, as on the Schedule calendar (#95).
+  expect(number.y - cell.y).toBeLessThan(12);
   await editConstraintDay(page, noted);
   await page.getByLabel('Description (optional)').fill('Unsaved edit');
   await page.mouse.click(5, 5);

@@ -1,4 +1,4 @@
-import {useRef, useState} from 'react';
+import {useRef, useState, type ReactNode} from 'react';
 import {Lock} from 'lucide-react';
 import {MonthTitle} from './month-title';
 import {useMonthArrival, type MonthStageHandle} from './month-stage';
@@ -7,17 +7,21 @@ import {Chip} from '@/components/ui/chip';
 import {AvailabilityEditor} from '@/components/rota/availability-editor';
 import type {State} from '@/lib/rota/engine';
 import {shortDate} from '@/lib/date-format';
+import {calendarOwnerMonth} from '@/lib/rota/calendar-dates';
 import type {Language, Translate} from './workspace-types';
 
 /** The Availability tab (decision 2026-11-06): the month, who (admins), the grid. No legends. */
-export function WorkspaceAvailability({state, month, monthLabel, onMonth, person, setPerson, dateCells, lang, isManager, meId, constraintsClosed, deadline, t, saveConstraints}: {
+export function WorkspaceAvailability({state, month, monthLabel, onMonth, person, setPerson, dateCells, lang, isManager, meId, constraintsClosed, deadline, t, saveConstraints, schedule}: {
   state: State; month: string; monthLabel: string; onMonth: (offset: number) => void; person: string; setPerson: (id: string) => void; dateCells: string[]; lang: Language;
   isManager: boolean; meId: string; constraintsClosed: boolean; deadline: string; t: Translate;
   saveConstraints: (days: string[], kind: 'no' | 'prefer' | 'clear', note: string) => Promise<boolean>;
+  /** A month's Schedule calendar: the grid copies its layout (#95 rule 4). */
+  schedule?: (month: string) => ReactNode;
 }) {
   const active = state.team.filter((p) => p.active);
   const mine = state.constraints[person] ?? {};
-  const counts = Object.values(mine).reduce((n, kind) => ({...n, [kind]: (n[kind] ?? 0) + 1}), {} as Record<string, number>);
+  // Only the shown month's own days count (#95 rule 5).
+  const counts = Object.entries(mine).filter(([day]) => calendarOwnerMonth(day) === month).map(([, kind]) => kind).reduce((n, kind) => ({...n, [kind]: (n[kind] ?? 0) + 1}), {} as Record<string, number>);
   // A name swipe refreshes the grid in place, blurred to sharp (owner round 4).
   const {ref: arrivalRef, mark: markArrival} = useMonthArrival<HTMLDivElement>(month);
   // The chevrons play the grid's slide; a grid swipe changes the month itself (#94).
@@ -34,10 +38,9 @@ export function WorkspaceAvailability({state, month, monthLabel, onMonth, person
         </Select>
       </div>}
     </div>
-    <div className="availability-summary" aria-live="polite">
+    <div ref={arrivalRef}><AvailabilityEditor state={state} month={month} person={person} cells={dateCells} lang={lang} disabled={constraintsClosed} onSave={saveConstraints} schedule={schedule} footer={<div className="availability-summary" aria-live="polite">
       <Chip tone="danger" size="sm"><i className="dot"/>{t(`${counts.no ?? 0} unavailable`, `${counts.no ?? 0} לא זמין`)}</Chip>
       <Chip tone="ok" size="sm"><i className="dot"/>{t(`${counts.prefer ?? 0} preferred`, `${counts.prefer ?? 0} מועדף`)}</Chip>
-    </div>
-    <div ref={arrivalRef}><AvailabilityEditor state={state} month={month} person={person} cells={dateCells} lang={lang} disabled={constraintsClosed} onSave={saveConstraints} stage={stage} onMonth={(n, swiped) => {setNameArrival(swiped ? 'blur' : 'roll'); onMonth(n);}}/></div>
+    </div>} stage={stage} onMonth={(n, swiped) => {setNameArrival(swiped ? 'blur' : 'roll'); onMonth(n);}}/></div>
   </section>;
 }
