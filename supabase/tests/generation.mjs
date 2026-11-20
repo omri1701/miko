@@ -295,7 +295,7 @@ begin
  begin
   perform duty_private.allocation_rebind(released,p||jsonb_build_object('id',gen_random_uuid()),ancestor,allocation_id,1822478400000);
   raise exception 'Ancestor replay undid explicit release';
- exception when serialization_failure then null;end;
+ exception when sqlstate 'PT409' then null;end;
 end$$;rollback;`;
 const repaymentViews=sql(repayment),repaymentView=repaymentViews[0];for(const view of repaymentViews)assert.deepEqual(ordered(view),ordered(replay(view.events)));
 assert.equal(repaymentView.net[debtor],-4);assert.equal(repaymentView.net[ids[12]],0);assert.equal(repaymentView.net[carrier],2);assert.equal(repaymentView.net[creditor],2);

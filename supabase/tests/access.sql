@@ -58,7 +58,7 @@ begin
  perform public.duty_save_schedule(schedule,rev);
  perform set_config('request.jwt.claim.sub',engineer_id::text,true);
  select revision into rev from public.duty_workspace;perform public.duty_set_constraints(engineer_id,array['2099-10-01'::date],'no','Travel',rev);
- begin perform public.duty_set_constraints(engineer_id,array['2099-10-02'::date],'no','Stale',rev); raise exception 'Stale revision accepted'; exception when serialization_failure then null; end;
+ begin perform public.duty_set_constraints(engineer_id,array['2099-10-02'::date],'no','Stale',rev); raise exception 'Stale revision accepted'; exception when sqlstate 'PT409' then null; end;
  select revision into rev from public.duty_workspace;
  begin perform public.duty_set_constraints(admin_id,array['2099-10-02'::date],'no','Other person',rev); raise exception 'Other constraints writable'; exception when insufficient_privilege then null; end;
  perform set_config('request.jwt.claim.sub',second_id::text,true);

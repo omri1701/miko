@@ -5,7 +5,7 @@ import {registerEnvironment} from '../lib/supabase/write-policy.ts';
 
 test('generation writes retain the captured revision and fingerprint, and never retry stale output',async()=>{
  const captured={revision:37,fingerprint:'captured',input:{schedule:{month:'2027-12'}}};
- const calls=[],error={code:'40001',message:'Refresh and review'};
+ const calls=[],error={code:'PT409',message:'Refresh and review'};
  const client={rpc:async(...args)=>{calls.push(args);return {data:null,error}}};
  await assert.rejects(saveGeneration(client,captured,{'2027-12-01':{primary:'a'}},42),e=>e===error);
  await assert.rejects(confirmAllocation(client,captured,{}),e=>e===error);

@@ -4,7 +4,7 @@ CREATE FUNCTION duty_private.save_generation(p_month text, p_assignments jsonb, 
 declare ctx jsonb; f jsonb; checked jsonb; meta public.duty_allocations; d jsonb; s jsonb; instant bigint;
 begin
  ctx:=duty_private.generation_context(p_month,p_revision);
- if p_fingerprint IS DISTINCT FROM ctx->>'fingerprint' then raise exception 'Generation inputs changed. Refresh and review.' using errcode='40001'; end if;
+ if p_fingerprint IS DISTINCT FROM ctx->>'fingerprint' then raise exception 'Generation inputs changed. Refresh and review.' using errcode='PT409'; end if;
  if p_seed is null or p_seed<0 or length(p_assignments::text)>100000 then raise exception 'Invalid generation result'; end if;
  -- Sample after obtaining the workspace lock, and again immediately before the
  -- mutation. A lock wait can cross opening without any revision change.
@@ -12,9 +12,9 @@ begin
  if not exists(select 1 from public.duty_months where month=p_month and status='draft') then raise exception 'An open month draft is required'; end if;
  select * into meta from public.duty_allocations where month=p_month and publication_id is null;
  if meta.month is null then raise exception 'Confirmed allocation required'; end if;
- if meta.accounting_fingerprint IS DISTINCT FROM ctx->>'accountingFingerprint' then raise exception 'Compensation changed. Refresh and review.' using errcode='40001'; end if;
+ if meta.accounting_fingerprint IS DISTINCT FROM ctx->>'accountingFingerprint' then raise exception 'Compensation changed. Refresh and review.' using errcode='PT409'; end if;
  f:=ctx->'facts';
- if meta.calendar_fingerprint<>md5((select jsonb_agg(d-array['primary','secondary'] order by d->>'id')::text from jsonb_array_elements(f->'duties') d)) then raise exception 'Calendar changed. Confirm allocation again.' using errcode='40001'; end if;
+ if meta.calendar_fingerprint<>md5((select jsonb_agg(d-array['primary','secondary'] order by d->>'id')::text from jsonb_array_elements(f->'duties') d)) then raise exception 'Calendar changed. Confirm allocation again.' using errcode='PT409'; end if;
  checked:=duty_private.generation_validate(f,meta.allocation->'targetsUnits',p_assignments);
  -- Generate never places a non-weekend member on a weekend duty (either half of a split
  -- weekend included). A weekend the manager locked to them is kept, never deleted; manual
