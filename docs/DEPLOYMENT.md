@@ -323,6 +323,47 @@ This repairs definitions only: it cannot restore removed working rows or make th
 old client compatible. Data recovery requires the separately approved backup and
 reconciliation procedure below; do not reverse the lifecycle with schema SQL.
 
+## Database health
+
+After each Production release (and the next day), run these read-only queries in the
+Production SQL editor. They read statistics only, never rows. In #86 a refusal raised with a
+retryable SQLSTATE (40001) made PostgREST retry the same call forever: 600 transactions a
+second for 12 days, 99.9% rollbacks, 97% of database time. `tests/retryable-sqlstate.test.mjs`
+now blocks that code in CI; these checks catch anything like it that slips through.
+
+```sql
+-- 1. Commits vs rollbacks. Run twice, a minute apart: rollbacks should rise by a handful,
+--    never by hundreds a second, and stay a small share of all transactions.
+select xact_commit, xact_rollback,
+ round(100.0*xact_rollback/nullif(xact_commit+xact_rollback,0),1) as rollback_pct
+from pg_stat_database where datname=current_database();
+
+-- 2. Where database time goes. Expect application RPCs (pgrst_source …), duty_private.push_tick()
+--    at a few ms mean, and dashboard catalog queries. A PostgREST preamble
+--    (select set_config('search_path' …) with millions of calls at the top means a retry loop.
+select calls, round(total_exec_time) as total_ms, round(mean_exec_time::numeric,1) as mean_ms,
+ round((100*total_exec_time/sum(total_exec_time) over ())::numeric,1) as pct,
+ left(regexp_replace(query,'\s+',' ','g'),70) as query
+from extensions.pg_stat_statements order by total_exec_time desc limit 10;
+
+-- 3. Connections right now. Idle: 0–1 active authenticator (API) backends. Several active
+--    ones waiting on Lock, sample after sample, are stuck or looping requests.
+select usename, state, wait_event_type, count(*) from pg_stat_activity
+where backend_type='client backend' group by 1,2,3 order by 4 desc;
+
+-- 4. The push clock over the last day: 96 succeeded runs, average a few ms to tens of ms.
+select status, count(*) as runs, round(avg(extract(epoch from end_time-start_time))*1000) as avg_ms,
+ round(max(extract(epoch from end_time-start_time))*1000) as max_ms
+from cron.job_run_details where start_time > now()-interval '1 day' group by status;
+```
+
+Then check the logs (Supabase dashboard → **Logs & Analytics**, last 24 hours):
+**Postgres** — search `could not serialize`, `deadlock detected` and `Refresh and try again`:
+a few per day at most, never a continuous stream. **PostgREST** — search `PGRST003` (timed out
+acquiring a connection from the pool): expect none. Use **Database → Query Performance →
+Reset** after fixing a problem so the next reading starts clean. When a check is out of
+range, open an issue with the readings before the next release.
+
 ## Failure and recovery
 
 - Quality/approval/credential failure: no migration/app deployment starts.

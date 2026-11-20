@@ -3,6 +3,7 @@ REVOKE ALL ON FUNCTION duty_private.assert_admin_remains() FROM PUBLIC, anon, au
 REVOKE ALL ON FUNCTION duty_private.check_revision(p_revision bigint) FROM PUBLIC, anon, authenticated, service_role;
 
 REVOKE ALL ON FUNCTION duty_private.current_duties() FROM PUBLIC, anon, authenticated, service_role;
+REVOKE ALL ON FUNCTION duty_private.current_duties_between(p_from date, p_to date) FROM PUBLIC, anon, authenticated, service_role;
 
 REVOKE ALL ON FUNCTION duty_private.delete_publication(p_publication uuid, p_revision bigint) FROM PUBLIC, anon, authenticated, service_role;
 GRANT ALL ON FUNCTION duty_private.delete_publication(p_publication uuid, p_revision bigint) TO authenticated;

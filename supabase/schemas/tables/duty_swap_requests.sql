@@ -43,8 +43,7 @@ CREATE INDEX duty_swaps_month ON public.duty_swap_requests USING btree (month);
 
 CREATE INDEX duty_swaps_other ON public.duty_swap_requests USING btree (other_id);
 
-CREATE INDEX duty_swaps_pending_month ON public.duty_swap_requests USING btree (month) WHERE (status = ANY (ARRAY['awaiting_engineer'::text, 'awaiting_admin'::text]));
-
+-- Also serves pending lookups by month (#86 dropped the redundant duty_swaps_pending_month).
 CREATE UNIQUE INDEX duty_swaps_pending_pair ON public.duty_swap_requests USING btree (month, requester_id, from_day, to_day) WHERE (status = ANY (ARRAY['awaiting_engineer'::text, 'awaiting_admin'::text]));
 
 CREATE INDEX duty_swaps_requester ON public.duty_swap_requests USING btree (requester_id, created_at DESC);
