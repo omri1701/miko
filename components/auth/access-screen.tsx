@@ -1,6 +1,6 @@
 'use client';
 import {useEffect,useLayoutEffect,useRef,useState} from 'react';
-import {Clock, LogOut, RefreshCw, UserRoundX} from 'lucide-react';
+import {Clock, CloudOff, LogOut, RefreshCw, UserRoundX} from 'lucide-react';
 import {Button} from '@/components/ui/button';
 import {Logo} from '@/components/brand/logo';
 import {EnvironmentBadge,InspectionWarning} from '@/components/environment-indicator';
@@ -26,6 +26,8 @@ export function AccessScreen({remote,lang,setLang}:{remote:TeamWorkspace;lang:'e
   const resize=()=>{const typing=document.activeElement instanceof HTMLInputElement;if(innerWidth!==width||!typing||innerHeight>parseFloat(node.style.getPropertyValue('--access-h'))){width=innerWidth;set();}};
   set();addEventListener('resize',resize);return()=>removeEventListener('resize',resize);
  },[remote.loading]);
+ // Signed in, but the team could not be read (#86): one clear Try again, never the sign-in button.
+ const failed=remote.loadFailed&&!remote.user;
  const pending=!!remote.user,rejected=remote.me?.status==='rejected',inactive=remote.me?.status==='approved'&&!remote.me.active,local=remote.environment?.target==='local';
  if(remote.loading)return <StartupSkeleton lang={lang} environment={remote.environment}/>;
  const title=rejected?t('Request declined','הבקשה נדחתה'):inactive?t('Membership inactive','החברות אינה פעילה'):t('Waiting for approval','ממתין לאישור');
@@ -50,8 +52,16 @@ export function AccessScreen({remote,lang,setLang}:{remote:TeamWorkspace;lang:'e
      <p>{copy}</p>
      {remote.user?.email&&<small className="access-email">{remote.user.email}</small>}
     </>}
-    {remote.error&&<div className="note-line" data-tone="danger" role="alert">{remote.error}</div>}
-    {pending?<>
+    {failed&&<>
+     <span className="access-state" data-tone="danger" aria-hidden="true"><CloudOff/></span>
+     <h1>{t('Couldn’t load your team','לא ניתן היה לטעון את הצוות')}</h1>
+     <p>{t('The server is busy or didn’t answer. Nothing was lost. Try again in a moment.','השרת עמוס או שלא הגיב. שום דבר לא אבד. כדאי לנסות שוב בעוד רגע.')}</p>
+    </>}
+    {remote.error&&!failed&&<div className="note-line" data-tone="danger" role="alert">{remote.error}</div>}
+    {failed?<>
+     <Button size="lg" className="access-main" disabled={remote.retrying} onClick={()=>remote.retryLoad()}><RefreshCw className={remote.retrying?'animate-spin':undefined}/>{remote.retrying?t('Trying again…','מנסה שוב…'):t('Try again','לנסות שוב')}</Button>
+     <button type="button" className="access-quiet-action" onClick={()=>remote.signOut()}><LogOut/>{t('Sign out','יציאה')}</button>
+    </>:pending?<>
      <Button size="lg" className="access-main" onClick={()=>remote.refresh().catch(()=>{})}><RefreshCw/>{t('Check approval','בדיקת אישור')}</Button>
      <button type="button" className="access-quiet-action" onClick={()=>remote.signOut()}><LogOut/>{t('Sign out','יציאה')}</button>
     </>:local?<>
@@ -65,7 +75,7 @@ export function AccessScreen({remote,lang,setLang}:{remote:TeamWorkspace;lang:'e
      <Button size="lg" className="access-main" disabled={!remote.environment} onClick={()=>remote.signIn()}><GoogleMark/>{t('Continue with Google','המשך עם גוגל')}</Button>
      <p className="access-quiet">{t('New here? Signing in asks an admin to let you join.','חדשים כאן? ההתחברות שולחת למנהל בקשה להצטרף.')}</p>
     </>}
-    {!pending&&remote.readOnly&&remote.environment&&<form className="local-login access-inspection" onSubmit={async e=>{e.preventDefault();await remote.completeInspection(returnUrl);setReturnUrl('')}}>
+    {!pending&&!failed&&remote.readOnly&&remote.environment&&<form className="local-login access-inspection" onSubmit={async e=>{e.preventDefault();await remote.completeInspection(returnUrl);setReturnUrl('')}}>
      <p className="access-quiet">{t('Google opens in a new tab and returns to the deployed Production site. Copy that return URL here to finish this localhost PKCE login. Only existing approved members can inspect; no join request is created.','גוגל נפתח בלשונית חדשה וחוזר לאתר Production. העתיקו לכאן את כתובת החזרה להשלמת ההתחברות המקומית. רק חברים מאושרים קיימים יכולים לצפות; לא נוצרת בקשת הצטרפות.')}</p>
      <label className="field-label">{t('Google return URL','כתובת חזרה מגוגל')}<input type="url" autoComplete="off" required value={returnUrl} onChange={e=>setReturnUrl(e.target.value)}/></label>
      <Button type="submit" variant="secondary">{t('Complete inspection login','השלמת התחברות לצפייה')}</Button>

@@ -72,6 +72,17 @@ export function createWorkspace(callbacks: {
     try {await promise;}
     finally {if (current.read?.promise === promise) current.read = null;}
   }
+  // Background checks (#86): every write advances the workspace revision, so an idle check reads
+  // only that one RLS-filtered number and reloads the whole team (duty_load) only when it moved.
+  // Anything in flight, a failed check or an unreadable revision (pending sign-up) reloads as before.
+  async function poll() {
+    const current = scope;
+    if (!current || current.bootstrap || current.save || current.read || current.snapshot?.revision == null) return refresh();
+    const revision = current.snapshot.revision;
+    const {data, error} = await current.client.from('duty_workspace').select('revision').maybeSingle();
+    if (scope !== current) return;
+    if (error || data?.revision == null || data.revision !== revision || current.snapshot?.revision !== revision) return refresh();
+  }
   async function prepare(client: DutyClient, session: Session) {
     if (scope?.client === client && scope.id === session.user.id) return undefined;
     // Only the session observer commits this result after verifying the same token.
@@ -101,7 +112,8 @@ export function createWorkspace(callbacks: {
       try {await current.bootstrap;}
       catch (error) {if (scope === current) {clear(); throw error;}}
       finally {current.bootstrap = null;}
-    } else await refresh();
+    // A resume (focus, visibility) re-verifies the identity first; its data check is the cheap one.
+    } else await poll();
   }
   function mutate<N extends MutationName>(name: N, args: MutationArgs<N>): Promise<Functions[N]['Returns']> {
     const current = scope;
@@ -170,5 +182,5 @@ export function createWorkspace(callbacks: {
     current.save = save;
     return save;
   }
-  return {connect, prepare, clear, refresh, mutate, captured, isSaving: () => !!scope?.save};
+  return {connect, prepare, clear, refresh, poll, mutate, captured, isSaving: () => !!scope?.save};
 }

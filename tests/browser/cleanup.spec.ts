@@ -6,7 +6,7 @@ test('profile reopening resets edits and captures the latest saved name', async 
   const name = page.getByRole('textbox', {name: 'Display name'});
   await expect(name).toHaveValue('Avery Admin');
   await name.fill('Unsaved edit');
-  backend.raw.members.find(m => m.id === ids.admin)!.name = 'Updated Admin';
+  backend.raw.members.find(m => m.id === ids.admin)!.name = 'Updated Admin'; backend.raw.revision!++;
   const loaded = page.waitForResponse('**/rest/v1/rpc/duty_load');
   await page.evaluate(() => window.dispatchEvent(new Event('focus')));
   await loaded;
@@ -25,7 +25,7 @@ test('availability closes and clears selection when editing becomes disabled', a
   const day = page.getByRole('button', {name: /^5 Nov.*Available/});
   await day.click();
   await page.getByLabel('Description (optional)').fill('Unsaved note');
-  backend.raw.months[0].status = 'published';
+  backend.raw.months[0].status = 'published'; backend.raw.revision!++;
   const loaded = page.waitForResponse('**/rest/v1/rpc/duty_load');
   await page.evaluate(() => window.dispatchEvent(new Event('focus')));
   await loaded;

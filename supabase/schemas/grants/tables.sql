@@ -36,6 +36,9 @@ GRANT ALL ON TABLE public.duty_swap_requests TO service_role;
 -- Compensation audit privileges. Even service_role cannot rewrite history.
 REVOKE ALL ON TABLE public.duty_compensation_events FROM PUBLIC, anon, authenticated, service_role;
 GRANT SELECT ON TABLE public.duty_compensation_events TO authenticated, service_role;
+-- The ledger fold cache: written only by duty_private.compensation_state (#86).
+REVOKE ALL ON TABLE public.duty_compensation_snapshots FROM PUBLIC, anon, authenticated, service_role;
+GRANT SELECT ON TABLE public.duty_compensation_snapshots TO authenticated, service_role;
 
 REVOKE ALL ON TABLE public.duty_allocations FROM PUBLIC, anon, authenticated, service_role;
 GRANT SELECT ON TABLE public.duty_allocations TO authenticated;

@@ -41,6 +41,58 @@ test('authoritative context avoids a duplicate calendar load unless reconciliati
   assert.equal(loads(), 2); assert.equal(f.snapshots.at(-1).revision, 2);
 });
 
+// #86: background checks read only the revision; the whole team loads only when it moved.
+const loads = f => f.calls.filter(c => c.name === 'duty_load').length;
+const checks = f => f.calls.filter(c => c.name === 'from:duty_workspace').length;
+
+test('an idle poll with an unchanged revision reads one number and never reloads the team', async () => {
+  const f = fixture(); await f.workspace.connect(f.client, user('admin'));
+  for (let i = 0; i < 5; i++) await f.workspace.poll();
+  assert.equal(loads(f), 1); assert.equal(checks(f), 5);
+  assert.deepEqual(f.calls.filter(c => c.name === 'from:duty_workspace').map(c => c.args), Array(5).fill('revision'));
+});
+
+test('a poll reloads the team exactly once when the revision moved', async () => {
+  const f = fixture(); await f.workspace.connect(f.client, user('admin'));
+  f.setRaw(snapshot(4));
+  await f.workspace.poll(); await f.workspace.poll();
+  assert.equal(loads(f), 2); assert.equal(f.snapshots.at(-1).revision, 4);
+});
+
+test('a failed or unreadable revision check falls back to the full reload', async () => {
+  const f = fixture(); await f.workspace.connect(f.client, user('admin'));
+  f.responses.set('from:duty_workspace', () => Promise.resolve({data: null, error: {message: 'canceling statement due to statement timeout'}}));
+  await f.workspace.poll(); assert.equal(loads(f), 2);
+  f.responses.set('from:duty_workspace', () => Promise.resolve(result(null)));
+  await f.workspace.poll(); assert.equal(loads(f), 3);
+  // A pending sign-up has no readable revision: it reloads (its own small view) as before.
+  const p = fixture(); p.setRaw(snapshot(null)); await p.workspace.connect(p.client, user('pending'));
+  await p.workspace.poll(); assert.equal(loads(p), 2); assert.equal(checks(p), 0);
+});
+
+test('a resume of the same identity uses the cheap check; a poll during a save waits for its reload', async () => {
+  const f = fixture(); await f.workspace.connect(f.client, user('admin'));
+  await f.workspace.connect(f.client, user('admin'));
+  assert.equal(loads(f), 1); assert.equal(checks(f), 1);
+  const write = deferred(); f.responses.set('duty_rename_self', () => write.promise);
+  const save = f.workspace.mutate('duty_rename_self', {p_name: 'Renamed'});
+  const poll = f.workspace.poll(); await tick();
+  assert.equal(checks(f), 1); assert.equal(loads(f), 1);
+  f.setRaw(snapshot(2)); write.resolve(result(null)); await Promise.all([save, poll]);
+  assert.equal(loads(f), 2); assert.equal(f.snapshots.at(-1).revision, 2);
+});
+
+test('a poll answer from an earlier identity is discarded', async () => {
+  const f = fixture(); await f.workspace.connect(f.client, user('admin'));
+  const late = deferred(); f.responses.set('from:duty_workspace', () => late.promise);
+  const poll = f.workspace.poll(); await tick();
+  f.workspace.clear(); f.responses.delete('from:duty_workspace');
+  await f.workspace.connect(f.client, user('engineer'));
+  const before = loads(f);
+  late.resolve(result({revision: 99})); await poll;
+  assert.equal(loads(f), before); assert.equal(f.snapshots.at(-1).revision, 1);
+});
+
 function fixture() {
   let raw = snapshot(1);
   const calls = [], snapshots = [], errors = [], saving = [], headers = [], responses = new Map();
@@ -50,6 +102,13 @@ function fixture() {
     const request=handler ? handler(args) : Promise.resolve(result(name === 'duty_load' ? raw : null));
     request.setHeader=(name,value)=>{headers.push({name,value});return request;};
     return request;
+  }, from(table) {
+    // The cheap change check (#86): select('revision').maybeSingle() on duty_workspace.
+    return {select(columns) {return {maybeSingle() {
+      calls.push({name: `from:${table}`, args: columns});
+      const handler = responses.get(`from:${table}`);
+      return handler ? handler() : Promise.resolve(result(raw.revision == null ? null : {revision: raw.revision}));
+    }};}};
   }};
   const workspace = createWorkspace({snapshot: s => snapshots.push(s), error: e => errors.push(e), saving: s => saving.push(s)});
   return {client, workspace, calls, snapshots, errors, saving, headers, responses, setRaw: s => {raw = s;}};
