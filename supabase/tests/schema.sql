@@ -2,18 +2,32 @@
 DO $schema$
 DECLARE t record; f record;
 BEGIN
-  IF (SELECT count(*) FROM pg_tables WHERE schemaname='public' AND tablename LIKE 'duty_%') <> 18 THEN
-    RAISE EXCEPTION 'Expected exactly 18 application tables';
+  IF (SELECT count(*) FROM pg_tables WHERE schemaname='public' AND tablename LIKE 'duty_%') <> 19 THEN
+    RAISE EXCEPTION 'Expected exactly 19 application tables';
   END IF;
   IF (SELECT count(*) FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace
-      WHERE n.nspname='duty_private' OR (n.nspname='public' AND p.proname LIKE 'duty_%')) <> 135 THEN
-    RAISE EXCEPTION 'Expected exactly 135 application functions';
+      WHERE n.nspname='duty_private' OR (n.nspname='public' AND p.proname LIKE 'duty_%')) <> 136 THEN
+    RAISE EXCEPTION 'Expected exactly 136 application functions';
   END IF;
   IF (SELECT count(*) FROM pg_constraint c JOIN pg_namespace n ON n.oid=c.connamespace
       WHERE n.nspname='public' AND c.contype='f' AND c.conrelid::regclass::text LIKE 'duty_%') <> 30
     OR EXISTS (SELECT 1 FROM pg_constraint c JOIN pg_namespace n ON n.oid=c.connamespace
       WHERE n.nspname='public' AND c.conrelid::regclass::text LIKE 'duty_%' AND NOT c.convalidated) THEN
     RAISE EXCEPTION 'Expected 30 validated application foreign keys';
+  END IF;
+  -- #86: every application table has a primary key, and every foreign key a leading index
+  -- (parent deletes and updates check children through it).
+  IF EXISTS (SELECT 1 FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace
+      WHERE n.nspname='public' AND c.relkind='r' AND c.relname LIKE 'duty_%'
+      AND NOT EXISTS (SELECT 1 FROM pg_constraint p WHERE p.conrelid=c.oid AND p.contype='p')) THEN
+    RAISE EXCEPTION 'Application table without a primary key: %',(SELECT string_agg(c.relname,', ') FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace
+      WHERE n.nspname='public' AND c.relkind='r' AND c.relname LIKE 'duty_%' AND NOT EXISTS (SELECT 1 FROM pg_constraint p WHERE p.conrelid=c.oid AND p.contype='p'));
+  END IF;
+  IF EXISTS (SELECT 1 FROM pg_constraint c JOIN pg_namespace n ON n.oid=c.connamespace
+      WHERE n.nspname='public' AND c.contype='f' AND c.conrelid::regclass::text LIKE 'duty_%'
+      AND NOT EXISTS (SELECT 1 FROM pg_index i WHERE i.indrelid=c.conrelid AND i.indpred IS NULL
+        AND (i.indkey::int2[])[0:cardinality(c.conkey)-1] @> c.conkey AND c.conkey @> (i.indkey::int2[])[0:cardinality(c.conkey)-1])) THEN
+    RAISE EXCEPTION 'Application foreign key without a leading index';
   END IF;
   IF EXISTS (SELECT 1 FROM auth.users) OR EXISTS (SELECT 1 FROM auth.identities) THEN
     RAISE EXCEPTION 'Clean database requires zero Auth users and identities';
@@ -61,7 +75,7 @@ BEGIN
   IF EXISTS (SELECT 1 FROM public.duty_members) OR EXISTS (SELECT 1 FROM public.duty_assignments)
     OR EXISTS (SELECT 1 FROM public.duty_constraints) OR EXISTS (SELECT 1 FROM public.duty_months)
     OR EXISTS (SELECT 1 FROM public.duty_publications) OR EXISTS (SELECT 1 FROM public.duty_swap_requests)
-    OR EXISTS (SELECT 1 FROM public.duty_compensation_events) OR EXISTS (SELECT 1 FROM public.duty_allocations)
+    OR EXISTS (SELECT 1 FROM public.duty_compensation_events) OR EXISTS (SELECT 1 FROM public.duty_compensation_snapshots) OR EXISTS (SELECT 1 FROM public.duty_allocations)
     OR EXISTS (SELECT 1 FROM public.duty_notification_settings) OR EXISTS (SELECT 1 FROM public.duty_push_subscriptions)
     OR EXISTS (SELECT 1 FROM public.duty_push_notifications) OR EXISTS (SELECT 1 FROM public.duty_push_deliveries)
     OR EXISTS (SELECT 1 FROM public.duty_calendar_feeds) THEN

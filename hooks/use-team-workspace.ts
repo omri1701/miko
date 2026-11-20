@@ -1,5 +1,5 @@
 'use client';
-import {useEffect,useMemo,useState} from 'react';
+import {useEffect,useMemo,useRef,useState} from 'react';
 import type {User} from '@supabase/supabase-js';
 import {getSupabase,getEnvironment,signInWithGoogle,signInLocally,completeInspectionLogin} from '@/lib/supabase/client';
 import type {Environment} from '@/lib/supabase/environment';
@@ -26,6 +26,11 @@ import type {DeviceSubscription} from '@/lib/push/browser';
 // schedule is viewable without a network; every write stays disabled until the server answers.
 const SNAPSHOT_KEY=(userId:string)=>`duty-snapshot:${userId}`;
 const isNetworkError=(e:unknown)=>(typeof navigator!=='undefined'&&!navigator.onLine)||/Failed to fetch|NetworkError|Load failed|network|not configured yet/i.test(errorMessage(e,''));
+// Reading the team failed for a signed-in member (#86: e.g. a busy database timing out): the
+// screen offers Try again instead of falling back to sign-in.
+type LoadFailure={loadFailure:true;cause:unknown};
+const loadFailure=(cause:unknown):LoadFailure=>({loadFailure:true,cause});
+const isLoadFailure=(e:unknown):e is LoadFailure=>typeof e==='object'&&e!==null&&(e as LoadFailure).loadFailure===true;
 function readCachedSnapshot(userId:string):Snapshot|null{try{const raw=localStorage.getItem(SNAPSHOT_KEY(userId));return raw?readSnapshot(JSON.parse(raw)):null}catch{return null}}
 
 export function useTeamWorkspace(){
@@ -33,6 +38,8 @@ export function useTeamWorkspace(){
  const [client,setClient]=useState<DutyClient|null>(null),[user,setUser]=useState<User|null>(null),[snapshot,setSnapshot]=useState<Snapshot|null>(null),[loading,setLoading]=useState(true),[saving,setSaving]=useState(false),[error,setError]=useState('');
  const [workspace]=useState(()=>createWorkspace({snapshot:setSnapshot,saving:setSaving,error:setError}));
  const [online,setOnline]=useState(true),[cached,setCached]=useState<{userId:string;snapshot:Snapshot}|null>(null);
+ const [loadFailed,setLoadFailed]=useState(false),[retrying,setRetrying]=useState(false);
+ const observer=useRef<{refresh:()=>Promise<void>}|null>(null);
  useEffect(()=>{
   const sync=()=>setOnline(navigator.onLine);
   const on=()=>{sync();workspace.refresh().catch(()=>{})};
@@ -65,22 +72,28 @@ export function useTeamWorkspace(){
     setClient(c);
     setEnvironment(await getEnvironment());
     const connected=c;
-    unsubscribe=observeSession(connected,{
-     clear:()=>{workspace.clear();setUser(null);setLoading(true)},
-     prepare:s=>workspace.prepare(connected,s),
-     user:async (u,initial)=>{setCached(null);setUser(u);await workspace.connect(connected,u,initial)},
-     error:e=>{setError(errorMessage(e,'Could not load the team. Please try again.'));if(isNetworkError(e))void fallback(connected)},
-     ready:()=>setLoading(false),
+    const observed=observeSession(connected,{
+     clear:()=>{workspace.clear();setUser(null);setLoading(true);setLoadFailed(false)},
+     prepare:s=>workspace.prepare(connected,s).catch(e=>{throw loadFailure(e)}),
+     user:async (u,initial)=>{setCached(null);setUser(u);await workspace.connect(connected,u,initial).catch(e=>{throw loadFailure(e)})},
+     error:failure=>{
+      const e=isLoadFailure(failure)?failure.cause:failure;
+      setLoadFailed(isLoadFailure(failure));
+      setError(errorMessage(e,'Could not load the team. Please try again.'));if(isNetworkError(e))void fallback(connected);
+     },
+     ready:()=>{setLoading(false);setRetrying(false)},
     });
+    unsubscribe=observed;observer.current=observed;
    }catch(e){if(alive){setError(errorMessage(e,'Could not load the team. Please try again.'));if(isNetworkError(e))await fallback(c);setLoading(false)}}
   }
   void bootstrap();
-  return()=>{alive=false;unsubscribe();workspace.clear()};
+  return()=>{alive=false;observer.current=null;unsubscribe();workspace.clear()};
  },[workspace]);
  useEffect(()=>{
   if(!client||!user)return;
   let alive=true;
-  const poll=()=>{if(document.visibilityState==='visible'&&!workspace.isSaving())workspace.refresh().catch(e=>{if(alive)setError(errorMessage(e,'Could not refresh the team. Please try again.'))})};
+  // Cheap revision check; the team is reloaded only when something changed (#86).
+  const poll=()=>{if(document.visibilityState==='visible'&&!workspace.isSaving())workspace.poll().catch(e=>{if(alive)setError(errorMessage(e,'Could not refresh the team. Please try again.'))})};
   const timer=setInterval(poll,30000);
   return()=>{alive=false;clearInterval(timer)};
  },[client,user,workspace]);
@@ -100,6 +113,9 @@ export function useTeamWorkspace(){
  // The caller's member id: their sign-in id, or the id of the temporary member they were linked to.
  return {user,me,memberId:me?.id??user?.id??'',snapshot:shown,loading,saving,error:offline?'':error,environment,offline:offline||!online,readOnly:(environment?.readOnly??true)||offline,isAdmin:!!shown&&!!user&&canManage(shown,user.id),clearError:()=>setError(''),state:shown&&user?fromSnapshot(shown,user.id):null,
   refresh:()=>workspace.refresh(),
+  // Loading the team failed while signed in: Try again re-verifies the session and reloads.
+  loadFailed:loadFailed&&!snapshot&&!offline,retrying,
+  retryLoad(){if(!observer.current)return;setRetrying(true);setError('');void observer.current.refresh()},
   // Display-only projection; read where it is shown, never at startup.
   balance:()=>client?readBalance(client):Promise.reject(Error('Not connected')),
   replannedVersions:(month:string)=>client?replannedVersions(client,month):Promise.reject(Error('Not connected')),

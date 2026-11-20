@@ -12,6 +12,9 @@ CREATE TABLE public.duty_allocations (
  source_publication_id uuid,
  generation jsonb,
  origin text NOT NULL DEFAULT 'confirmed' CHECK (origin IN ('confirmed','restored','swap')),
+ -- Row identity only (#86): allocation_id is shared by a draft and its publication, and
+ -- publication_id is NULL for the working draft, so neither can be the primary key.
+ id uuid NOT NULL DEFAULT gen_random_uuid() CONSTRAINT duty_allocations_pkey PRIMARY KEY,
  CONSTRAINT duty_allocations_publication_fkey FOREIGN KEY (month,publication_id)
   REFERENCES public.duty_publications(month,id) ON DELETE CASCADE,
  CONSTRAINT duty_allocations_shape CHECK (jsonb_typeof(allocation)='object'

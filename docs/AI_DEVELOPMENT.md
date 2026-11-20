@@ -3,10 +3,10 @@
 ## Setup and effective settings
 
 Open this repository in IntelliJ's Codex integration and review/trust its project
-configuration. Authentication is a manual setup step: use an existing ChatGPT
+configuration. Authentication is manual: use an existing ChatGPT
 session or sign in yourself if needed. Restart the Codex session after pulling
-instruction/config changes. Future prompts need only the task and its specific
-requirements; [AGENTS.md](../AGENTS.md) owns the universal working rules.
+instruction/config changes. Future prompts need only the task and its
+specifics; [AGENTS.md](../AGENTS.md) owns the universal working rules.
 
 `.codex/config.toml` retains `gpt-6.1-sol` with `low` reasoning as the economical
 default. Select higher effort in the client for work that needs deeper reasoning;
@@ -16,7 +16,7 @@ to ChatGPT; no API key, external provider, AI SDK or AI CI calls are needed.
 
 Project settings load only for trusted projects. IDE launch options and managed
 settings can override them; verify the effective settings in the installed client.
-Model/account availability is not established by this repository. If configured
+Model/account availability is unestablished here. If configured
 reviewers are unavailable, perform the focused review locally and report the gap.
 ChatGPT's GitHub connector and shell Git credentials are separate connections;
 use whichever is already authorized, otherwise report the manual setup step.
@@ -31,6 +31,7 @@ Skill descriptions are discovered initially; bodies load only when relevant.
 | `scheduling-regression` | Scheduling invariants and deterministic regressions |
 | `security-review` | Auth/database checks, migrations and release trust boundaries |
 | `feature-delivery` | Authorized branch/commit/push/PR workflow |
+| `implement-issue` | Issue-as-spec workflow |
 
 The existing `qa` (`gpt-6-luna` / `high`) and `security` (`gpt-6.1-sol` / `high`)
 agents are optional reviewers under the root delegation rule. Enabling agents

@@ -205,6 +205,17 @@ SQL/core differential checks compare complete histories and graph provenance.
 Quality runs these alongside existing publication/swap tests and canonical
 fresh/upgrade gates. They do not establish allocation-solver feasibility.
 
-Replay is intentionally uncached and proportional to ledger history; unusually
-large ledgers should be measured before adding disposable projections. SQL and
-TypeScript accounting must evolve together, retaining differential coverage.
+Replay used to be uncached, and its PL/pgSQL fold copies the growing state per
+event, so its cost grew with the square of ledger history: about 160 ms for 60
+events and 270 ms for 110 on a laptop, paid by every balance read, Plan the month
+context, publication and swap (#86). `duty_private.compensation_state()` now keeps
+the latest fold in `public.duty_compensation_snapshots` (a disposable cache,
+manager-readable like the events, written only by that function) and folds only
+newer events. Events are append-only and numbered 1..N and `compensation_apply` is
+pure, so the result is identical to a full replay
+(`supabase/tests/compensation-snapshots.sql`). The cache row is keyed by a hash of
+every `duty_private` function's source, so any migration that changes a private
+function ignores older rows; deleting the rows only costs one full replay. Any
+operator repair that bypasses the append-only trigger must delete them in the same
+transaction. SQL and TypeScript accounting
+must evolve together, retaining differential coverage.

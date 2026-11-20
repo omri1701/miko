@@ -28,7 +28,7 @@ begin
   -- A month that can't be re-planned says why: refreshing would not change that.
   begin s:=duty_private.compensation_replan(s,month,instant,true);
   exception when others then
-   if SQLERRM not like 'review-replan-%' and allocation.accounting_fingerprint<>ledger then raise exception 'Compensation changed. Refresh and review.' using errcode='40001'; end if;
+   if SQLERRM not like 'review-replan-%' and allocation.accounting_fingerprint<>ledger then raise exception 'Compensation changed. Refresh and review.' using errcode='PT409'; end if;
    raise;
   end;
   before_pub:=null;
@@ -94,7 +94,7 @@ begin
     facts:=duty_private.generation_facts(month);
     begin metadata:=duty_private.allocation_bind(facts,allocation.allocation,s,allocation.allocation_id,after_pub,instant);
     exception when others then
-     if allocation.accounting_fingerprint<>ledger then raise exception 'Compensation changed. Refresh and review.' using errcode='40001'; end if;
+     if allocation.accounting_fingerprint<>ledger then raise exception 'Compensation changed. Refresh and review.' using errcode='PT409'; end if;
      raise;
     end;
    elsif allocation.origin<>'swap' then
@@ -112,7 +112,7 @@ begin
       or exists(select 1 from jsonb_array_elements(case when jsonb_typeof(l->'counterparts')='array' then l->'counterparts' else '[]'::jsonb end) c where starts_with(coalesce(c->>'id',''),'uneven/')))))) then raise exception 'invalid-intent'; end if;
   if metadata is not null then
    if jsonb_typeof(metadata) IS DISTINCT FROM 'object' or metadata - array['fingerprint','reservations','intents']<>'{}' then raise exception 'Invalid compensation metadata'; end if;
-   if metadata->>'fingerprint' is distinct from md5((s->'events')::text) then raise exception 'Compensation changed. Refresh and review.' using errcode='40001'; end if;
+   if metadata->>'fingerprint' is distinct from md5((s->'events')::text) then raise exception 'Compensation changed. Refresh and review.' using errcode='PT409'; end if;
    after_pub:=after_pub||jsonb_build_object('reservations',coalesce(metadata->'reservations',reservations),'intents',coalesce(metadata->'intents',before_pub->'intents','[]'));
   end if;
   if edit is not null then

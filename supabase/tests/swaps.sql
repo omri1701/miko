@@ -56,7 +56,7 @@ begin
  begin update public.duty_swap_requests set status='approved'; raise exception 'Direct write allowed'; exception when insufficient_privilege then null; end;
  begin perform public.duty_resolve_swap(request_id,'approve',rev+1); raise exception 'Engineer can approve'; exception when insufficient_privilege then null; end;
  begin perform public.duty_resolve_swap(request_id,'reject',rev+1); raise exception 'Engineer can reject'; exception when insufficient_privilege then null; end;
- begin perform public.duty_request_swap(from_id,to_id,'Stale',rev); raise exception 'Stale revision allowed'; exception when serialization_failure then null; end;
+ begin perform public.duty_request_swap(from_id,to_id,'Stale',rev); raise exception 'Stale revision allowed'; exception when sqlstate 'PT409' then null; end;
  begin perform public.duty_request_swap(from_id,to_id,'Duplicate',rev+1); raise exception 'Duplicate pending pair allowed'; exception when unique_violation then null; end;
  perform set_config('request.jwt.claim.sub',other_id::text,true);
  if not exists(select 1 from public.duty_swap_requests where id=request_id and status='awaiting_engineer') then raise exception 'Counterpart cannot see incoming request'; end if;
@@ -124,7 +124,7 @@ begin
  if (select override_reason from public.duty_swap_requests where id=request_id)<>'Explicit availability exception' then raise exception 'Override not audited'; end if;
  if (select manager_override from public.duty_assignments where publication_id=new_pub and day='2099-10-05')
   or not (select manager_override from public.duty_assignments where publication_id=new_pub and day='2099-10-06') then raise exception 'Override must apply only to conflicting dates'; end if;
- begin perform public.duty_resolve_swap(competing,'approve',rev); raise exception 'Concurrent stale revision accepted'; exception when serialization_failure then null; end;
+ begin perform public.duty_resolve_swap(competing,'approve',rev); raise exception 'Concurrent stale revision accepted'; exception when sqlstate 'PT409' then null; end;
  select revision into rev from public.duty_workspace;
  begin perform public.duty_resolve_swap(competing,'approve',rev,'Exception'); raise exception 'Superseded publication approved'; exception when raise_exception then if sqlerrm='Superseded publication approved' then raise; end if; end;
  begin perform public.duty_resolve_swap(request_id,'approve',rev); raise exception 'Double approval accepted'; exception when raise_exception then if sqlerrm='Double approval accepted' then raise; end if; end;
@@ -245,7 +245,7 @@ begin
  select revision into rev from public.duty_workspace; perform public.duty_resolve_swap(competing,'accept',rev);
  perform set_config('request.jwt.claim.sub',admin_id::text,true);
  select revision into rev from public.duty_workspace; perform public.duty_resolve_swap(competing,'approve',rev);
- begin perform public.duty_resolve_swap(r,'approve',rev); raise exception 'Stale consent approved'; exception when serialization_failure then null; end;
+ begin perform public.duty_resolve_swap(r,'approve',rev); raise exception 'Stale consent approved'; exception when sqlstate 'PT409' then null; end;
  select revision into rev from public.duty_workspace;
  begin perform public.duty_resolve_swap(r,'approve',rev); raise exception 'Earlier B consent reused'; exception when raise_exception then if sqlerrm='Earlier B consent reused' then raise; end if; end;
  reset role;
@@ -513,7 +513,7 @@ begin
   rev:=pg_temp.act(z); perform public.duty_resolve_swap(req,'accept',rev);
   rev:=pg_temp.act(boss);
   begin perform public.duty_resolve_swap(req,'approve',rev-1); raise exception 'Stale tab approved';
-  exception when serialization_failure then if sqlerrm<>'The team data changed. Refresh and try again.' then raise; end if; end;
+  exception when sqlstate 'PT409' then if sqlerrm<>'The team data changed. Refresh and try again.' then raise; end if; end;
   perform public.duty_resolve_swap(req,'approve',rev);
   reset role; perform pg_temp.act(boss);
   if live=y and ((duty_private.balance()->'net'->>y::text)::numeric<>(net->>y::text)::numeric+2

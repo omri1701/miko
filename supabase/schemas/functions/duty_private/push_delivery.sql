@@ -4,7 +4,8 @@
 --   Only for months not yet published.
 -- * duty reminders: the evening before (default 18:00) and the morning of the duty
 --   (default 08:30), for the primary engineer and emergency cover of the duties the
---   team sees (duty_private.current_duties: each date from its owning month). Each has a three-hour window, so a late run still reminds once.
+--   team sees (duty_private.current_duties: each date from its owning month; only the three
+--   days a reminder can be due, #86). Each has a three-hour window, so a late run still reminds once.
 CREATE FUNCTION duty_private.push_schedule(p_now timestamp with time zone) RETURNS integer
     LANGUAGE plpgsql SECURITY DEFINER
     SET search_path TO ''
@@ -24,7 +25,7 @@ begin
    jsonb_build_object('month',r.month,'deadline',r.deadline),'/?tab=availability&month='||r.month) then added:=added+1; end if;
  end loop;
  for r in
-  select a.day,a.end_day,p.member,p.role,k.kind from duty_private.current_duties() a
+  select a.day,a.end_day,p.member,p.role,k.kind from duty_private.current_duties_between(today-1,today+1) a
   cross join lateral (values (a.primary_id,'primary'),(a.secondary_id,'secondary')) p(member,role)
   left join public.duty_notification_settings s on s.member_id=p.member
   cross join lateral (values ('remind_evening',(a.day-1)+coalesce(s.evening_time,time '18:00')),

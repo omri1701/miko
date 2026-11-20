@@ -44,7 +44,7 @@ begin
    and exists(select 1 from public.duty_members where id=r.other_id and is_temporary) then side:='other';
   elsif r.other_id=me or (r.requester_id=me and r.proposed_by is not null) then
    raise exception 'Your answer is already recorded';
-  elsif party then raise exception 'The counterpart changed. Refresh first.' using errcode='40001';
+  elsif party then raise exception 'The counterpart changed. Refresh first.' using errcode='PT409';
   else raise exception 'Only the current counterpart can respond' using errcode='42501'; end if;
  elsif p_action='approve' then
   -- Every swap ends with an explicit admin approval after both members accepted,
