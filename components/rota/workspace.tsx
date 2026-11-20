@@ -24,7 +24,7 @@ import {PublishedDutyEditor} from '@/components/rota/published-duty-editor';
 import {editablePublishedDuty,publishedWeekend} from '@/lib/supabase/published-edit';
 import {PublishedWeekendEditor} from '@/components/rota/published-weekend-editor';
 import {SettingsScreen} from '@/components/rota/settings-screen';
-import {deepLink} from '@/lib/push/settings';
+import {DEEP_LINK_KEYS, deepLink, type DeepLink} from '@/lib/push/settings';
 import {currentSubscription, describe} from '@/lib/push/browser';
 import {PublicationHistory} from '@/components/rota/publication-history';
 import {SwapRequestDialog, useSwapActions} from '@/components/rota/swap-requests';
@@ -70,18 +70,22 @@ export function RotaWorkspace({remote, lang, setLang}: {remote: TeamWorkspace; l
   const [link] = useState(() => typeof window === 'undefined' ? {} : deepLink(window.location.search));
   const [month, setMonth] = useState(() => link.month ?? initialCalendarMonth()), [tab, setTab] = useState<string>(link.tab ?? 'home');
   const [welcome, setWelcome] = useState(() => typeof window !== 'undefined' && !welcomeSeen());
+  // The exact target inside that screen (a day, a swap request, the approvals), resolved once rendered.
+  const [target, setTarget] = useState<DeepLink | null>(() => link.day || link.duty || link.swap || link.focus ? link : null);
   useEffect(() => {
     const url = new URL(window.location.href);
-    if (url.searchParams.has('tab') || url.searchParams.has('month')) {
-      url.searchParams.delete('tab'); url.searchParams.delete('month');
+    if (DEEP_LINK_KEYS.some(key => url.searchParams.has(key))) {
+      for (const key of DEEP_LINK_KEYS) url.searchParams.delete(key);
       window.history.replaceState(window.history.state, '', url.pathname + url.search + url.hash);
     }
-    // A notification tapped while the app is open (public/sw.js falls back to a message).
+    // A notification tapped while the app is open: public/sw.js focuses this window and
+    // sends the link, so it navigates here instead of opening a second window (issue #89).
     const open = (event: MessageEvent) => {
       if (event.data?.type !== 'duty-open' || typeof event.data.url !== 'string') return;
       const next = deepLink(event.data.url.replace(/^\/\?/, '?'));
       if (next.month) setMonth(next.month);
       if (next.tab) setTab(next.tab);
+      setTarget(next.day || next.duty || next.swap || next.focus ? next : null);
     };
     navigator.serviceWorker?.addEventListener('message', open);
     // The offline shell (public/sw.js); push subscribes through the same registration.
@@ -302,6 +306,44 @@ export function RotaWorkspace({remote, lang, setLang}: {remote: TeamWorkspace; l
     {isManager && viewingDraft && !!metrics.conflicts.length && <p className="note-line" data-tone="warn">{t(`${metrics.conflicts.length} duties conflict with availability`, `${metrics.conflicts.length} כוננויות מתנגשות עם אילוצים`)}</p>}
   </>;
   const openSchedule = (m: string) => {if (m !== month) goToMonth(m); setTab('schedule');};
+  // A notification's exact target (issue #89); when it no longer exists, the closest screen and a short note.
+  function resolve(target: DeepLink) {
+    const note = (en: string, he: string) => toast.info(t(en, he), {id: 'deep-link'});
+    const reveal = (selector: string) => setTimeout(() => document.querySelector(selector)?.scrollIntoView({block: 'center'}), 60);
+    const showDay = (day?: string) => {
+      setTab('schedule');
+      if (!day) return;
+      if (day.slice(0, 7) !== month) goToMonth(day.slice(0, 7));
+      setSelectedDay(day); setFlashDays([day]);
+      reveal(`button[data-date="${day}"]`);
+    };
+    if (target.swap) {
+      if (swaps.requests.some(r => r.id === target.swap && ['awaiting_engineer', 'awaiting_admin'].includes(r.status))) {
+        setTab('home'); reveal(`[data-swap-card="${CSS.escape(target.swap)}"]`);
+      } else {
+        showDay(target.day);
+        note('This swap request was already handled.', 'בקשת ההחלפה הזו כבר טופלה.');
+      }
+    } else if (target.duty) {
+      const raw = remote.snapshot!, day = target.duty;
+      const current = raw.months.find(m => m.month === day.slice(0, 7))?.current_publication_id;
+      const mine = raw.assignments.some(a => a.publication_id === current && a.day === day && (a.primary_id === meId || a.secondary_id === meId));
+      showDay(day);
+      if (!mine) note('This duty has changed. Here is the current schedule.', 'הכוננות הזו השתנתה. זה הלוח העדכני.');
+    } else if (target.day) showDay(target.day);
+    else if (target.focus === 'approvals') {
+      setTab('team');
+      if (isManager && remote.snapshot!.members.some(m => m.status === 'pending')) reveal('.join-requests');
+      else note('No one is waiting for approval now.', 'אין כרגע מי שממתין לאישור.');
+    }
+  }
+  useEffect(() => {
+    if (!target) return;
+    // After this render commits, so the target screen exists to scroll to.
+    const timer = setTimeout(() => {setTarget(null); resolve(target);}, 0);
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- runs once per link
+  }, [target]);
   return <>
     <AppToaster/>
     <AppShell lang={lang} t={t} tab={tab} onRefresh={() => remote.refresh()} setTab={next => {setTab(next); if (next !== 'schedule') {setPickingFrom(null); setSheetDuty(null);}}} disabled={!!remote.saving}
