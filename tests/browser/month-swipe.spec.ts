@@ -125,6 +125,9 @@ test('a six-week month peeks in whole and the calendar grows smoothly, with no j
   // The whole neighbour shows: the stage eases to its height, so the sixth row is not clipped.
   await expect.poll(async () => (await stage.boundingBox())!.height).toBeGreaterThan(short + 20);
   await expect.poll(async () => {const c = (await last.boundingBox())!, s = (await stage.boundingBox())!; return c.y + c.height - (s.y + s.height);}).toBeLessThanOrEqual(0);
+  // Measure only once the stage's 200ms height ease has settled: its slow tail can already pass the polls
+  // above while a pixel or two short, and a slow runner reading it there is a race, not a jump.
+  await expect.poll(async () => page.evaluate(() => document.querySelector('.month-stage')!.getAnimations().length)).toBe(0);
   const tall = (await stage.boundingBox())!.height;
   await g.move(-grid.width * .6);
   await g.end();

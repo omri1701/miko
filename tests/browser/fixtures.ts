@@ -120,6 +120,13 @@ export class Backend {
     raw.swapRequests = raw.swapRequests!.filter(r => r.requester_id === user || r.proposed_by === user || (r.other_id === user && r.status === 'awaiting_engineer') || (admin && r.status === 'awaiting_admin'));
     return raw;
   }
+  // #86 revision poll: GET duty_workspace?select=revision under workspace_read (is_member) RLS.
+  revisionReads = 0;
+  workspaceRows(signIn: string) {
+    this.revisionReads++;
+    const revision = this.snapshot(signIn).revision;
+    return revision == null ? [] : [{revision}];
+  }
   rpc(name: string, p: Record<string, unknown>, signIn: string) {
     // Every own-row RPC acts on the caller's member row, as duty_private.current_member_id() does.
     const user = findMe(this.raw, signIn)?.id ?? signIn;
@@ -468,6 +475,9 @@ export const test = base.extend<Fixtures>({
             return route.fulfill({json:{access_token:tokenFor(user.id),refresh_token:'synthetic-only',expires_at:4102444800,expires_in:3600,token_type:'bearer',user}});
           }
           if (url.pathname === '/auth/v1/logout') return route.fulfill({status: 204});
+          if (url.pathname === '/rest/v1/duty_workspace' && route.request().method() === 'GET' && url.searchParams.get('select') === 'revision') {
+            return route.fulfill({json: backend.workspaceRows(user.id)});
+          }
           if (url.pathname.startsWith('/rest/v1/rpc/')) {
             if (url.pathname.endsWith('/duty_load')) await backend.loadGate;
             if (url.pathname.endsWith('/duty_swap_availability')) await backend.availabilityGate;

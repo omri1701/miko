@@ -15,6 +15,8 @@ test('late private workspace refresh cannot restore data after sign-out', async 
   await page.route('**/rest/v1/rpc/duty_load', async route => {
     started.release(); await held.wait; await route.fulfill({json: privateSnapshot});
   });
+  // #86: focus reloads the team only when the revision changed.
+  backend.raw.revision!++;
   await page.evaluate(() => window.dispatchEvent(new Event('focus')));
   await started.wait;
   await signOutFromSettings(page);
@@ -35,6 +37,9 @@ test('save reload wins over a delayed older refresh and supplies the next revisi
     if (!first) return route.fallback();
     first = false; started.release(); await held.wait; await route.fulfill({json: oldSnapshot});
   });
+  // #86: focus reloads the team only when the revision changed. One poll reports a
+  // remote change; the backend's own revision stays 1 so the save below is current.
+  await page.route(url => url.pathname === '/rest/v1/duty_workspace', route => route.fulfill({json: [{revision: 99}]}), {times: 1});
   await page.evaluate(() => window.dispatchEvent(new Event('focus')));
   await started.wait;
   await page.getByRole('button', {name: 'Settings', exact: true}).click();
@@ -81,12 +86,26 @@ test('focus and visibility share auth revalidation and one workspace load', asyn
   await openApp();const before=backend.calls.filter(c=>c.name==='duty_load').length;
   const held=gate(),started=gate();let verifications=0;
   await page.route('**/auth/v1/user',async route=>{verifications++;started.release();await held.wait;await route.fallback();});
+  // #86: a changed revision makes the shared revalidation reload the team once.
+  backend.raw.revision!++;
   await page.evaluate(()=>{window.dispatchEvent(new Event('focus'));window.dispatchEvent(new Event('visibilitychange'));});
   await started.wait;
   await page.evaluate(()=>{window.dispatchEvent(new Event('focus'));window.dispatchEvent(new Event('visibilitychange'));});
   const loaded=page.waitForResponse('**/rest/v1/rpc/duty_load');held.release();await loaded;
   await expect.poll(()=>backend.calls.filter(c=>c.name==='duty_load').length).toBe(before+1);
   expect(verifications).toBe(1);
+});
+
+test('#86: focus with an unchanged revision reads only the revision', async ({page,openApp,backend}) => {
+  await openApp();const loads=()=>backend.calls.filter(c=>c.name==='duty_load').length,before=loads(),reads=backend.revisionReads;
+  await page.evaluate(()=>window.dispatchEvent(new Event('focus')));
+  await expect.poll(()=>backend.revisionReads).toBeGreaterThan(reads);
+  await page.evaluate(()=>new Promise(requestAnimationFrame));
+  expect(loads()).toBe(before);
+  backend.raw.revision!++;
+  const loaded=page.waitForResponse('**/rest/v1/rpc/duty_load');
+  await page.evaluate(()=>window.dispatchEvent(new Event('focus')));await loaded;
+  expect(loads()).toBe(before+1);
 });
 
 for(const identity of ['pending','inactive'] as const) {

@@ -54,7 +54,9 @@ export type Functions = {
   duty_edit_published_weekend: Operation<Revision & {p_publication: string; p_friday: string; p_friday_primary: string; p_friday_extra: number;
     p_saturday_primary: string; p_saturday_extra: number; p_kind: 'temporary' | 'permanent'; p_override_reason: string}, {publication: string; version: number; joined: boolean}>;
 };
-export type Database = {public: {Tables: Record<string, never>; Views: Record<string, never>; Functions: Functions}};
+// The one direct read: the workspace revision (RLS: approved members), a cheap change check (#86).
+type ReadOnlyTable<Row> = {Row: Row; Insert: never; Update: never; Relationships: []};
+export type Database = {public: {Tables: {duty_workspace: ReadOnlyTable<{id: boolean; revision: number}>}; Views: Record<string, never>; Functions: Functions}};
 export type DutyClient = SupabaseClient<Database>;
 export type MutationName = Exclude<keyof Functions, 'duty_set_language' | 'duty_notification_settings' | 'duty_set_notification_settings' | 'duty_save_push_subscription' | 'duty_delete_push_subscription' | 'duty_load' | 'duty_balance' | 'duty_replanned_versions' | 'duty_swap_availability' | 'duty_edit_returns' | 'duty_join' | 'duty_generation_context' | 'duty_confirm_allocation' | 'duty_save_generation' | 'duty_calendar_status' | 'duty_calendar_reset' | 'duty_calendar_language'>;
 export type MutationArgs<N extends MutationName> = Omit<Functions[N]['Args'], 'p_revision'>;

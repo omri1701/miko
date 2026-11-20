@@ -88,7 +88,10 @@ overlaps it with an RLS-protected read using the same captured token. The snapsh
 stays unpublished until verification succeeds for the current identity. Existing
 members (including pending/inactive accounts) skip registration; missing profiles
 use the checked join RPC and reload. Focus/visibility events share revalidation
-and refresh work; visible tabs still poll workspace data every 30 seconds.
+and refresh work. Visible tabs check the workspace revision every 30 seconds and
+on resume (one RLS-filtered number) and reload the team only when it changed (#86).
+If the team cannot be read after sign-in, the screen offers Try again rather than
+sign-in.
 
 While initial access or a changed identity is being verified, a public calendar
 skeleton reuses the header, month selector, navigation styling, date-cell traversal
