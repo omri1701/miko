@@ -220,6 +220,8 @@ published duty on each 15-minute run. `duty_allocations` gets a row-id primary k
 other indexes the Supabase advisor reports as unused each back a foreign key and stay;
 `tests/schema.sql` now requires a primary key on every application table and a leading index
 on every foreign key. `tests/push.sql` checks the ranged duties against the full definition.
+`tests/retryable-sqlstate.test.mjs` fails when any canonical source raises 40001/40P01 (PostgREST
+retries those forever); see [Database health](DEPLOYMENT.md#database-health) for the post-release checks.
 
 ## Unmerged migrations in local development
 
