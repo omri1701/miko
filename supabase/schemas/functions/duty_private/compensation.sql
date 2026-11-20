@@ -29,7 +29,7 @@ begin
  s:=duty_private.compensation_state(); first_count:=jsonb_array_length(s->'events');
  instant:=greatest(duty_private.compensation_now(),coalesce((s->'events'->-1->>'at')::bigint,0));
  s:=duty_private.compensation_reconcile(s,instant);
- if previous.sequence is null and p_fingerprint is not null and p_fingerprint<>md5((s->'events')::text) then raise exception 'Compensation changed. Refresh and review.' using errcode='40001'; end if;
+ if previous.sequence is null and p_fingerprint is not null and p_fingerprint<>md5((s->'events')::text) then raise exception 'Compensation changed. Refresh and review.' using errcode='PT409'; end if;
  if kind<>'reconcile' then s:=duty_private.compensation_append(s,p_operation,key,instant,auth.uid()::text,p_reason); end if;
  if jsonb_array_length(s->'events')<>first_count then update public.duty_workspace set revision=revision+1 where id; end if;
  if p_cutoff is not null then

@@ -475,7 +475,7 @@ export const test = base.extend<Fixtures>({
             catch (error) {
               const message = (error as Error).message;
               if (!message.startsWith('Synthetic stale')) errors.push(message);
-              return route.fulfill({status: 409, json: {message, code: '40001'}});
+              return route.fulfill({status: 409, json: {message, code: 'PT409'}});
             }
           }
         }

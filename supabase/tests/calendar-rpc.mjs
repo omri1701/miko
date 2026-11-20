@@ -50,14 +50,14 @@ try {
  const before=structuredClone(raw),publication=raw.months.find(m=>m.month===month).current_publication_id;
  const expected=fields(raw.assignments.filter(a=>a.publication_id===publication&&owner(a)===month));
  const denied=await engineer.c.rpc('duty_cancel_draft',{p_month:month,p_revision:raw.revision});assert.equal(denied.error?.code,'42501');
- const stale=await admin.c.rpc('duty_cancel_draft',{p_month:month,p_revision:raw.revision-1});assert.equal(stale.error?.code,'40001');
+ const stale=await admin.c.rpc('duty_cancel_draft',{p_month:month,p_revision:raw.revision-1});assert.equal(stale.error?.code,'PT409');
   sql(`create function duty_private.calendar_rpc_failure() returns trigger language plpgsql set search_path='' as $$begin if NEW.month='${month}' then raise exception 'Injected LOCAL cancellation failure'; end if; return NEW; end$$;
   create trigger calendar_rpc_failure before update on public.duty_months for each row execute function duty_private.calendar_rpc_failure();`);trigger=true;
  const failed=await admin.c.rpc('duty_cancel_draft',{p_month:month,p_revision:raw.revision});assert.equal(failed.error?.message,'Injected LOCAL cancellation failure');
   assert.deepEqual(ordered(await load()),ordered(before),'HTTP failure must roll back deletes and revision');
   sql('drop trigger calendar_rpc_failure on public.duty_months; drop function duty_private.calendar_rpc_failure();');trigger=false;
  const race=await Promise.all([0,1].map(()=>admin.c.rpc('duty_cancel_draft',{p_month:month,p_revision:raw.revision})));
- assert.equal(race.filter(r=>!r.error).length,1);assert.equal(race.find(r=>r.error).error.code,'40001');
+ assert.equal(race.filter(r=>!r.error).length,1);assert.equal(race.find(r=>r.error).error.code,'PT409');
  raw=await load();
  assert.equal(raw.months.find(m=>m.month===month).status,'published');
  assert.equal(raw.revision,before.revision+1);

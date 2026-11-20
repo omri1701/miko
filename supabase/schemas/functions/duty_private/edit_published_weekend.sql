@@ -22,7 +22,7 @@ begin
  if p_kind is null or p_kind not in ('temporary','permanent') then raise exception 'Choose Temporary or Permanent'; end if;
  if length(reason)>500 then raise exception 'Keep the override reason under 500 characters'; end if;
  select * into m from public.duty_months where current_publication_id=p_publication for update;
- if m.month is null then raise exception 'This publication changed. Refresh first.' using errcode='40001'; end if;
+ if m.month is null then raise exception 'This publication changed. Refresh first.' using errcode='PT409'; end if;
  -- A reopened draft was copied from the earlier version; publishing it would silently undo this edit.
  if m.status<>'published' then raise exception 'Publish or cancel the open draft before editing published duties'; end if;
  if p_friday is null or extract(dow from p_friday)<>5 or duty_private.duty_owner(p_friday)<>m.month then raise exception 'Choose a weekend in this published month'; end if;

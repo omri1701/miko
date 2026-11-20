@@ -61,7 +61,7 @@ begin
   begin perform public.duty_cancel_draft('2027-12',rev); raise exception 'Pending member cancelled'; exception when insufficient_privilege then null; end;
   perform set_config('request.jwt.claim.sub',manager::text,true);
   if not exists(select 1 from public.duty_assignments where publication_id is null and title='Discarded special') then raise exception 'Manager cannot read draft'; end if;
-  begin perform public.duty_cancel_draft('2027-12',rev-1); raise exception 'Stale cancellation accepted'; exception when serialization_failure then null; end;
+  begin perform public.duty_cancel_draft('2027-12',rev-1); raise exception 'Stale cancellation accepted'; exception when sqlstate 'PT409' then null; end;
   reset role;
   select jsonb_agg(to_jsonb(a) order by id) into before_failure from public.duty_assignments a;
   create function pg_temp.reject_reopen_copy() returns trigger language plpgsql as 'begin if NEW.publication_id is null then raise exception ''Injected reopen failure''; end if; return NEW; end';
