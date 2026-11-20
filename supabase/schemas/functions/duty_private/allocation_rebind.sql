@@ -29,8 +29,8 @@ begin
    -- again through an older publication's metadata.
    if exists(select 1 from jsonb_array_elements(s->'events') released join jsonb_each(s->'contributions') child on child.key=released->'operation'->>'contributionId'
     where released->'operation'->>'kind'='release' and duty_private.compensation_locate(jsonb_build_object('claims',jsonb_build_array(
-     duty_private.compensation_segment(child.value->'claim','{"at":0,"sequence":0,"lotId":"lineage"}'))),ref) is not null) then raise exception 'Repayment lineage changed. Refresh and review.' using errcode='40001'; end if;
-   if duty_private.compensation_locate(jsonb_build_object('claims',duty_private.compensation_candidates(after_state)),ref) is null then raise exception 'Repayment lineage changed. Refresh and review.' using errcode='40001'; end if;
+     duty_private.compensation_segment(child.value->'claim','{"at":0,"sequence":0,"lotId":"lineage"}'))),ref) is not null) then raise exception 'Repayment lineage changed. Refresh and review.' using errcode='PT409'; end if;
+   if duty_private.compensation_locate(jsonb_build_object('claims',duty_private.compensation_candidates(after_state)),ref) is null then raise exception 'Repayment lineage changed. Refresh and review.' using errcode='PT409'; end if;
    wanted:=array_append(wanted,off);
   end loop;
   remaining:=cardinality(wanted); position:=1;
@@ -49,7 +49,7 @@ begin
     remaining:=remaining-1; position:=position+1;
    end loop;
   end loop;
-  if remaining<>0 then raise exception 'Repayment capacity changed. Refresh and review.' using errcode='40001'; end if;
+  if remaining<>0 then raise exception 'Repayment capacity changed. Refresh and review.' using errcode='PT409'; end if;
  end loop;
  return jsonb_build_object('fingerprint',md5((s->'events')::text),'intents',publication->'intents','reservations',reservations);
 end $$;

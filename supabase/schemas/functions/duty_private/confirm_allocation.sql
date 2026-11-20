@@ -3,7 +3,7 @@ CREATE FUNCTION duty_private.confirm_allocation(p_month text, p_allocation jsonb
 declare ctx jsonb; facts jsonb; assignments jsonb; checked jsonb; projected jsonb; old_meta public.duty_allocations; instant bigint; fits boolean:=true; plan_facts jsonb;
 begin
  ctx:=duty_private.generation_context(p_month,p_revision);
- if p_fingerprint IS DISTINCT FROM ctx->>'fingerprint' then raise exception 'Generation inputs changed. Refresh and review.' using errcode='40001'; end if;
+ if p_fingerprint IS DISTINCT FROM ctx->>'fingerprint' then raise exception 'Generation inputs changed. Refresh and review.' using errcode='PT409'; end if;
  if length(p_allocation::text)>1000000 or length(p_approvals::text)>100000 or length(p_locks::text)>100000 then raise exception 'Allocation too large'; end if;
  if not exists(select 1 from public.duty_months where month=p_month and status='draft') then raise exception 'An open month draft is required'; end if;
  facts:=(ctx->'facts')||jsonb_build_object('locks',p_locks,'approvals',p_approvals);

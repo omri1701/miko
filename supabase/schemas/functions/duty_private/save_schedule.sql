@@ -71,7 +71,7 @@ begin
   select * into allocation from public.duty_allocations where month=p_publish and publication_id is null;
   if allocation.month is not null then
    f:=duty_private.generation_facts(p_publish);
-   if allocation.calendar_fingerprint<>md5((select jsonb_agg(d-array['primary','secondary'] order by d->>'id')::text from jsonb_array_elements(f->'duties') d)) then raise exception 'Calendar changed. Confirm allocation again.' using errcode='40001'; end if;
+   if allocation.calendar_fingerprint<>md5((select jsonb_agg(d-array['primary','secondary'] order by d->>'id')::text from jsonb_array_elements(f->'duties') d)) then raise exception 'Calendar changed. Confirm allocation again.' using errcode='PT409'; end if;
    result:=duty_private.generation_validate(f,allocation.allocation->'targetsUnits',(select jsonb_object_agg(d->>'id',jsonb_build_object('primary',d->'primary','secondary',d->'secondary')) from jsonb_array_elements(f->'duties') d));
    if not (result->>'complete')::boolean then raise exception 'Complete allocation required for publication'; end if;
   end if;
