@@ -52,7 +52,7 @@ assignments involving inactive members require manager review before publication
 Temporary engineers participate in the same fairness and compensation rules as
 regular engineers.
 
-**Viewers** (#90): the member sheet's **Viewer** switch (admins only) makes an approved
+**Viewers** (#90): the member sheet's **Viewer** switch (admins only, after a short confirm) makes an approved
 member someone who sees the schedule but never takes part: never scheduled (Generate and
 Plan the month leave them out, publishing refuses them, swaps and published edits never
 pick them), no constraints, and no points or debts. It works like deactivating, except

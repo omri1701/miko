@@ -32,16 +32,28 @@ for (const lang of ['en', 'he'] as const) {
     const name = backend.raw.members.find(m => m.id === ids.e)!.name;
     const toggle = dialog.getByRole('switch', {name: `${t('Viewer', 'צופה')} ${name}`, exact: true});
     await expect(toggle).not.toBeChecked();
+    // The explanation lives only in the confirm popup; Cancel changes nothing.
+    await expect(dialog.first()).not.toContainText(t('Never scheduled', 'לא משובץ'));
+    const confirm = page.getByRole('alertdialog');
     await toggle.click();
+    await expect(confirm).toContainText(t(`Make ${name} a Viewer?`, `להפוך את ${name} לצופה?`));
+    await expect(confirm).toContainText(t('Never scheduled, no constraints or points; current duties stay.', 'לא משובץ, בלי אילוצים ונקודות; הכוננויות הנוכחיות נשארות.'));
+    await snapshot(page, `viewer-confirm-${lang}`);
+    await confirm.getByRole('button', {name: t('Cancel', 'ביטול'), exact: true}).click();
+    await expect(confirm).toHaveCount(0);
+    await expect(toggle).not.toBeChecked();
+    expect(backend.calls.filter(c => c.name === 'duty_set_viewer')).toEqual([]);
+    await toggle.click();
+    await confirm.getByRole('button', {name: t('Make viewer', 'הפיכה לצופה'), exact: true}).click();
+    await expect(confirm).toHaveCount(0);
     await expect(toggle).toBeChecked();
     await expect(row.locator('.team-name')).toContainText(t('Viewer', 'צופה'));
     expect(backend.calls.filter(c => c.name === 'duty_set_viewer').map(c => c.params)).toEqual([expect.objectContaining({p_member: ids.e, p_viewer: true})]);
-    // Like deactivating: their duties stay for the admin to review.
-    await expect(page.locator('[data-sonner-toast]').first()).toContainText(t('Existing duties are kept for review', 'שיבוצים קיימים נשמרים לבדיקה'));
-    await expect(page.locator('[data-sonner-toast]')).toHaveCount(0, {timeout: 15_000});
     await snapshot(page, `member-sheet-viewer-${lang}`);
-    // Temporary members have no Viewer switch (they cannot sign in to view anything).
-    await page.keyboard.press('Escape');
+    // Turning it off needs no confirmation.
+    await toggle.click();
+    await expect(toggle).not.toBeChecked();
+    expect(backend.calls.filter(c => c.name === 'duty_set_viewer').map(c => c.params.p_viewer)).toEqual([true, false]);
   });
 
   test(`a Viewer sees the schedule with no edit actions ${lang}`, async ({page, openApp, backend}) => {
@@ -55,7 +67,7 @@ for (const lang of ['en', 'he'] as const) {
     await expect(page.getByText(t('Enter now', 'להזין'))).toHaveCount(0);
     // Availability: a note instead of the editor.
     await tab(page, 'Availability', 'אילוצים', lang);
-    await expect(page.getByRole('note').filter({hasText: t('Viewers see the schedule', 'צופים רואים את הלוח')})).toBeVisible();
+    await expect(page.getByRole('note').filter({hasText: t('Viewers don’t add constraints.', 'צופים לא מוסיפים אילוצים.')})).toBeVisible();
     await expect(page.locator('.availability-summary')).toHaveCount(0);
     await snapshot(page, `viewer-availability-${lang}`);
     // Schedule: the published calendar, no month actions.

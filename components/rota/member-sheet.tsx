@@ -48,7 +48,7 @@ export function MemberSheet({member, open, onClose, lang, t, selfId, admin, savi
         </span></div>
         <div className="row"><span className="row-body"><label className="row-title" htmlFor="member-no-weekends">{t('No weekends', 'ללא סופי שבוע')}</label></span><span className="row-trail">
           <Switch id="member-no-weekends" disabled={saving} checked={noWeekends} aria-label={`${t('No weekends', 'ללא סופי שבוע')} ${p.name}`} onCheckedChange={v => onNoWeekends(v === true)}/></span></div>
-        {!temporary && <div className="row"><span className="row-body"><label className="row-title" htmlFor="member-viewer">{t('Viewer', 'צופה')}</label><span className="row-subtitle">{t('Sees the schedule; never scheduled, no constraints or points', 'רואה את הלוח; לא משובץ, בלי אילוצים ונקודות')}</span></span><span className="row-trail">
+        {!temporary && <div className="row"><span className="row-body"><label className="row-title" htmlFor="member-viewer">{t('Viewer', 'צופה')}</label></span><span className="row-trail">
           <Switch id="member-viewer" disabled={saving} checked={!!p.viewer} aria-label={`${t('Viewer', 'צופה')} ${p.name}`} onCheckedChange={v => onViewer(v === true)}/></span></div>}
         <div className="row"><span className="row-body"><label className="row-title" htmlFor="member-active">{t('Active', 'פעיל')}</label>{p.id === selfId && <span className="row-subtitle">{t('You can’t deactivate yourself', 'אי אפשר להשבית את עצמך')}</span>}</span><span className="row-trail">
           <Switch id="member-active" disabled={saving || p.id === selfId} checked={p.active} aria-label={`${t('Active', 'פעיל')} ${p.name}`} onCheckedChange={v => onActive(v === true)}/></span></div>

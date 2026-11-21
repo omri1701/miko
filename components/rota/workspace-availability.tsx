@@ -36,7 +36,7 @@ export function WorkspaceAvailability({state, month, monthLabel, onMonth, person
       <Chip tone="danger" size="sm"><i className="dot"/>{t(`${counts.no ?? 0} unavailable`, `${counts.no ?? 0} לא זמין`)}</Chip>
       <Chip tone="ok" size="sm"><i className="dot"/>{t(`${counts.prefer ?? 0} preferred`, `${counts.prefer ?? 0} מועדף`)}</Chip>
     </div>}
-    {viewer && !isManager ? <p className="muted-copy" role="note">{t('Viewers see the schedule and don’t add constraints.', 'צופים רואים את הלוח ולא מוסיפים אילוצים.')}</p>
+    {viewer && !isManager ? <p className="muted-copy" role="note">{t('Viewers don’t add constraints.', 'צופים לא מוסיפים אילוצים.')}</p>
       : <div ref={arrivalRef}><AvailabilityEditor state={state} month={month} person={who} cells={dateCells} lang={lang} disabled={constraintsClosed} onSave={saveConstraints}/></div>}
   </section>;
 }
