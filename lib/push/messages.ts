@@ -10,8 +10,8 @@ export type PushParams = {month?: string; deadline?: string; version?: number; d
 export type PushText = {title: string; body: string};
 
 const DAY = /^\d{4}-\d{2}-\d{2}$/, MONTH = /^\d{4}-(0[1-9]|1[0-2])$/;
-const locale = (lang: PushLanguage) => lang === 'he' ? 'he-IL' : 'en-GB';
-/** A date-only key in Israel, e.g. "Thu 12 Nov" / "יום ה׳, 12 בנוב׳". */
+const locale = (lang: PushLanguage) => lang === 'he' ? 'he-IL' : 'en-US';
+/** A date-only key in Israel, e.g. "Thu, Nov 12" / "יום ה׳, 12 בנוב׳". */
 export function pushDate(day: string | undefined, lang: PushLanguage) {
   if (!day || !DAY.test(day)) return '';
   return new Date(day + 'T12:00:00Z').toLocaleDateString(locale(lang), {weekday: 'short', day: 'numeric', month: 'short', timeZone: 'Asia/Jerusalem'});

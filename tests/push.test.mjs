@@ -26,14 +26,14 @@ test('every kind has its own English and Hebrew text with the dates in Israel', 
     seen.add(en.title);
   }
   assert.ok(seen.size >= PUSH_KINDS.length - 1, 'titles tell the kinds apart');
-  assert.equal(pushDate('2026-12-03', 'en'), 'Thu 3 Dec');
-  assert.match(pushDate('2026-12-03', 'he'), /3/);
+  assert.equal(pushDate('2026-12-03', 'en'), 'Thu, Dec 3');
+  assert.equal(pushDate('2026-12-03', 'he'), 'יום ה׳, 3 בדצמ׳');
   assert.equal(pushMonth('2026-12', 'en'), 'December 2026');
-  assert.equal(pushText('deadline_3', params, 'en').body, 'Enter your December 2026 constraints by Tue 24 Nov.');
+  assert.equal(pushText('deadline_3', params, 'en').body, 'Enter your December 2026 constraints by Tue, Nov 24.');
   assert.equal(pushText('remind_evening', {...params, role: 'secondary'}, 'en').title, 'Emergency cover tomorrow');
-  assert.equal(pushText('remind_morning', params, 'en').body, 'You’re on duty today, Thu 3 Dec.');
-  assert.equal(pushText('swap_new', params, 'en').body, 'Swap Thu 3 Dec ↔ Thu 10 Dec. Open it to answer.');
-  assert.equal(pushText('edit', {...params, count: 1}, 'en').body, 'An admin changed your duty on Thu 3 Dec.');
+  assert.equal(pushText('remind_morning', params, 'en').body, 'You’re on duty today, Thu, Dec 3.');
+  assert.equal(pushText('swap_new', params, 'en').body, 'Swap Thu, Dec 3 ↔ Thu, Dec 10. Open it to answer.');
+  assert.equal(pushText('edit', {...params, count: 1}, 'en').body, 'An admin changed your duty on Thu, Dec 3.');
 });
 
 test('text never shows malformed or injected values', () => {
@@ -79,7 +79,7 @@ test('dispatch writes each message in its own language and never contacts other 
   assert.deepEqual(result.results, [{id: '1', outcome: 'sent', status: 201}, {id: '2', outcome: 'gone', status: 410}, {id: '3', outcome: 'retry', status: 429},
     {id: '4', outcome: 'unknown'}, {id: '5', outcome: 'rejected'}, {id: '6', outcome: 'rejected'}, {id: '7', outcome: 'rejected'}]);
   assert.equal(sent.length, 4, 'only allowed push services with valid keys are contacted');
-  assert.deepEqual(sent[0].body, {title: 'Duty tomorrow', body: 'You’re on duty on Thu 3 Dec.', url: '/?tab=schedule&month=2026-12', tag: 'duty-12', lang: 'en'});
+  assert.deepEqual(sent[0].body, {title: 'Duty tomorrow', body: 'You’re on duty on Thu, Dec 3.', url: '/?tab=schedule&month=2026-12', tag: 'duty-12', lang: 'en'});
   assert.equal(sent[1].body.lang, 'he'); assert.equal(sent[1].body.title, 'כוננות מחר');
   assert.deepEqual(sent[0].options, {TTL: 21600, urgency: 'high', topic: 'duty-12'});
   assert.equal(JSON.parse(payload(message({kind: 'published', params: {month: '2026-12'}}))).title, 'December 2026 is published');

@@ -7,7 +7,7 @@ export async function zoomContext() {
   // An isolated automation profile; uses actual browser tab zoom, not CSS zoom.
   return chromium.launchPersistentContext('',{channel:'chromium',headless:true,
     args:[`--disable-extensions-except=${extension}`,`--load-extension=${extension}`],
-    viewport:{width:1280,height:1000},deviceScaleFactor:1,locale:'en-GB',timezoneId:'Asia/Jerusalem',reducedMotion:'reduce'});
+    viewport:{width:1280,height:1000},deviceScaleFactor:1,locale:'en-US',timezoneId:'Asia/Jerusalem',reducedMotion:'reduce'});
 }
 export async function setBrowserZoom(context,page,factor) {
   const worker=context.serviceWorkers()[0]??await context.waitForEvent('serviceworker');

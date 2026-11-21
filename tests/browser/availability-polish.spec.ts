@@ -28,7 +28,7 @@ for (const width of [320, 375, 390, 430]) for (const lang of ['en', 'he'] as con
       await expect(hint).toHaveText(lang === 'en' ? '1 day selected' : 'נבחר יום אחד');
       expect(await positions()).toEqual(original);
       await touchEvent(page, 'touchmove', target.x, target.y);
-      const title = from === to ? (lang === 'en' ? '5 November' : '5 בנובמבר') : (lang === 'en' ? '5–9 November' : '5–9 בנובמבר');
+      const title = from === to ? (lang === 'en' ? 'November 5' : '5 בנובמבר') : (lang === 'en' ? 'November 5–9' : '5–9 בנובמבר');
       await expect(hint).toHaveText(from === to ? (lang === 'en' ? '1 day selected' : 'נבחר יום אחד') : (lang === 'en' ? '5 days selected' : 'נבחרו 5 ימים'));
       expect(await positions()).toEqual(original);
       await touchEvent(page, 'touchend', target.x, target.y);

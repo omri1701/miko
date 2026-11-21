@@ -77,7 +77,7 @@ for (const lang of ['en', 'he'] as const) test(`a link made on another device is
   await openApp('a');
   const dialog = await openSettings(page, lang), section = dialog.getByRole('region', {name: x.section});
   await expect(section).toContainText(x.active);
-  await expect(section).toContainText(lang === 'en' ? '9 Oct 2026' : '9 באוק׳ 2026');
+  await expect(section).toContainText(lang === 'en' ? 'Oct 9, 2026' : '9 באוק׳ 2026');
   await expect(section.getByRole('link')).toHaveCount(0);
   await expect.poll(() => backend.calendars.get(ids.a)?.language).toBe(lang);
   expect(backend.calendarResets).toBe(0);

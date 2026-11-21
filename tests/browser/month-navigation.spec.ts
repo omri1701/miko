@@ -30,7 +30,7 @@ async function expectCompletedRequests(page:Page) {
   await page.locator('[data-bell]').click();
   const list=page.locator('.bell-list');
   await expect(list).toContainText('Swap approved');
-  await expect(list).toContainText('Swap cancelled');
+  await expect(list).toContainText('Swap canceled');
   await page.keyboard.press('Escape');
   await expect(list).toBeHidden();
 }

@@ -20,17 +20,17 @@ test('admin sees every projected net with a breakdown on focus, hover or tap, in
  await expect(net(page,ids.c)).toHaveText('+0.5net');
  await expect(net(page,ids.e)).toHaveText('0net');
  await net(page,ids.c).focus();
- await expect(page.locator('.net-breakdown')).toContainText('Uneven monthly split · 10 Nov · temporary');
+ await expect(page.locator('.net-breakdown')).toContainText('Uneven monthly split · Nov 10 · temporary');
  // A lone half cannot be repaid by whole duties: it waits for its second half.
  await expect(page.locator('.net-breakdown')).toContainText('0.5 waiting for the second half');
  await page.keyboard.press('Escape');
  await net(page,ids.a).focus();
  const breakdown=page.locator('.net-breakdown');
- await expect(breakdown).toContainText(`${name(ids.b)} covered a duty · 3 Nov · temporary`);
+ await expect(breakdown).toContainText(`${name(ids.b)} covered a duty · Nov 3 · temporary`);
  await expect(breakdown).not.toContainText('waiting for the second half');
  await page.keyboard.press('Escape');await expect(breakdown).toBeHidden();
  if(info.project.name==='mobile')await net(page,ids.b).tap();else await net(page,ids.b).hover();
- await expect(breakdown).toContainText(`Covered ${name(ids.a)}'s duty · 3 Nov · temporary`);
+ await expect(breakdown).toContainText(`Covered ${name(ids.a)}'s duty · Nov 3 · temporary`);
  await page.mouse.click(5,5);await expect(breakdown).toBeHidden();
  await switchLanguage(page, 'he');
  await net(page,ids.a).focus();

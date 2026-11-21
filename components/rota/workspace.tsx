@@ -124,7 +124,7 @@ export function RotaWorkspace({remote, lang, setLang}: {remote: TeamWorkspace; l
     ? monthDetails.status === 'published'
     : (remote.snapshot?.months.find((m) => m.month === month)?.status === 'published' || monthDetails.deadline < today);
   const metrics = workspaceMetrics(state, month, duties);
-  const locale = lang === 'en' ? 'en-GB' : 'he-IL';
+  const locale = lang === 'en' ? 'en-US' : 'he-IL';
   const fmt = (d: string, opts: Intl.DateTimeFormatOptions = {day: 'numeric', month: 'short'}) => new Date(d + 'T12:00:00Z').toLocaleDateString(locale, {...opts, timeZone: 'Asia/Jerusalem'});
   const monthLabel = calendarMonthLabel(month, lang);
   const personName = (id?: string) => state.team.find((p) => p.id === id)?.name ?? t('Unassigned', 'ללא שיבוץ');

@@ -482,7 +482,7 @@ test('real generation Worker saves a verified partial, retains targets and emerg
   await page.getByRole('button', {name: 'Open plan', exact: true}).click();
   await expect(page.locator('.plan-row output')).toHaveText(targets);
   const dialog = page.getByRole('dialog', {name: 'Plan the month'});
-  await expect(dialog.getByRole('note').filter({hasText: 'Uncovered: '})).toContainText('18 Nov');
+  await expect(dialog.getByRole('note').filter({hasText: 'Uncovered: '})).toContainText('Nov 18');
   await expect(dialog.locator('.allocation-row-warning').filter({hasText: /scheduled, plan says/})).not.toHaveCount(0);
 });
 
@@ -554,7 +554,7 @@ test('cancelling synchronous WASM retains accepted assignments and a fresh Worke
   await stopped;
   expect(backend.raw.assignments).toEqual(before);
   expect(backend.calls.filter(c => c.name === 'duty_save_generation')).toHaveLength(0);
-  await expect(page.getByText('Cancelled. Your saved draft is unchanged.', {exact: true})).toBeVisible();
+  await expect(page.getByText('Canceled. Your saved draft is unchanged.', {exact: true})).toBeVisible();
   await page.unroute('**/api/scheduling/asset/highs.mjs');
   const restarted = page.waitForEvent('worker');
   await page.getByRole('button', {name: 'Confirm & generate', exact: true}).click();

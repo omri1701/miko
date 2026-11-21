@@ -179,9 +179,10 @@ renders the in-app sizes (PNG + WebP), favicon, PWA icons and iOS startup screen
 and cyan `#19f2f7`, used only on navy or dark surfaces or as a glow, never as text or thin lines on
 white (`--brand`, `--brand-fg`, `--cyan`). In dark mode navy fills get a thin near-white edge and a soft
 cyan glow (`--brand-edge`). The Hebrew UI calls a duty כוננות (plural כוננויות) and the person on
-duty כונן/ית; `tests/hebrew-terms.test.mjs` keeps the older word out. Member colours come from the 20-colour palette in
+duty כונן/ית; `tests/hebrew-terms.test.mjs` keeps the older word out. English is US English (#113): US spelling
+and month-first dates ("Nov 26", "Friday, November 9"), checked by `tests/us-english.test.mjs`. Member colors come from the 20-color palette in
 `lib/theme/palette.ts` (the 15 older stored values map onto it); each member picks their own
-in Settings (`duty_set_color`, own row, taken colours greyed) and an admin can change anyone's
+in Settings (`duty_set_color`, own row, taken colors grayed) and an admin can change anyone's
 in the member sheet.
 
 The month changes by direct manipulation, and the month name and the calendar swipe

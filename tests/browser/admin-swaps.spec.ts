@@ -25,7 +25,7 @@ async function home(page: Page) {
   await page.getByRole('tab', {name: /^(Home|בית)$/}).click();
 }
 async function contexts(browser: Browser, page: Page, count: number) {
-  return Promise.all(Array.from({length: count}, () => browser.newContext({viewport: page.viewportSize()!, timezoneId: 'Asia/Jerusalem', locale: 'en-GB', serviceWorkers: 'block'})));
+  return Promise.all(Array.from({length: count}, () => browser.newContext({viewport: page.viewportSize()!, timezoneId: 'Asia/Jerusalem', locale: 'en-US', serviceWorkers: 'block'})));
 }
 
 test('admin proposal needs both members, then an explicit approval with a copyable summary', async ({page, browser, openApp, backend}) => {
@@ -60,8 +60,8 @@ test('admin proposal needs both members, then an explicit approval with a copyab
     const dialog = page.getByRole('dialog', {name: 'Approve swap'});
     await expect(dialog).toContainText('Record it in the external system first');
     const summary = ['Duty swap: Alex Atlas ⇄ Blair Birch',
-      'Alex Atlas — gives: 2 Nov (1 pt) · takes: 3 Nov (1 pt) · change: 0 pts',
-      'Blair Birch — gives: 3 Nov (1 pt) · takes: 2 Nov (1 pt) · change: 0 pts'].join('\n');
+      'Alex Atlas — gives: Nov 2 (1 pt) · takes: Nov 3 (1 pt) · change: 0 pts',
+      'Blair Birch — gives: Nov 3 (1 pt) · takes: Nov 2 (1 pt) · change: 0 pts'].join('\n');
     await expect(dialog.getByLabel('Swap summary')).toHaveText(summary);
     await dialog.getByRole('button', {name: 'Copy summary'}).click();
     await expect(page.getByText('Copied', {exact: true})).toBeVisible();
@@ -132,7 +132,7 @@ for (const lang of ['en', 'he'] as const) test(`availability alert names whose c
   // Alex would receive 4 November, which Alex marked unavailable: greyed before the pick, no note.
   await startSwap(page, '2026-11-09');
   await targetReady(page, '2026-11-04');
-  await expect(duty(page, '2026-11-04')).toHaveAttribute('title', t('You can’t take 4 Nov', 'אין לך אפשרות לקחת את 4 בנוב׳'));
+  await expect(duty(page, '2026-11-04')).toHaveAttribute('title', t('You can’t take Nov 4', 'אין לך אפשרות לקחת את 4 בנוב׳'));
   await duty(page, '2026-11-04').focus(); await page.keyboard.press('Space');
   await expect(page.getByRole('dialog')).toHaveCount(0);
   await expect(page.locator('body')).not.toContainText('Synthetic vacation');
@@ -159,7 +159,7 @@ for (const lang of ['en', 'he'] as const) test(`availability is rechecked at con
     const b = await bc.newPage(); await openApp('b', b); await language(b, lang);
     await b.getByRole('button', {name: t('Accept', 'קבלה'), exact: true}).click();
     const consent = b.getByRole('dialog', {name: t('Accept despite a conflict?', 'לאשר למרות התנגשות?')});
-    await expect(consent.getByRole('alert')).toContainText(t('Blair Birch is unavailable on 2 Nov', 'ל־Blair Birch יש אילוץ אי־זמינות ב־2 בנוב׳'));
+    await expect(consent.getByRole('alert')).toContainText(t('Blair Birch is unavailable on Nov 2', 'ל־Blair Birch יש אילוץ אי־זמינות ב־2 בנוב׳'));
     await consent.getByRole('button', {name: t('Accept anyway', 'אישור בכל זאת'), exact: true}).click();
     await expect(consent).toBeHidden();
   } finally {await bc.close();}

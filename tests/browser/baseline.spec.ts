@@ -162,16 +162,16 @@ test('engineer availability save, preference and removal before deadline', async
   backend.raw.months[0].current_publication_id = null;
   await openApp('a');
   await page.getByRole('tab', {name: 'Availability', exact: true}).click();
-  const day = page.getByRole('button', {name: /^5 Nov.*Available/});
+  const day = page.getByRole('button', {name: /^Nov 5.*Available/});
   await day.click();
   await page.getByLabel('Description (optional)').fill('Synthetic appointment');
   await page.getByRole('button', {name: 'Save', exact: true}).click();
-  await expect(page.getByRole('button', {name: /^5 Nov.*Unavailable.*Synthetic appointment/})).toBeVisible();
-  await page.getByRole('button', {name: /^5 Nov.*Unavailable/}).click();
+  await expect(page.getByRole('button', {name: /^Nov 5.*Unavailable.*Synthetic appointment/})).toBeVisible();
+  await page.getByRole('button', {name: /^Nov 5.*Unavailable/}).click();
   await page.getByRole('button', {name: 'Prefer duty', exact: true}).click();
   await page.getByRole('button', {name: 'Save', exact: true}).click();
-  await expect(page.getByRole('button', {name: /^5 Nov.*Preferred/})).toBeVisible();
-  await page.getByRole('button', {name: /^5 Nov.*Preferred/}).click();
+  await expect(page.getByRole('button', {name: /^Nov 5.*Preferred/})).toBeVisible();
+  await page.getByRole('button', {name: /^Nov 5.*Preferred/}).click();
   await page.getByRole('button', {name: 'Remove constraint', exact: true}).click();
   await page.getByRole('alertdialog').getByRole('button', {name: 'Remove constraints and notes', exact: true}).click();
   await expect(day).toBeVisible();
@@ -182,13 +182,13 @@ test('publication and elapsed deadline close engineer availability', async ({pag
   backend.raw.months[0].status = 'published';
   await openApp('a');
   await page.getByRole('tab', {name: 'Availability', exact: true}).click();
-  await expect(page.getByRole('button', {name: /^5 Nov/})).toBeDisabled();
+  await expect(page.getByRole('button', {name: /^Nov 5/})).toBeDisabled();
   backend.raw.months[0].current_publication_id = null;
   backend.raw.months[0].status = 'draft';
   backend.raw.months[0].deadline = '2026-10-08';
   await page.reload();
   await page.getByRole('tab', {name: 'Availability', exact: true}).click();
-  await expect(page.getByRole('button', {name: /^5 Nov/})).toBeDisabled();
+  await expect(page.getByRole('button', {name: /^Nov 5/})).toBeDisabled();
 });
 
 test('version preview, cancelled restore and confirmed restore preserve live publication', async ({page, openApp, backend}) => {

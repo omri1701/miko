@@ -45,7 +45,7 @@ try {
   }
   assert(ready, 'LOCAL preview must be ready on its separate port');
   browser = await chromium.launch();
-  const context = await browser.newContext({viewport: {width: 1440, height: 1000}, locale: 'en-GB', timezoneId: 'Asia/Jerusalem', reducedMotion: 'reduce'});
+  const context = await browser.newContext({viewport: {width: 1440, height: 1000}, locale: 'en-US', timezoneId: 'Asia/Jerusalem', reducedMotion: 'reduce'});
   const page = await context.newPage(), errors = [];
   page.on('pageerror', e => errors.push(e.message));
   await page.goto(origin);

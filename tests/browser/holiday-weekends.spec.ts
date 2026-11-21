@@ -68,7 +68,7 @@ test('removing the extra points works on a combined weekend and on a hand-split 
   // Split weekend: the Saturday half loses only its own extra; Friday keeps +1 and the split stays.
   await editDuty(page, '2026-11-28');
   // A split half opens as its own day, with its own points (decision 2026-11-07).
-  await expect(dialog.locator('.sheet-description')).toHaveText('Sat 28 Nov · 1.5 pt');
+  await expect(dialog.locator('.sheet-description')).toHaveText('Sat, Nov 28 · 1.5 pt');
   await expect(dialog.locator('.split-row')).toContainText('Part of a split weekend');
   await dialog.getByRole('button', {name: 'Remove extra points from this duty', exact: true}).click();
   await expect(dialog).toBeHidden();

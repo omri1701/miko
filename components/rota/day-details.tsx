@@ -12,7 +12,7 @@ export function DayDetails({date, duty, state, lang, t, meId, onOpen, interactiv
 }) {
   const a = duty ? state.assignments[duty.id] : undefined;
   const primary = state.team.find(p => p.id === a?.primary), cover = state.team.find(p => p.id === a?.secondary);
-  const title = new Date(date + 'T12:00:00Z').toLocaleDateString(lang === 'en' ? 'en-GB' : 'he-IL', {weekday: 'long', day: 'numeric', month: 'long', timeZone: 'UTC'});
+  const title = new Date(date + 'T12:00:00Z').toLocaleDateString(lang === 'en' ? 'en-US' : 'he-IL', {weekday: 'long', day: 'numeric', month: 'long', timeZone: 'UTC'});
   const last = duty ? addDays(duty.end, -1) : date;
   return <section className="day-details" aria-label={title} data-day-details>
     <h3 className="day-details-title">{title}{duty && last !== duty.start && <span className="muted"> – {shortDate(last, lang)}</span>}</h3>

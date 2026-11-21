@@ -34,9 +34,9 @@ test('split Temporary: the holder owes the taker that half’s points; Permanent
  assert.deepEqual(changes,[{day:'2026-11-07',from:'y',to:'n',owed:1}]);
  assert.deepEqual(nets(changes),{y:-1,n:1});
  const temporary=weekendEditSummary(w,edit('y','n'),name,'en');
- assert.equal(temporary,'Duty change (published schedule)\nDate: Fri 06/11/2026 – Sat 07/11/2026\nWeekend: One weekend → Two days\nFri 06/11/2026: Yossi (unchanged) · 0.5 points\nSat 07/11/2026: Yossi → Noa · 1 point\nType: Temporary\nBalance Sat 07/11/2026: Yossi owes Noa 1 point');
+ assert.equal(temporary,'Duty change (published schedule)\nDate: Fri 11/06/2026 – Sat 11/07/2026\nWeekend: One weekend → Two days\nFri 11/06/2026: Yossi (unchanged) · 0.5 points\nSat 11/07/2026: Yossi → Noa · 1 point\nType: Temporary\nBalance Sat 11/07/2026: Yossi owes Noa 1 point');
  const permanent=weekendEditSummary(w,edit('y','n','permanent'),name,'en');
- assert.match(permanent,/Type: Permanent\nBalance Sat 07\/11\/2026: No debt$/);
+ assert.match(permanent,/Type: Permanent\nBalance Sat 11\/07\/2026: No debt$/);
  // H1: giving a day back to who held it before a Temporary change cancels that debt.
  assert.match(weekendEditSummary(w,edit('y','n','permanent'),name,'en',new Set(['2026-11-07'])),/Noa gets the day back/);
  // Hebrew joins values with words, never arrows between Latin names.
@@ -48,7 +48,7 @@ test('per-day points are kept as typed; added points count for whoever does the 
  const w=publishedWeekend(joined,joined.assignments[0],'2026-11-01');
  // Saturday raised to 2 points for Noa: Yossi owes only Saturday's published 1 point.
  assert.deepEqual(weekendChanges(w,edit('y','n','temporary',0,1.5)),[{day:'2026-11-07',from:'y',to:'n',owed:1}]);
- assert.match(weekendEditSummary(w,edit('y','n','temporary',0,1.5),name,'en'),/Sat 07\/11\/2026: Yossi → Noa · 1 point → 2 points/);
+ assert.match(weekendEditSummary(w,edit('y','n','temporary',0,1.5),name,'en'),/Sat 11\/07\/2026: Yossi → Noa · 1 point → 2 points/);
  // Points alone: no change of person, no debt.
  assert.deepEqual(weekendChanges(w,edit('y','y','temporary',.5,.5)),[]);
  assert.match(weekendEditSummary(w,edit('y','y','temporary',.5,.5),name,'en'),/Weekend: One weekend\n.*0\.5 points → 1 point/s);

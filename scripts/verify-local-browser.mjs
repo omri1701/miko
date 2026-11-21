@@ -51,7 +51,7 @@ async function verifyState(state) {
  try {
   const storageState=await context.storageState();
   for(const width of [375,390,430]) {
-   const phone=await phoneBrowser.newContext({...devices['iPhone 13'],viewport:{width,height:844},storageState,locale:'en-GB',timezoneId:'Asia/Jerusalem',reducedMotion:'reduce'});await keepMonth(phone);
+   const phone=await phoneBrowser.newContext({...devices['iPhone 13'],viewport:{width,height:844},storageState,locale:'en-US',timezoneId:'Asia/Jerusalem',reducedMotion:'reduce'});await keepMonth(phone);
    const p=await phone.newPage();await p.goto(origin);await p.getByRole('tab',{name:'Schedule',exact:true}).click();await expect(p.locator('.month-bar')).toBeVisible();
    if(state==='new')await p.getByRole('button',{name:'Next month',exact:true}).click();
    for(const language of ['en','he']) {
@@ -134,7 +134,7 @@ try {
  const phoneBrowser=await webkit.launch();
  try {
   for(const width of [375,390,430]) {
-   const phone=await phoneBrowser.newContext({...devices['iPhone 13'],viewport:{width,height:844},storageState:state,locale:'en-GB',timezoneId:'Asia/Jerusalem',reducedMotion:'reduce'});await keepMonth(phone);
+   const phone=await phoneBrowser.newContext({...devices['iPhone 13'],viewport:{width,height:844},storageState:state,locale:'en-US',timezoneId:'Asia/Jerusalem',reducedMotion:'reduce'});await keepMonth(phone);
    const p=await phone.newPage();await p.goto(origin);await p.getByRole('tab',{name:'Schedule',exact:true}).click();await expect(p.locator('.month-bar')).toBeVisible();
    for(const language of ['en','he']) {
     if(language==='he')await p.getByRole('button',{name:'Switch to Hebrew',exact:true}).click();

@@ -83,17 +83,17 @@ test('Home on PC steps through the next duties with arrows and clickable dots', 
   backend.raw.months[0].status = 'published';
   await openApp('a');
   const cards = page.locator('.hero-track > .hero'), current = page.locator('.hero-track > .hero[aria-current=true]');
-  await expect(current).toContainText('2 November');
+  await expect(current).toContainText('November 2');
   // Owner round 2: no extra row of small cards, only the arrows and dots.
   await expect(page.locator('.hero-next')).toHaveCount(0);
   expect(await cards.count()).toBeGreaterThan(2);
   await page.getByRole('button', {name: 'Next duty'}).click();
-  await expect(current).toContainText('9 November');
+  await expect(current).toContainText('November 9');
   await expect(page.getByRole('button', {name: 'Previous duty'})).toBeEnabled();
   await page.getByRole('button', {name: /^Duty 1 of/}).click();
-  await expect(current).toContainText('2 November');
+  await expect(current).toContainText('November 2');
   await page.getByRole('button', {name: /^Duty 3 of/}).click();
-  await expect(current).toContainText('16 November');
+  await expect(current).toContainText('November 16');
 });
 
 test('Team keeps the last known balances on screen while a newer one loads', async ({page, openApp, backend}) => {

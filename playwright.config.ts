@@ -16,7 +16,7 @@ export default defineConfig({
   reporter: [['list'], process.env.DUTY_E2E_BLOB ? ['blob'] : ['html', {open: 'never'}], ['./scripts/visual-review-reporter.mjs']],
   use: {
     baseURL: external ?? 'http://127.0.0.1:8787',
-    locale: 'en-GB', timezoneId: 'Asia/Jerusalem', colorScheme: 'light',
+    locale: 'en-US', timezoneId: 'Asia/Jerusalem', colorScheme: 'light',
     reducedMotion: 'reduce', serviceWorkers: 'block', deviceScaleFactor: 1,
     trace: 'retain-on-failure', screenshot: 'only-on-failure',
   },

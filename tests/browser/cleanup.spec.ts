@@ -22,7 +22,7 @@ test('availability closes and clears selection when editing becomes disabled', a
   backend.raw.months[0].current_publication_id = null;
   await openApp('a');
   await page.getByRole('tab', {name: 'Availability', exact: true}).click();
-  const day = page.getByRole('button', {name: /^5 Nov.*Available/});
+  const day = page.getByRole('button', {name: /^Nov 5.*Available/});
   await day.click();
   await page.getByLabel('Description (optional)').fill('Unsaved note');
   backend.raw.months[0].status = 'published'; backend.raw.revision!++;

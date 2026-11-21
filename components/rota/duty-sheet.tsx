@@ -27,7 +27,7 @@ export function DutySheet({duty, state, lang, t, meId, open, onClose, actions, p
   const last = b ? addDays(b.end, -1) : '';
   const range = b ? (last === b.start ? shortDate(b.start, lang) : `${shortDate(b.start, lang)} – ${shortDate(last, lang)}`) : '';
   const kind = !b ? '' : b.kind === 'special' ? (b.title || t('Holiday', 'חג')) : b.weekendId ? t('Weekend', 'סוף שבוע') : t('Weekday', 'יום חול');
-  const weekday = b ? new Date(b.start + 'T12:00:00Z').toLocaleDateString(lang === 'en' ? 'en-GB' : 'he-IL', {weekday: 'long', timeZone: 'UTC'}) : '';
+  const weekday = b ? new Date(b.start + 'T12:00:00Z').toLocaleDateString(lang === 'en' ? 'en-US' : 'he-IL', {weekday: 'long', timeZone: 'UTC'}) : '';
   return <Sheet open={open && !!b} onOpenChange={next => {if (!next) onClose();}} lang={lang} title={range} description={`${weekday} · ${kind}`} className="duty-sheet"
     onCloseAutoFocus={event => {event.preventDefault(); if (b) document.querySelector<HTMLButtonElement>(`[data-gesture-key="${b.id}"]`)?.focus({preventScroll: true});}}
     footer={(actions.swap || actions.edit) && <div className="sheet-actions">

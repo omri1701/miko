@@ -22,7 +22,7 @@ test('published drag and keyboard request cancellation do not edit duties', asyn
   await tab(page, 'Home');
   await expect(page.locator('[data-swap-card]').getByText('Waiting for an answer', {exact: true})).toBeVisible();
   await page.getByRole('button', {name: 'Cancel request'}).click();
-  await expect(page.getByText('Request cancelled', {exact: true})).toBeVisible();
+  await expect(page.getByText('Request canceled', {exact: true})).toBeVisible();
   expect(status(backend)).toBe('cancelled');
   expect(backend.raw.assignments.find(d => d.day === '2026-11-02' && d.publication_id)!.primary_id).toBe(ids.a);
 });
@@ -33,7 +33,7 @@ test('a swap the server would refuse is greyed with its reason before the pick',
   for (const d of backend.raw.assignments.filter(d => d.day === '2026-11-13')) d.primary_id = ids.a;
   await openApp('a');
   await (await openDutySheet(page, '2026-11-02')).getByRole('button', {name: 'Swap', exact: true}).click();
-  await expect(duty(page, '2026-11-05')).toHaveAttribute('title', 'You can’t take 5 Nov');
+  await expect(duty(page, '2026-11-05')).toHaveAttribute('title', 'You can’t take Nov 5');
   await expect(duty(page, '2026-11-06')).toHaveAttribute('title', 'This would give you a second weekend');
   await duty(page, '2026-11-06').click({force: true});
   await expect(page.locator('[data-sonner-toast]').filter({hasText: 'This would give you a second weekend'})).toBeVisible();
@@ -44,7 +44,7 @@ test('a swap the server would refuse is greyed with its reason before the pick',
 test('consent gates admin review; rejection, approval and invalidation update each identity', async ({page, browser, openApp, backend}) => {
   await openApp('a');
   // Separate contexts are essential: sign-in state must not leak between identities.
-  const options = {viewport: page.viewportSize()!, timezoneId: 'Asia/Jerusalem', locale: 'en-GB', serviceWorkers: 'block' as const};
+  const options = {viewport: page.viewportSize()!, timezoneId: 'Asia/Jerusalem', locale: 'en-US', serviceWorkers: 'block' as const};
   const bc = await browser.newContext(options), ac = await browser.newContext(options);
   try {
     const b = await bc.newPage(), admin = await ac.newPage();
@@ -100,7 +100,7 @@ test('mobile scroll cancels hold; long press opens request', async ({page, openA
 
 test('changed counterpart clears consent in all four client views', async ({page, browser, openApp, backend}) => {
   await openApp('a');
-  const contexts = await Promise.all(['b', 'c', 'admin'].map(() => browser.newContext({viewport: page.viewportSize()!, timezoneId: 'Asia/Jerusalem', locale: 'en-GB', serviceWorkers: 'block'})));
+  const contexts = await Promise.all(['b', 'c', 'admin'].map(() => browser.newContext({viewport: page.viewportSize()!, timezoneId: 'Asia/Jerusalem', locale: 'en-US', serviceWorkers: 'block'})));
   try {
     const [b, c, admin] = await Promise.all(contexts.map(context => context.newPage()));
     await openApp('b', b); await openApp('c', c); await openApp('admin', admin);

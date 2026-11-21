@@ -18,8 +18,8 @@ async function editDuty(page:Page,day:string){
 }
 
 for(const lang of ['en','he'] as const)for(const weekend of [
- {friday:'2026-11-06',sunday:'2026-11-08',previous:0,en:'Fri 6 – Sat 7 Nov · 1 pt',he:'יום ו׳, 6 בנוב׳ – שבת, 7 בנוב׳ · 1 נק׳'},
- {friday:'2026-07-31',sunday:'2026-08-02',previous:4,en:'Fri 31 Jul – Sat 1 Aug · 1 pt',he:'יום ו׳, 31 ביולי – שבת, 1 באוג׳ · 1 נק׳'},
+ {friday:'2026-11-06',sunday:'2026-11-08',previous:0,en:'Fri, Nov 6 – Sat, Nov 7 · 1 pt',he:'יום ו׳, 6 בנוב׳ – שבת, 7 בנוב׳ · 1 נק׳'},
+ {friday:'2026-07-31',sunday:'2026-08-02',previous:4,en:'Fri, Jul 31 – Sat, Aug 1 · 1 pt',he:'יום ו׳, 31 ביולי – שבת, 1 באוג׳ · 1 נק׳'},
 ])test(`weekend editor shows one weekend and two days ${lang} ${weekend.friday}`,async({page,openApp,backend},info)=>{
  if(weekend.previous){
   backend.raw.months.push({month:'2026-07',deadline:'2026-06-24',status:'draft',generated:true,current_publication_id:null,publication_sequence:0});
