@@ -60,7 +60,8 @@ for (const lang of ['en', 'he'] as const) {
     await openApp('a'); await language(page, lang);
     await startSwap(page, '2026-11-02');
     await targetReady(page, '2026-11-05');
-    await expectRed(page, '2026-11-05', t('You marked 5 Nov as unavailable', 'סימנת את 5 בנוב׳ כלא זמין'));
+    // Owner 2026-11-21: your own note shows to you; another member's never does.
+    await expectRed(page, '2026-11-05', t('You marked 5 Nov as unavailable · Alex private note', 'סימנת את 5 בנוב׳ כלא זמין · Alex private note'));
     await expectRed(page, '2026-11-03', t('Blair Birch marked 2 Nov as unavailable', 'Blair Birch סימן/ה את 2 בנוב׳ כלא זמין'));
     await expectBlocked(page, '2026-11-10', t('Emergency cover can’t take 10 Nov', 'לכונן החירום אין אפשרות ב־10 בנוב׳'));
     await expectGreen(page, '2026-11-12');
@@ -69,11 +70,12 @@ for (const lang of ['en', 'he'] as const) {
     // Keyboard: Space on a red day opens the request, which names the dates and can be sent.
     await duty(page, '2026-11-05').focus(); await page.keyboard.press('Space');
     const dialog = page.getByRole('dialog', {name: t('Ask to swap', 'בקשת החלפה')});
-    await expect(dialog.getByRole('note').filter({hasText: t('You marked 5 Nov as unavailable', 'סימנת את 5 בנוב׳ כלא זמין')})).toBeVisible();
+    await expect(dialog.getByRole('note').getByRole('listitem')).toHaveText([
+      t('You marked 5 Nov as unavailable · Alex private note', 'סימנת את 5 בנוב׳ כלא זמין · Alex private note')]);
     await expect(dialog.getByRole('alert')).toHaveCount(0);
     await expect(page.getByRole('button', {name: t('Send anyway', 'לשלוח בכל זאת'), exact: true})).toBeEnabled();
     // Private notes are never shown to members.
-    for (const note of ['Synthetic vacation', 'Alex private note', 'Blair private note', 'Cover private note']) await expect(page.locator('body')).not.toContainText(note);
+    for (const note of ['Synthetic vacation', 'Blair private note', 'Cover private note']) await expect(page.locator('body')).not.toContainText(note);
     await page.getByRole('button', {name: t('Send anyway', 'לשלוח בכל זאת'), exact: true}).click();
     await expect(dialog).toBeHidden();
     expect(backend.raw.swapRequests![0]).toMatchObject({requester_id: ids.a, to_day: '2026-11-05', status: 'awaiting_engineer'});
@@ -92,14 +94,14 @@ for (const lang of ['en', 'he'] as const) {
     await page.getByRole('dialog', {name: t('Edit duty', 'עריכת כוננות')}).getByRole('button', {name: t('Swap with another duty…', 'החלפה עם כוננות אחרת…'), exact: true}).click();
     await expect(duty(page, '2026-11-03')).toHaveAttribute('aria-pressed', 'true');
     await targetReady(page, '2026-11-05');
-    await expectRed(page, '2026-11-05', t('Blair Birch · 5 Nov: Admin-only note', 'Blair Birch · 5 בנוב׳: Admin-only note'));
-    await expectRed(page, '2026-11-04', t('Casey Cedar · 3 Nov: Another note', 'Casey Cedar · 3 בנוב׳: Another note'));
+    await expectRed(page, '2026-11-05', t('Blair Birch marked 5 Nov as unavailable · Admin-only note', 'Blair Birch סימן/ה את 5 בנוב׳ כלא זמין · Admin-only note'));
+    await expectRed(page, '2026-11-04', t('Casey Cedar marked 3 Nov as unavailable · Another note', 'Casey Cedar סימן/ה את 3 בנוב׳ כלא זמין · Another note'));
     await expectGreen(page, '2026-11-09');
     await page.keyboard.press('Escape');
     // Dropping on a red day opens the proposal, which can still be sent.
     await hold(page, '2026-11-03', '2026-11-04', info.project.name === 'mobile');
     await expect(page.getByRole('dialog', {name: t('Propose swap', 'הצעת החלפה')})).toBeVisible();
-    await expect(page.getByRole('dialog').getByRole('note').filter({hasText: t('Casey Cedar · 3 Nov: Another note', 'Casey Cedar · 3 בנוב׳: Another note')})).toBeVisible();
+    await expect(page.getByRole('dialog').getByRole('note').filter({hasText: t('Casey Cedar marked 3 Nov as unavailable · Another note', 'Casey Cedar סימן/ה את 3 בנוב׳ כלא זמין · Another note')})).toBeVisible();
     await expect(page.getByRole('button', {name: t('Send anyway', 'לשלוח בכל זאת'), exact: true})).toBeEnabled();
   });
 

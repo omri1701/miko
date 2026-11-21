@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {publishedSwapDuties,eligibleSwapTarget,visibleSwapRequests,swapStarter,swapWaitingOn,swapAnswerFor,swapNeedsAction,readSwapConflicts,swapSummary,swapTargetBlock,swapBlockText,swapTargetWarning,swapWarningText,swapOwnConflict,coverConflicts,swapPartyConstraints,noteLabel} from '../lib/supabase/swaps.ts';
+import {publishedSwapDuties,eligibleSwapTarget,visibleSwapRequests,swapStarter,swapWaitingOn,swapAnswerFor,swapNeedsAction,readSwapConflicts,swapSummary,swapTargetBlock,swapBlockText,swapTargetWarning,swapWarningText,coverConflicts,swapPartyConstraints,constraintLine,visibleNote} from '../lib/supabase/swaps.ts';
 import {todayIsrael} from '../lib/rota/calendar-dates.ts';
 
 test('Israeli midnight expires yesterday, including a continuing Friday weekend',()=>{
@@ -164,16 +164,30 @@ test('swap hint text says who and which day, never the note, for engineers and a
  assert.equal(warn({person:'me',day:'2026-11-04'},'me','he'),'סימנת את 04 כלא זמין');
  assert.equal(warn({person:'dana',day:'2026-11-02'},'admin','he'),'Dana סימן/ה את 02 כלא זמין');
  // Admins always read the note (owner review of #103).
- assert.equal(swapWarningText({person:'dana',day:'2026-11-02'},{me:'admin',name:id=>names[id],day,lang:'he',note:'Dentist'}),'Dana · 02: Dentist');
+ assert.equal(swapWarningText({person:'dana',day:'2026-11-02'},{me:'admin',name:id=>names[id],day,lang:'he',note:'Dentist'}),'Dana סימן/ה את 02 כלא זמין · Dentist');
 });
 
 test('#92 consent: the answering member sees their own unavailable date; admins read each party’s note',()=>{
  const r={requester_id:'me',other_id:'dana',from_day:'2026-11-02',from_end_day:'2026-11-03',to_day:'2026-11-04',to_end_day:'2026-11-05'};
  const raw={constraints:[{member_id:'dana',day:'2026-11-02',kind:'no',note:'Secret'},{member_id:'me',day:'2026-11-04',kind:'prefer',note:''}]};
  // Rule 2: Dana takes 2 Nov, which she marked unavailable; a preference is not unavailability.
- assert.equal(swapOwnConflict(raw,r,'dana'),'2026-11-02');
- assert.equal(swapOwnConflict(raw,r,'me'),null);
+ assert.deepEqual(swapPartyConstraints(raw,r).map(c=>c.day),['2026-11-02']);
  // Admin view: each party's constraint on the duty they take, with its note.
  const notes={...raw,constraints:[...raw.constraints,{member_id:'me',day:'2026-11-04',kind:'no',note:''},{member_id:'me',day:'2026-11-02',kind:'no',note:'Own day'}]};
- assert.deepEqual(swapPartyConstraints(notes,r).map(c=>noteLabel(c.member_id,c.day,c.note,{name:id=>id,day:d=>d.slice(8)})),['dana · 02: Secret','me · 04']);
+ assert.deepEqual(swapPartyConstraints(notes,r).map(c=>[c.member_id,c.day,c.note]),[['dana','2026-11-02','Secret'],['me','2026-11-04','']]);
+});
+
+test('constraint lines read like a person; the note shows to its owner and admins only (owner 2026-11-21)',()=>{
+ const names={avi:'Avi',me:'Me'},day=d=>d.slice(8),c={member:'avi',day:'2026-12-22'},note='doctor';
+ const line=(viewer,admin,lang='en')=>constraintLine({...c,note:visibleNote(note,c.member,{me:viewer,admin})},{me:viewer,name:id=>names[id],day,lang});
+ // The owner always sees their own note.
+ assert.equal(line('avi',false),'You marked 22 as unavailable · doctor');
+ assert.equal(line('avi',false,'he'),'סימנת את 22 כלא זמין · doctor');
+ // An admin sees whose and the note.
+ assert.equal(line('admin',true),'Avi marked 22 as unavailable · doctor');
+ assert.equal(line('admin',true,'he'),'Avi סימן/ה את 22 כלא זמין · doctor');
+ // Any other member: who and when, never the note.
+ assert.equal(line('dana',false),'Avi marked 22 as unavailable');
+ assert.equal(line('dana',false,'he'),'Avi סימן/ה את 22 כלא זמין');
+ assert.equal(constraintLine({...c,note:''},{me:'dana',name:id=>names[id],day,lang:'en'}),'Avi marked 22 as unavailable');
 });

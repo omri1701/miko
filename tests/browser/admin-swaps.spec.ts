@@ -132,11 +132,10 @@ for (const lang of ['en', 'he'] as const) test(`availability alert names whose c
   // Alex would receive 4 November, which Alex marked unavailable: red before the pick, no note (#92).
   await startSwap(page, '2026-11-09');
   await targetReady(page, '2026-11-04');
-  await expect(duty(page, '2026-11-04')).toHaveAttribute('title', t('You marked 4 Nov as unavailable', 'סימנת את 4 בנוב׳ כלא זמין'));
+  await expect(duty(page, '2026-11-04')).toHaveAttribute('title', t('You marked 4 Nov as unavailable · Synthetic vacation', 'סימנת את 4 בנוב׳ כלא זמין · Synthetic vacation'));
   await duty(page, '2026-11-04').focus(); await page.keyboard.press('Space');
-  await expect(page.getByRole('dialog').getByRole('note')).toHaveText(t('You marked 4 Nov as unavailable', 'סימנת את 4 בנוב׳ כלא זמין'));
+  await expect(page.getByRole('dialog').getByRole('note')).toHaveText(t('You marked 4 Nov as unavailable · Synthetic vacation', 'סימנת את 4 בנוב׳ כלא זמין · Synthetic vacation'));
   await expect(page.getByRole('button', {name: t('Send anyway', 'לשלוח בכל זאת'), exact: true})).toBeEnabled();
-  await expect(page.locator('body')).not.toContainText('Synthetic vacation');
   await page.keyboard.press('Escape');
   expect(backend.calls.filter(c => c.name === 'duty_request_swap')).toHaveLength(0);
   // Without a conflict the same dialog sends normally.
@@ -161,8 +160,8 @@ for (const lang of ['en', 'he'] as const) test(`a member accepts a date they mar
   try {
     const b = await bc.newPage(); await openApp('b', b); await language(b, lang);
     const card = b.locator('[data-swap-card]');
-    await expect(card.getByRole('note')).toHaveText(t('You marked this date as unavailable', 'סימנת את התאריך הזה כלא זמין'));
-    await expect(b.locator('body')).not.toContainText('Late private note');
+    // The owner reads their own constraint, note included.
+    await expect(card.getByRole('note')).toHaveText(t('You marked 2 Nov as unavailable · Late private note', 'סימנת את 2 בנוב׳ כלא זמין · Late private note'));
     await card.getByRole('button', {name: t('Accept', 'קבלה'), exact: true}).click();
     await expect(b.getByRole('dialog')).toHaveCount(0);
     await expect.poll(() => backend.raw.swapRequests![0].accepted_by).toBe(ids.b);
@@ -175,7 +174,7 @@ for (const lang of ['en', 'he'] as const) test(`a member accepts a date they mar
   const dialog = page.getByRole('dialog', {name: t('Approve swap', 'אישור החלפה')});
   await expect(dialog.getByLabel(t('Swap summary', 'סיכום ההחלפה'))).toContainText(t('Duty swap: Alex Atlas ⇄ Blair Birch', 'החלפת כוננויות: Alex Atlas ⇄ Blair Birch'));
   // Owner 2026-11-21: the admin sees the conflict with its note, no explanation, checkbox or reason.
-  await expect(dialog.getByRole('alert').getByRole('listitem')).toHaveText(t('Blair Birch · 2 Nov: Late private note', 'Blair Birch · 2 בנוב׳: Late private note'));
+  await expect(dialog.getByRole('alert').getByRole('listitem')).toHaveText(t('Blair Birch marked 2 Nov as unavailable · Late private note', 'Blair Birch סימן/ה את 2 בנוב׳ כלא זמין · Late private note'));
   await expect(dialog.getByRole('checkbox')).toHaveCount(0);
   await expect(dialog.getByRole('textbox')).toHaveCount(0);
   await expect(dialog).not.toContainText(t('reason', 'נימוק'));

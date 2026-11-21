@@ -82,16 +82,19 @@ const inside=(d:{day:string;end_day:string},day:string)=>day>=d.day&&day<d.end_d
 export const partyConflict=(c:SwapConflict,source:DutyRow,target:DutyRow)=>
  (c.member!==null&&c.member===source.primary_id&&inside(target,c.day))||(c.member!==null&&c.member===target.primary_id&&inside(source,c.day));
 export const coverConflicts=(conflicts:SwapConflict[],source:DutyRow,target:DutyRow)=>conflicts.filter(c=>!partyConflict(c,source,target));
-/** The answering member's own unavailability on the duty they would take: the date only. */
-export function swapOwnConflict(raw:Snapshot,r:SwapRequest,member:string){
- const takes=member===r.other_id?{day:r.from_day,end_day:r.from_end_day}:{day:r.to_day,end_day:r.to_end_day};
- return raw.constraints.find(c=>c.kind==='no'&&c.member_id===member&&inside(takes,c.day))?.day??null;
+/** A note is shown only to its owner and to admins (owner 2026-11-21); never to other members. */
+export const visibleNote=(note:string|undefined,member:string,{me,admin}:{me:string;admin:boolean})=>admin||member===me?note??'':'';
+/** One constraint line, read like a person wrote it: "You marked 22 Dec as unavailable · doctor",
+ * "Avi marked 22 Dec as unavailable · doctor" (admins) or without the note (other members).
+ * Callers pass `note` through visibleNote. */
+export function constraintLine({member,day:d,note}:{member:string;day:string;note?:string},{me,name,day,lang}:{me:string;name:(id:string)=>string;day:(d:string)=>string;lang:'en'|'he'}){
+ const he=lang==='he';
+ const text=member===me?(he?`סימנת את ${day(d)} כלא זמין`:`You marked ${day(d)} as unavailable`)
+  :he?`${name(member)} סימן/ה את ${day(d)} כלא זמין`:`${name(member)} marked ${day(d)} as unavailable`;
+ return note?`${text} · ${note}`:text;
 }
-/** An admin's view of a constraint: "Dana · 5 Nov: Dentist" (no note: "Dana · 5 Nov"). */
-export const noteLabel=(member:string,d:string,note:string,{name,day}:{name:(id:string)=>string;day:(d:string)=>string})=>
- `${name(member)} · ${day(d)}${note?`: ${note}`:''}`;
-/** The two members' own 'no' constraints on the duty each would take (other: from, requester: to),
- * with notes: for admins only, who can read every note. */
+/** The two members' own 'no' constraints on the duty each would take (other: from, requester: to).
+ * Members' snapshots hold only their own constraints (RLS); admins' hold all. */
 export function swapPartyConstraints(raw:Snapshot,r:SwapRequest){
  return raw.constraints.filter(c=>c.kind==='no'&&((c.member_id===r.other_id&&inside({day:r.from_day,end_day:r.from_end_day},c.day))
   ||(c.member_id===r.requester_id&&inside({day:r.to_day,end_day:r.to_end_day},c.day)))).sort((a,b)=>a.day.localeCompare(b.day));
@@ -120,14 +123,9 @@ export function swapTargetWarning(source:DutyRow,target:DutyRow,conflicts:SwapCo
  const first=party.find(c=>c.member===source.primary_id)??party[0];
  return first?{person:first.member!,day:first.day}:null;
 }
-/** "You marked 5 Nov as unavailable" / "Dana marked 5 Nov as unavailable": who and when. Only
- * admins pass the constraint's note (they always see notes): "Dana · 5 Nov: Dentist". */
-export function swapWarningText(w:SwapWarning,{me,name,day,lang,note}:{me:string;name:(id:string)=>string;day:(d:string)=>string;lang:'en'|'he';note?:string}){
- const he=lang==='he';
- if(note)return noteLabel(w.person,w.day,note,{name,day});
- return w.person===me?(he?`סימנת את ${day(w.day)} כלא זמין`:`You marked ${day(w.day)} as unavailable`)
-  :he?`${name(w.person)} סימן/ה את ${day(w.day)} כלא זמין`:`${name(w.person)} marked ${day(w.day)} as unavailable`;
-}
+/** The red day's line: constraintLine for its person, with the note when the viewer may read it. */
+export const swapWarningText=(w:SwapWarning,options:{me:string;name:(id:string)=>string;day:(d:string)=>string;lang:'en'|'he';note?:string})=>
+ constraintLine({member:w.person,day:w.day,note:options.note},options);
 /** One short reason, phrased for the viewer: "you" for themselves, names for others. */
 export function swapBlockText(block:SwapBlock,{me,name,day,lang}:{me:string;name:(id:string)=>string;day:(d:string)=>string;lang:'en'|'he'}){
  const he=lang==='he';
