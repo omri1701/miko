@@ -6,6 +6,8 @@ import {Avatar} from '@/components/ui/avatar';
 import {Chip} from '@/components/ui/chip';
 import {addDays, monthNext, type State, type Duty} from '@/lib/rota/engine';
 import type {WorkspaceDraft} from '@/hooks/use-workspace-draft';
+import {constraintLine} from '@/lib/supabase/swaps';
+import type {DayConflict} from '@/lib/supabase/snapshot';
 import type {Language, Translate, FormatDate} from './workspace-types';
 type DialogCopy = {lang: Language; t: Translate};
 
@@ -32,8 +34,8 @@ export function ClearBoardDialog({open, onOpenChange, saving, lang, t, monthLabe
   </Sheet>;
 }
 
-export function DraftSwapDialog({controller, state, duties, lang, t, fmt, nickname, personName}: DialogCopy & {
-  controller: WorkspaceDraft['swap']; state: State; duties: Duty[]; fmt: FormatDate; nickname: (id?: string) => string; personName: (id?: string) => string;
+export function DraftSwapDialog({controller, state, duties, lang, t, fmt, nickname, personName, me = ''}: DialogCopy & {
+  controller: WorkspaceDraft['swap']; state: State; duties: Duty[]; fmt: FormatDate; nickname: (id?: string) => string; personName: (id?: string) => string; me?: string;
 }) {
   const {selection: swap, setSelection: setSwap, override: swapOverride, setOverride: setSwapOverride, preview: swapPreview, reason: swapReason, confirm: confirmSwap, saving} = controller;
   const member = (id?: string) => state.team.find(p => p.id === id);
@@ -56,7 +58,8 @@ export function DraftSwapDialog({controller, state, duties, lang, t, fmt, nickna
       </div>
       {swapPreview && !swapPreview.ok && !conflicts && <p className="note-line" data-tone="danger">{swapReason(swapPreview.reason)}</p>}
       {conflicts && <div className="note-line" style={{display: 'block'}}>
-        {!!swapPreview?.conflicts?.length && <p>{t('Availability conflicts: ', 'התנגשות עם אילוצים: ')}{swapPreview.conflicts.map((c) => `${personName(c.person)} · ${fmt(c.date)}${state.constraintNotes?.[c.person]?.[c.date] ? ' · ' + state.constraintNotes[c.person][c.date] : ''}`).join(' / ')}</p>}
+        {!!swapPreview?.conflicts?.length && <div><strong>{t('Availability conflicts', 'התנגשות עם אילוצים')}</strong>
+          <ul className="swap-conflicts">{swapPreview.conflicts.map((c) => <li key={`${c.person}${c.date}`}>{constraintLine({member: c.person, day: c.date, note: state.constraintNotes?.[c.person]?.[c.date]}, {me, name: personName, day: fmt, lang})}</li>)}</ul></div>}
         {swapPreview?.weekendConflicts?.map(c => {
           const monthLabel = new Intl.DateTimeFormat(lang === 'he' ? 'he-IL' : 'en-GB', {month: 'long', timeZone: 'UTC'}).format(new Date(c.month + '-01T12:00:00Z'));
           return <p key={c.person}>{t(`This swap gives ${personName(c.person)} ${c.count} weekends in ${monthLabel}. Approve exception?`, `ההחלפה נותנת ל${personName(c.person)} ${c.count} סופי שבוע בחודש ${monthLabel}. לאשר חריגה?`)}</p>;
@@ -96,11 +99,24 @@ export function MonthSettingsDialog({settings, setSettings, monthLabel, monthDet
   </Sheet>;
 }
 
-export function PublishDialog({publishOpen, setPublishOpen, monthLabel, assigned, saving, lang, t, onPublish}: DialogCopy & {
-  publishOpen: boolean; setPublishOpen: (open: boolean) => void; monthLabel: string; assigned: number; saving: boolean; onPublish: () => Promise<void>;
+export function PublishDialog({publishOpen, setPublishOpen, monthLabel, assigned, saving, lang, t, onPublish, conflicts = [], line}: DialogCopy & {
+  publishOpen: boolean; setPublishOpen: (open: boolean) => void; monthLabel: string; assigned: number; saving: boolean; onPublish: (anyway?: DayConflict[]) => Promise<void>;
+  conflicts?: DayConflict[]; line?: (conflict: DayConflict) => string;
 }) {
+  // Unapproved availability conflicts (owner 2026-11-21): who and when, one per line; Publish
+  // anyway approves exactly these. Never the red "approve it with a reason" message.
+  if (conflicts.length) {
+    const members = new Set(conflicts.map(c => c.member)).size;
+    return <Sheet open={publishOpen} onOpenChange={setPublishOpen} lang={lang} kind="alert" closeDisabled={saving} busy={saving}
+      title={members === 1 ? t('1 member is on a day they marked unavailable', 'חבר צוות אחד משובץ ביום שסימן כלא זמין')
+        : t(`${members} members are on days they marked unavailable`, `${members} חברי צוות משובצים בימים שסימנו כלא זמינים`)}
+      description={`${monthLabel} · ${assigned} ${t('duties covered', 'כוננויות משובצות')}`}
+      footer={<div className="sheet-actions"><Button variant="secondary" disabled={saving} onClick={() => setPublishOpen(false)}>{t('Cancel', 'ביטול')}</Button><Button disabled={saving} onClick={() => onPublish(conflicts)}>{t('Publish anyway', 'לפרסם בכל זאת')}</Button></div>}>
+      <ul className="swap-conflicts swap-unavailable publish-conflicts">{conflicts.map(c => <li key={c.member + c.day}>{line ? line(c) : c.day}</li>)}</ul>
+    </Sheet>;
+  }
   return <Sheet open={publishOpen} onOpenChange={setPublishOpen} lang={lang} kind="alert" closeDisabled={saving} busy={saving} title={t('Publish?', 'לפרסם?')} description={`${monthLabel} · ${assigned} ${t('duties covered', 'כוננויות משובצות')}`}
-    footer={<div className="sheet-actions"><Button variant="secondary" disabled={saving} onClick={() => setPublishOpen(false)}>{t('Not yet', 'עוד לא')}</Button><Button disabled={saving} onClick={onPublish}>{t('Publish', 'פרסום')}</Button></div>}>
+    footer={<div className="sheet-actions"><Button variant="secondary" disabled={saving} onClick={() => setPublishOpen(false)}>{t('Not yet', 'עוד לא')}</Button><Button disabled={saving} onClick={() => onPublish()}>{t('Publish', 'פרסום')}</Button></div>}>
     <div className="publish-summary"><CheckCircle2 size={28}/><p>{t('The team sees it and gets notified. You can reopen it any time.', 'הצוות יראה אותו ויקבל התראה. אפשר לפתוח לעריכה בכל עת.')}</p></div>
   </Sheet>;
 }

@@ -21,5 +21,7 @@ begin
  insert into public.duty_allocations(month,publication_id,allocation_id,allocation,locks,approvals,accounting_fingerprint,calendar_fingerprint,source_publication_id,generation,origin)
  select month,null,allocation_id,allocation,locks,approvals,md5((duty_private.compensation_state()->'events')::text),calendar_fingerprint,p_publication,generation,'restored' from public.duty_allocations where publication_id=p_publication;
  update public.duty_months set status='draft',generated=true where month=v.month;
+ -- Whoever this left off a date loses its availability approval (#103).
+ perform duty_private.prune_duty_approvals();
  update public.duty_workspace set revision=revision+1 where id;
 end $$;

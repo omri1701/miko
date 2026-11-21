@@ -75,7 +75,8 @@ for(const lang of ['en','he'] as const)for(const availability of [false,true])te
  const mobile=info.project.name==='mobile',dialog=page.getByRole('dialog'),confirm=dialog.locator('button').filter({hasText:lang==='en'?'Confirm swap':'אישור החלפה'});
  await propose(page,mobile);
  await expect(dialog).toContainText(lang==='en'?'Alex Atlas 2 weekends in November':'Alex Atlas 2 סופי שבוע בחודש נובמבר');
- if(availability){await expect(dialog).toContainText('Weekend vacation');await expect(dialog).toContainText(lang==='en'?'Availability conflicts':'התנגשות עם אילוצים')}
+ if(availability){await expect(dialog.locator('strong').filter({hasText:lang==='en'?'Availability conflicts':'התנגשות עם אילוצים'})).toHaveText(lang==='en'?'Availability conflicts':'התנגשות עם אילוצים');
+  await expect(dialog.locator('.swap-conflicts').getByRole('listitem')).toHaveText([lang==='en'?'Alex Atlas marked 7 Nov as unavailable · Weekend vacation':'Alex Atlas סימן/ה את 7 בנוב׳ כלא זמין · Weekend vacation'])}
  const label=dialog.locator('.manager-override'),checkbox=label.getByRole('checkbox');
  await expect(confirm).toBeDisabled();await expect(checkbox).not.toBeChecked();
  await label.evaluate(el=>{el.style.maxWidth='145px'});

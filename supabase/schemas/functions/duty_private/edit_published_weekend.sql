@@ -115,6 +115,15 @@ begin
  perform duty_private.compensation_publication(m.month,publication,NULL,false,jsonb_build_object('intents',intents,
   'reason','Published weekend edit '||p_friday||' ('||case when joined then 'one weekend' else 'two days' end||', '||p_kind||')'||case when conflicts then '. Availability override: '||reason else '' end));
  update public.duty_months set current_publication_id=publication where month=m.month;
+ -- A reason is the availability approval (owner 2026-11-21) for the dates it covered; anyone
+ -- moved off this weekend loses theirs.
+ if conflicts then
+  -- Exactly the dates the reason covered: a new engineer's date, or a cover joined onto one.
+  update public.duty_constraints c set duty_approved=true where c.kind='no' and ((fri_changed and c.member_id=p_friday_primary and c.day=p_friday)
+   or (sat_changed and c.member_id=p_saturday_primary and c.day=saturday)
+   or (joined and c.member_id=cover and ((c.day=p_friday and cover is distinct from f.secondary_id) or (c.day=saturday and cover is distinct from s.secondary_id))));
+ end if;
+ perform duty_private.prune_duty_approvals();
  -- The weekend's shape or points changed the month's calendar; the copied plan follows it.
  update public.duty_allocations set calendar_fingerprint=md5((select jsonb_agg(d-array['primary','secondary'] order by d->>'id')::text
   from jsonb_array_elements(duty_private.generation_facts(m.month)->'duties') d)) where publication_id=publication;

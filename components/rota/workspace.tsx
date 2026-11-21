@@ -39,11 +39,12 @@ import {AllocationDialog} from './allocation-dialog';
 import {allocationTotals, repaymentsTaken} from '@/lib/allocation/review';
 import {useIsraelToday} from '@/hooks/use-israel-today';
 import {useCalendarInteractions} from '@/hooks/use-calendar-interactions';
-import {fromSnapshot} from '@/lib/supabase/snapshot';
+import {fromSnapshot, type DayConflict} from '@/lib/supabase/snapshot';
 import {toast} from 'sonner';
 import {addDays, monthNext, blocks, ownerMonth, type Duty} from '@/lib/rota/engine';
 import {calendarDates, workspaceMetrics, visibleCalendarBlocks} from '@/lib/rota/workspace-data';
-import {userMessage} from '@/lib/messages';
+import {userMessage, availabilityConflicts} from '@/lib/messages';
+import {explainedMessage, conflictContext, conflictLine} from '@/lib/conflict-message';
 
 export function RotaWorkspace({remote, lang, setLang}: {remote: TeamWorkspace; lang: 'en' | 'he'; setLang: (lang: 'en' | 'he') => void}) {
   const mobile = useMobileLayout();
@@ -146,7 +147,9 @@ export function RotaWorkspace({remote, lang, setLang}: {remote: TeamWorkspace; l
   const state = remote.state!;
   const today = useIsraelToday();
   const [settingsOpen, setSettingsOpen] = useState(false), [historyOpen, setHistoryOpen] = useState(false);
-  const [settings, setSettings] = useState(false), [publishOpen, setPublishOpen] = useState(false);
+  const [settings, setSettings] = useState(false), [publishOpen, openPublish] = useState(false);
+  const [publishConflicts, setPublishConflicts] = useState<DayConflict[] | null>(null);
+  const setPublishOpen = (open: boolean) => {setPublishConflicts(null); openPublish(open);};
   const [person, setPerson] = useState(meId), [calendarChoice, setCalendarChoice] = useState({month: '', status: '', version: 'draft'});
   const [cancelDraftMonth, setCancelDraftMonth] = useState<string | null>(null);
   const [publishedEdit, setPublishedEdit] = useState<string | null>(null);
@@ -239,8 +242,17 @@ export function RotaWorkspace({remote, lang, setLang}: {remote: TeamWorkspace; l
       return true;
     } catch (e) {toast.error(userMessage((e as Error).message, t)); return false;}
   }
-  async function publish() {
-    if (!(await update((s) => ({...s, months: {...s.months, [month]: {...monthDetails, status: 'published', generated: true}}}), false))) return;
+  async function publish(anyway?: DayConflict[]) {
+    try {
+      if (!(await draft.update((s) => ({...s, months: {...s.months, [month]: {...monthDetails, status: 'published', generated: true}}}), false, false, undefined, anyway))) return;
+    } catch (e) {
+      // Who is on a date they marked unavailable: the popup lists the database's own list (a newer
+      // conflict included) and asks again, instead of an error.
+      const listed = availabilityConflicts((e as Error).message);
+      if (listed) {remote.clearError(); setPublishConflicts(listed); return;}
+      toast.error(explainedMessage((e as Error).message, t, conflictContext(remote, state, t)));
+      return;
+    }
     setPublishOpen(false);
     setCalendarChoice({month, status: 'published', version: 'draft'});
     interactions.resetSelection();
@@ -299,7 +311,8 @@ export function RotaWorkspace({remote, lang, setLang}: {remote: TeamWorkspace; l
   };
 
   // One state-driven primary action and a ⋯ menu for the rare ones (decision 2026-11-06).
-  const publishable = !allocationMismatch && metrics.assigned === metrics.owned.length && !metrics.conflicts.length && !!metrics.owned.length && !publishBlockers.length;
+  // Availability conflicts never block Publish: its popup lists them (owner 2026-11-21).
+  const publishable = !allocationMismatch && metrics.assigned === metrics.owned.length && !!metrics.owned.length && !publishBlockers.length;
   const planLabel = t('Plan the month', 'תכנון החודש'), closedReason = t('Coverage has started: manual edits and swaps only', 'הכיסוי החודשי התחיל: רק עריכה ידנית והחלפות');
   let primary: PrimaryAction | undefined, menu: MenuItem[] = [];
   if (isManager) {
@@ -409,7 +422,7 @@ export function RotaWorkspace({remote, lang, setLang}: {remote: TeamWorkspace; l
       status={remote.saving ? <span className="side-status" role="status">{t('Saving…', 'שומר…')}</span> : undefined}>
       <InspectionWarning environment={remote.environment} lang={lang}/>
       {remote?.error && <div className="note-card" role="alert" data-tone="danger">
-        <span>{userMessage(remote.error, t)}</span>
+        <span className="message-lines">{explainedMessage(remote.error, t, conflictContext(remote, state, t))}</span>
         <Button variant="ghost" size="sm" onClick={() => remote.refresh().then(() => remote.clearError()).catch((e) => toast.error(userMessage(e.message, t)))}><RefreshCw/>{t('Refresh', 'רענון')}</Button>
       </div>}
       <fieldset disabled={!!remote?.saving} className="workspace-controls">
@@ -457,7 +470,7 @@ export function RotaWorkspace({remote, lang, setLang}: {remote: TeamWorkspace; l
     {isManager && allocation.open && <AllocationDialog flow={allocation} state={state} month={month} monthLabel={monthLabel} lang={lang} t={t}
       onShowSplits={fridays => {allocation.close(); setTab('schedule'); if (mobile) setSelectedDay(fridays[0]); setFlashDays(fridays.flatMap(f => [f, addDays(f, 1)]));}}/>}
     {isManager && <PublicationHistory key={`history-${month}`} remote={remote} month={month} open={historyOpen} onOpenChange={setHistoryOpen} lang={lang}/>}
-    {selected && <DutyEditor key={selected.id} state={state} duty={selected} month={month} lang={lang} onClose={() => setSelected(null)} saving={remote.saving}
+    {selected && <DutyEditor key={selected.id} state={state} duty={selected} month={month} lang={lang} me={remote.memberId} onClose={() => setSelected(null)} saving={remote.saving}
       onMonth={(m) => {goToMonth(m); setSelected(null);}} onSave={draft.editor.save} onRemoveSpecial={draft.editor.removeSpecial}/>}
     {/* A weekend that hasn't started opens the "One weekend | Two days" editor (decision 2026-11-07). */}
     {publishedEditRow && (publishedEditWeekend
@@ -465,7 +478,7 @@ export function RotaWorkspace({remote, lang, setLang}: {remote: TeamWorkspace; l
         onSwap={interactions.swapSourceDays.has(publishedEditRow.day) ? () => {setPublishedEdit(null); interactions.setKeyboardSource(publishedEditRow.day);} : undefined}/>
       : <PublishedDutyEditor key={publishedEditRow.day} remote={remote} row={publishedEditRow} lang={lang} onClose={() => setPublishedEdit(null)}
         onSwap={interactions.swapSourceDays.has(publishedEditRow.day) ? () => {setPublishedEdit(null); interactions.setKeyboardSource(publishedEditRow.day);} : undefined}/>)}
-    <DraftSwapDialog controller={draft.swap} state={state} duties={duties} lang={lang} t={t} fmt={fmt} nickname={nickname} personName={personName}/>
+    <DraftSwapDialog controller={draft.swap} state={state} duties={duties} lang={lang} t={t} fmt={fmt} nickname={nickname} personName={personName} me={remote.memberId}/>
     <CancelDraftDialog open={cancelDraftMonth !== null} onOpenChange={open => {if (!open) setCancelDraftMonth(null);}} saving={remote.saving} lang={lang} t={t} monthLabel={monthLabel} onConfirm={async () => {
       if (!cancelDraftMonth) return;
       try {
@@ -479,7 +492,8 @@ export function RotaWorkspace({remote, lang, setLang}: {remote: TeamWorkspace; l
     <SpecialDutyDialog form={draft.special} month={month} lang={lang} t={t} fmt={fmt}/>
     <MonthSettingsDialog settings={settings} setSettings={setSettings} monthLabel={monthLabel} monthDetails={monthDetails} lang={lang} t={t}
       onDeadline={(deadline) => {update((s) => ({...s, months: {...s.months, [month]: {...monthDetails, deadline}}}), false);}}/>
-    <PublishDialog publishOpen={publishOpen} setPublishOpen={setPublishOpen} monthLabel={monthLabel} assigned={metrics.assigned} saving={!!remote?.saving} lang={lang} t={t} onPublish={publish}/>
+    <PublishDialog publishOpen={publishOpen} setPublishOpen={setPublishOpen} monthLabel={monthLabel} assigned={metrics.assigned} saving={!!remote?.saving} lang={lang} t={t} onPublish={publish}
+      conflicts={publishConflicts ?? metrics.unavailableDays} line={c => conflictLine(c, conflictContext(remote, state, t))}/>
   </>;
 }
 
