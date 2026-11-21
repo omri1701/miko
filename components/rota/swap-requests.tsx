@@ -131,8 +131,11 @@ export function SwapCard({r,swaps,remote,lang}:{r:SwapRequest;swaps:SwapActions;
  // the same actions as the buttons, which stay for keyboard and screen readers.
  const [openSwipe,setOpenSwipe]=useState<string|null>(null);
  const off=remote.readOnly||!pending;
- const leading:SwipeAction|undefined=off?undefined:incoming&&!refused?{label:t('Accept','קבלה'),icon:<Check/>,tone:'brand',onSelect:()=>swaps.startAccept(r)}
-  :admin?{label:t('Approve','אישור'),icon:<ShieldCheck/>,tone:'brand',onSelect:()=>swaps.openApprove(r)}:undefined;
+ // A card showing a party's own constraint warns in its action label (owner 2026-11-21).
+ const conflicted=pending&&swapPartyConstraints(raw,r).some(c=>remote.isAdmin||c.member_id===me);
+ const acceptLabel=conflicted?t('Accept anyway','לקבל בכל זאת'):t('Accept','קבלה'),approveLabel=conflicted?t('Approve anyway','לאשר בכל זאת'):t('Approve','אישור');
+ const leading:SwipeAction|undefined=off?undefined:incoming&&!refused?{label:acceptLabel,icon:<Check/>,tone:'brand',onSelect:()=>swaps.startAccept(r)}
+  :admin?{label:approveLabel,icon:<ShieldCheck/>,tone:'brand',onSelect:()=>swaps.openApprove(r)}:undefined;
  const trailing:SwipeAction|undefined=off?undefined:incoming?{label:t('Decline','סירוב'),icon:<X/>,tone:'danger',onSelect:()=>swaps.decline(r)}
   :admin?{label:t('Reject','דחייה'),icon:<X/>,tone:'danger',onSelect:()=>swaps.reject(r)}
   :swapStarter(r)===me?{label:t('Cancel','ביטול'),icon:<X/>,tone:'danger',onSelect:()=>swaps.cancel(r)}:undefined;
@@ -156,8 +159,8 @@ export function SwapCard({r,swaps,remote,lang}:{r:SwapRequest;swaps:SwapActions;
     {refused&&<small className="swap-refused" role="note">{swaps.explain(refused,'accept')}</small>}
   </div>
   {pending&&<div className="swap-card-actions">
-   {incoming&&<><Button size="sm" disabled={!!refused||remote.readOnly} onClick={()=>swaps.startAccept(r)}>{t('Accept','קבלה')}</Button><Button size="sm" variant="secondary" disabled={remote.readOnly} onClick={()=>swaps.decline(r)}>{t('Decline','סירוב')}</Button></>}
-   {admin&&<><Button size="sm" disabled={remote.readOnly} onClick={()=>swaps.openApprove(r)}>{t('Approve','אישור')}</Button><Button size="sm" variant="secondary" disabled={remote.readOnly} onClick={()=>swaps.reject(r)}>{t('Reject','דחייה')}</Button></>}
+   {incoming&&<><Button size="sm" disabled={!!refused||remote.readOnly} onClick={()=>swaps.startAccept(r)}>{acceptLabel}</Button><Button size="sm" variant="secondary" disabled={remote.readOnly} onClick={()=>swaps.decline(r)}>{t('Decline','סירוב')}</Button></>}
+   {admin&&<><Button size="sm" disabled={remote.readOnly} onClick={()=>swaps.openApprove(r)}>{approveLabel}</Button><Button size="sm" variant="secondary" disabled={remote.readOnly} onClick={()=>swaps.reject(r)}>{t('Reject','דחייה')}</Button></>}
    {swapStarter(r)===me&&<Button size="sm" variant="ghost" disabled={remote.readOnly} onClick={()=>swaps.cancel(r)}>{t('Cancel request','ביטול הבקשה')}</Button>}
   </div>}
  </article>

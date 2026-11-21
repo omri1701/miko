@@ -171,7 +171,9 @@ for (const lang of ['en', 'he'] as const) test(`a member accepts a date they mar
       expect(box.width).toBeGreaterThan(cardBox!.width - 40);
     }
     expect(await card.locator('.swap-party').evaluateAll(parts => new Set(parts.map(p => Math.round(p.getBoundingClientRect().top))).size)).toBe(1);
-    await card.getByRole('button', {name: t('Accept', 'קבלה'), exact: true}).click();
+    // Owner 2026-11-21: the label itself warns, on the button and the swipe action; no popup.
+    await expect(b.locator('.swap-swipe .swipe-actions-start .swipe-action')).toHaveText(t('Accept anyway', 'לקבל בכל זאת'));
+    await card.getByRole('button', {name: t('Accept anyway', 'לקבל בכל זאת'), exact: true}).click();
     await expect(b.getByRole('dialog')).toHaveCount(0);
     await expect.poll(() => backend.raw.swapRequests![0].accepted_by).toBe(ids.b);
   } finally {await bc.close();}
@@ -179,7 +181,8 @@ for (const lang of ['en', 'he'] as const) test(`a member accepts a date they mar
   Object.assign(backend.raw.swapRequests![0], {requester_accepted_at: NOW, status: 'awaiting_admin'});
   backend.raw.revision!++;
   await page.reload(); await language(page, lang);
-  await page.getByRole('button', {name: t('Approve', 'אישור'), exact: true}).click();
+  await expect(page.locator('.swap-swipe .swipe-actions-start .swipe-action')).toHaveText(t('Approve anyway', 'לאשר בכל זאת'));
+  await page.getByRole('button', {name: t('Approve anyway', 'לאשר בכל זאת'), exact: true}).click();
   const dialog = page.getByRole('dialog', {name: t('Approve swap', 'אישור החלפה')});
   await expect(dialog.getByLabel(t('Swap summary', 'סיכום ההחלפה'))).toContainText(t('Duty swap: Alex Atlas ⇄ Blair Birch', 'החלפת כוננויות: Alex Atlas ⇄ Blair Birch'));
   // Owner 2026-11-21: the admin sees the conflict with its note, no explanation, checkbox or reason.
@@ -220,6 +223,8 @@ for (const lang of ['en', 'he'] as const) test(`an admin answers for temporary m
   expect(backend.raw.swapRequests![0]).toMatchObject({requester_id: tamar, other_id: noa, status: 'awaiting_admin', accepted_by: noa, requester_accepted_at: NOW});
   // Answering never publishes: the explicit approval with its summary still follows.
   expect(backend.raw.publications).toHaveLength(1);
+  // No conflict line: the plain labels stay, on the button and the swipe action.
+  await expect(page.locator('.swap-swipe .swipe-actions-start .swipe-action')).toHaveText(t('Approve', 'אישור'));
   await page.getByRole('button', {name: t('Approve', 'אישור'), exact: true}).click();
   const dialog = page.getByRole('dialog', {name: t('Approve swap', 'אישור החלפה')});
   await expect(dialog.getByLabel(t('Swap summary', 'סיכום ההחלפה'))).toContainText('Tamar Temp ⇄ Noa Temp');
