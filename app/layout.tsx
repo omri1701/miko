@@ -2,13 +2,15 @@ import type { Metadata, Viewport } from 'next';
 import './tailwind.css';
 import './globals.css';
 import {APP_DESCRIPTION, APP_NAME} from '@/lib/brand';
+import {appNameFor, currentBrandEnvironment, publicAsset} from '@/lib/brand-environment';
 import {THEME_SCRIPT} from '@/lib/theme/theme';
 export const viewport: Viewport = {width: 'device-width', initialScale: 1, viewportFit: 'cover', interactiveWidget: 'resizes-content'};
 // No viewport themeColor: React re-inserts those tags after hydration with their first colours, which a
 // theme change then misses. THEME_SCRIPT owns the one theme-color tag instead (lib/theme/theme.ts).
-export const metadata: Metadata = {title: APP_NAME, description: APP_DESCRIPTION,
-  icons: {icon: [{url: '/favicon-32.png', sizes: '32x32', type: 'image/png'}, {url: '/favicon-48.png', sizes: '48x48', type: 'image/png'}], shortcut: '/favicon-32.png', apple: '/apple-touch-icon.png'},
-  appleWebApp: {capable: true, title: APP_NAME, statusBarStyle: 'default'}};
+const brand = currentBrandEnvironment(), appName = appNameFor(APP_NAME, brand), icon = (file: string) => publicAsset(brand, file);
+export const metadata: Metadata = {title: appName, description: APP_DESCRIPTION,
+  icons: {icon: [{url: icon('favicon-32.png'), sizes: '32x32', type: 'image/png'}, {url: icon('favicon-48.png'), sizes: '48x48', type: 'image/png'}], shortcut: icon('favicon-32.png'), apple: icon('apple-touch-icon.png')},
+  appleWebApp: {capable: true, title: appName, statusBarStyle: 'default'}};
 // width, height, points width, points height, scale.
 const SPLASH: [number, number, number, number, number][] = [[1290, 2796, 430, 932, 3], [1179, 2556, 393, 852, 3], [1170, 2532, 390, 844, 3], [1284, 2778, 428, 926, 3], [1125, 2436, 375, 812, 3], [828, 1792, 414, 896, 2], [750, 1334, 375, 667, 2], [1242, 2208, 414, 736, 3]];
 export default function Layout({children}: {children: React.ReactNode}) {
