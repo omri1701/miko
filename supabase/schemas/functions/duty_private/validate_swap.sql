@@ -16,8 +16,8 @@ begin
  if a.secondary_id=b.primary_id or b.secondary_id=a.primary_id then raise exception 'A primary engineer cannot also be emergency cover'; end if;
  if exists(select 1 from duty_private.current_duties() x join duty_private.current_duties() y on x.id<>y.id and x.day<y.end_day and y.day<x.end_day
   where x.id in (a.id,b.id)) then raise exception 'Published duty dates overlap'; end if;
- -- Emergency cover's unavailability needs an audited admin override. A primary's own
- -- constraint is theirs to waive by consenting (#92); resolve_swap checks that consent.
+ -- Emergency cover's unavailability refuses a request. A primary's own constraint never
+ -- does (#92): they consent by sending or accepting; the admin's approval overrides both.
  select exists(select 1 from public.duty_constraints c where c.kind='no' and
   ((c.member_id=a.secondary_id and c.day>=a.day and c.day<a.end_day)
    or (c.member_id=b.secondary_id and c.day>=b.day and c.day<b.end_day))) into conflicts;

@@ -24,8 +24,7 @@ begin
   elsif b.primary_id is distinct from r.other_id then
    -- A new counterpart is a new deal: both members answer again.
    update public.duty_swap_requests set other_id=b.primary_id,status='awaiting_engineer',
-    accepted_by=null,accepted_at=null,requester_accepted_at=null,other_waived_days='{}',
-    requester_waived_days=case when r.proposed_by is null then requester_waived_days else '{}' end where id=r.id;
+    accepted_by=null,accepted_at=null,requester_accepted_at=null where id=r.id;
   end if;
  end loop;
 end $$;

@@ -76,7 +76,7 @@ for (const lang of ['en', 'he'] as const) {
     for (const note of ['Synthetic vacation', 'Alex private note', 'Blair private note', 'Cover private note']) await expect(page.locator('body')).not.toContainText(note);
     await page.getByRole('button', {name: t('Send anyway', 'לשלוח בכל זאת'), exact: true}).click();
     await expect(dialog).toBeHidden();
-    expect(backend.raw.swapRequests![0]).toMatchObject({requester_id: ids.a, to_day: '2026-11-05', requester_waived_days: ['2026-11-05'], status: 'awaiting_engineer'});
+    expect(backend.raw.swapRequests![0]).toMatchObject({requester_id: ids.a, to_day: '2026-11-05', status: 'awaiting_engineer'});
     expect(backend.raw.constraints.some(c => c.member_id === ids.a && c.day === '2026-11-05')).toBe(true);
   });
 

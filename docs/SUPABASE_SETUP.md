@@ -743,13 +743,12 @@ an approved admin or one of the two primaries. Members get emergency cover's con
 with `member` NULL and only for a pair starting today or later. Only final
 approval copies the current publication into a new immutable version. Since migration
 `20261120094825_swap_over_constraint.sql` (#92) a primary's own unavailability no longer
-refuses a request: sending it records the requester's unavailable dates on the duty they
-take in `requester_waived_days`, and each Accept records the accepting side's in
-`requester_waived_days`/`other_waived_days` (dates only; a new counterpart starts empty).
-Approval needs no override reason for waived dates and never deletes the constraint; the
-published duty is marked `manager_override`. Emergency cover's unavailability still refuses
-a request, and it or a constraint added after that side's consent can be acknowledged at
-consent but requires an explicit admin override reason at approval. Published swap requests retain their
+refuses a request; emergency cover's still does. Since
+`20261121170542_swap_approve_without_reason.sql` (owner 2026-11-21) the admin's approval is
+the availability override: no typed reason (`override_reason` stays empty unless a client
+sends one), the published duties are marked `manager_override`, and constraints are never
+deleted. That migration also drops the short-lived `requester_waived_days`/`other_waived_days`
+columns. Published duty edits still require an override reason. Published swap requests retain their
 weekend cap: a swap cannot increase an engineer's weekend count above one. Draft
 swaps can instead explicitly approve weekend exceptions in the manager dialog. Secondary
 cover, special date points/spans, draft rows/status and historical versions remain

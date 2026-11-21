@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {publishedSwapDuties,eligibleSwapTarget,visibleSwapRequests,swapStarter,swapWaitingOn,swapAnswerFor,swapNeedsAction,readSwapConflicts,swapSummary,swapTargetBlock,swapBlockText,swapTargetWarning,swapWarningText,unwaivedSwapConflicts,swapOwnConflict,coverConflicts,swapPartyConstraints,noteLabel} from '../lib/supabase/swaps.ts';
+import {publishedSwapDuties,eligibleSwapTarget,visibleSwapRequests,swapStarter,swapWaitingOn,swapAnswerFor,swapNeedsAction,readSwapConflicts,swapSummary,swapTargetBlock,swapBlockText,swapTargetWarning,swapWarningText,swapOwnConflict,coverConflicts,swapPartyConstraints,noteLabel} from '../lib/supabase/swaps.ts';
 import {todayIsrael} from '../lib/rota/calendar-dates.ts';
 
 test('Israeli midnight expires yesterday, including a continuing Friday weekend',()=>{
@@ -167,20 +167,12 @@ test('swap hint text says who and which day, never the note, for engineers and a
  assert.equal(swapWarningText({person:'dana',day:'2026-11-02'},{me:'admin',name:id=>names[id],day,lang:'he',note:'Dentist'}),'Dana · 02: Dentist');
 });
 
-test('#92 consent: the answering member sees their own unavailable date; approval overrides only unwaived dates',()=>{
- const source={id:'s',publication_id:'p',day:'2026-11-02',end_day:'2026-11-03',primary_id:'me',secondary_id:'cover'};
- const target={id:'t',publication_id:'p',day:'2026-11-04',end_day:'2026-11-05',primary_id:'dana',secondary_id:null};
+test('#92 consent: the answering member sees their own unavailable date; admins read each party’s note',()=>{
  const r={requester_id:'me',other_id:'dana',from_day:'2026-11-02',from_end_day:'2026-11-03',to_day:'2026-11-04',to_end_day:'2026-11-05'};
  const raw={constraints:[{member_id:'dana',day:'2026-11-02',kind:'no',note:'Secret'},{member_id:'me',day:'2026-11-04',kind:'prefer',note:''}]};
  // Rule 2: Dana takes 2 Nov, which she marked unavailable; a preference is not unavailability.
  assert.equal(swapOwnConflict(raw,r,'dana'),'2026-11-02');
  assert.equal(swapOwnConflict(raw,r,'me'),null);
- const conflicts=[{member:'dana',day:'2026-11-02'},{member:'me',day:'2026-11-04'},{member:'cover',day:'2026-11-02'}];
- // Rule 3: consent waived both members' dates; only cover still needs the admin's reason.
- assert.deepEqual(unwaivedSwapConflicts({...r,requester_waived_days:['2026-11-04'],other_waived_days:['2026-11-02']},source,target,conflicts),[{member:'cover',day:'2026-11-02'}]);
- // A date added after consent (or a database without #92) still needs the override.
- assert.deepEqual(unwaivedSwapConflicts({...r,requester_waived_days:[],other_waived_days:['2026-11-02']},source,target,conflicts),[{member:'me',day:'2026-11-04'},{member:'cover',day:'2026-11-02'}]);
- assert.deepEqual(unwaivedSwapConflicts(r,source,target,conflicts),conflicts);
  // Admin view: each party's constraint on the duty they take, with its note.
  const notes={...raw,constraints:[...raw.constraints,{member_id:'me',day:'2026-11-04',kind:'no',note:''},{member_id:'me',day:'2026-11-02',kind:'no',note:'Own day'}]};
  assert.deepEqual(swapPartyConstraints(notes,r).map(c=>noteLabel(c.member_id,c.day,c.note,{name:id=>id,day:d=>d.slice(8)})),['dana · 02: Secret','me · 04']);

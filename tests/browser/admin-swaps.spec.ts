@@ -167,7 +167,6 @@ for (const lang of ['en', 'he'] as const) test(`a member accepts a date they mar
     await expect(b.getByRole('dialog')).toHaveCount(0);
     await expect.poll(() => backend.raw.swapRequests![0].accepted_by).toBe(ids.b);
   } finally {await bc.close();}
-  expect(backend.raw.swapRequests![0].other_waived_days).toEqual(['2026-11-02']);
   // Alex's side, accepted on the server to keep this test on the admin review.
   Object.assign(backend.raw.swapRequests![0], {requester_accepted_at: NOW, status: 'awaiting_admin'});
   backend.raw.revision!++;
@@ -175,10 +174,12 @@ for (const lang of ['en', 'he'] as const) test(`a member accepts a date they mar
   await page.getByRole('button', {name: t('Approve', 'אישור'), exact: true}).click();
   const dialog = page.getByRole('dialog', {name: t('Approve swap', 'אישור החלפה')});
   await expect(dialog.getByLabel(t('Swap summary', 'סיכום ההחלפה'))).toContainText(t('Duty swap: Alex Atlas ⇄ Blair Birch', 'החלפת כוננויות: Alex Atlas ⇄ Blair Birch'));
-  // No extra warning or reason for the date Blair waived; the admin reads its note.
-  await expect(dialog.getByRole('alert')).toHaveCount(0);
-  await expect(dialog.getByRole('note')).toHaveText(t('Blair Birch · 2 Nov: Late private note', 'Blair Birch · 2 בנוב׳: Late private note'));
-  const approve = dialog.getByRole('button', {name: t('Approve & publish', 'אישור ופרסום')});
+  // Owner 2026-11-21: the admin sees the conflict with its note, no explanation, checkbox or reason.
+  await expect(dialog.getByRole('alert').getByRole('listitem')).toHaveText(t('Blair Birch · 2 Nov: Late private note', 'Blair Birch · 2 בנוב׳: Late private note'));
+  await expect(dialog.getByRole('checkbox')).toHaveCount(0);
+  await expect(dialog.getByRole('textbox')).toHaveCount(0);
+  await expect(dialog).not.toContainText(t('reason', 'נימוק'));
+  const approve = dialog.getByRole('button', {name: t('Approve anyway', 'לאשר בכל זאת'), exact: true});
   await expect(approve).toBeEnabled();
   await approve.click();
   await expect(dialog).toBeHidden();

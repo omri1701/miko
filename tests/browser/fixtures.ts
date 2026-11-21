@@ -54,17 +54,11 @@ export class Backend {
   authFailure = false;
   invalidated = false;
   failNextSave = false;
-  /** A member's own unavailable dates inside a duty (dates only, as request/resolve_swap record them). */
-  unavailable(member: string, duty: {day: string; end_day: string}) {
-    return this.raw.constraints.filter(c => c.kind === 'no' && c.member_id === member && c.day >= duty.day && c.day < duty.end_day).map(c => c.day).sort();
-  }
-  /** validate_swap's conflicts minus dates waived by the incoming primaries (from's new holder, to's new holder). */
-  unwaived(from: DutyRow, to: DutyRow, fromWaived: string[], toWaived: string[]) {
+  /** validate_swap's blocking conflicts: emergency cover's unavailability (a primary's own never blocks, #92). */
+  coverConflict(from: DutyRow, to: DutyRow) {
     const inside = (d: DutyRow, day: string) => day >= d.day && day < d.end_day;
-    return this.raw.constraints.filter(c => c.kind === 'no' && (
-      (c.member_id === from.secondary_id && inside(from, c.day)) || (c.member_id === to.secondary_id && inside(to, c.day)) ||
-      (c.member_id === to.primary_id && inside(from, c.day) && !fromWaived.includes(c.day)) ||
-      (c.member_id === from.primary_id && inside(to, c.day) && !toWaived.includes(c.day)))).map(c => ({member: c.member_id, day: c.day}));
+    return this.raw.constraints.some(c => c.kind === 'no' &&
+      ((c.member_id === from.secondary_id && inside(from, c.day)) || (c.member_id === to.secondary_id && inside(to, c.day))));
   }
   /** Display-only projection served by duty_balance; null serves zero for everyone. */
   balance: Balance | null = null;
@@ -325,10 +319,9 @@ export class Backend {
       // Admins may propose for others; an admin party becomes the requester.
       if (from.primary_id !== user) {expect(admin).toBe(true); if (to.primary_id === user) [from, to] = [to, from];}
       expect(to.primary_id).not.toBe(from.primary_id);
-      // Mirrors request_swap (#92): emergency cover's unavailability refuses; sending waives the requester's own.
-      if (this.unwaived(from, to, [], []).some(c => c.member !== from.primary_id && c.member !== to.primary_id)) throw Error('Availability conflict. An admin must explicitly override with a reason.');
-      this.raw.swapRequests!.unshift({id: `request-${this.raw.revision}`, month: MONTH, source_publication_id: from.publication_id, requester_id: from.primary_id!, other_id: to.primary_id!, from_day: from.day, from_end_day: from.end_day, to_day: to.day, to_end_day: to.end_day, explanation: p.p_explanation as string, status: 'awaiting_engineer', accepted_by: null, accepted_at: null, created_at: NOW, resolved_at: null, resolved_by: null, result_publication_id: null, override_reason: '', proposed_by: from.primary_id === user ? null : user, requester_accepted_at: null,
-        requester_waived_days: from.primary_id === user ? this.unavailable(from.primary_id, to) : [], other_waived_days: []});
+      // Mirrors request_swap (#92): emergency cover's unavailability refuses; a primary's own never does.
+      if (this.coverConflict(from, to)) throw Error('Availability conflict. An admin must explicitly override with a reason.');
+      this.raw.swapRequests!.unshift({id: `request-${this.raw.revision}`, month: MONTH, source_publication_id: from.publication_id, requester_id: from.primary_id!, other_id: to.primary_id!, from_day: from.day, from_end_day: from.end_day, to_day: to.day, to_end_day: to.end_day, explanation: p.p_explanation as string, status: 'awaiting_engineer', accepted_by: null, accepted_at: null, created_at: NOW, resolved_at: null, resolved_by: null, result_publication_id: null, override_reason: '', proposed_by: from.primary_id === user ? null : user, requester_accepted_at: null});
     } else if (name === 'duty_delete_publication') {
       expect(admin).toBe(true);
       const publication = this.raw.publications.find(v => v.id === p.p_publication)!;
@@ -354,18 +347,15 @@ export class Backend {
       if (action === 'cancel') expect(user).toBe(r.proposed_by ?? r.requester_id);
       r.status = ({accept: 'awaiting_admin', decline: 'declined', approve: 'approved', reject: 'rejected', cancel: 'cancelled'} as Record<string, SwapRequest['status']>)[action];
       if (action === 'accept') {
-        // Accept waives the answering member's own unavailability on the duty they take (#92).
-        if (side === 'requester') {r.requester_accepted_at = NOW; r.requester_waived_days = this.unavailable(r.requester_id, {day: r.to_day, end_day: r.to_end_day});}
-        else {r.accepted_by = r.other_id; r.accepted_at = NOW; r.other_waived_days = this.unavailable(r.other_id, {day: r.from_day, end_day: r.from_end_day});}
+        if (side === 'requester') r.requester_accepted_at = NOW; else {r.accepted_by = r.other_id; r.accepted_at = NOW;}
         if (!r.accepted_by || (r.proposed_by && !r.requester_accepted_at)) r.status = 'awaiting_engineer';
       }
       if (action === 'approve') {
         const current = this.raw.months[0].current_publication_id;
         const rows = this.raw.assignments.filter(d => d.publication_id === current).map(d => ({...d}));
         const from = rows.find(d => d.day === r.from_day)!, to = rows.find(d => d.day === r.to_day)!;
-        // Mirrors resolve_swap: only dates nobody waived by consenting need the audited reason.
-        if (this.unwaived(from, to, r.other_waived_days ?? [], r.requester_waived_days ?? []).length && !String(p.p_override_reason).trim())
-          throw Error('Availability conflict. An admin must explicitly override with a reason.');
+        // Mirrors resolve_swap: approving is the availability override, never a typed reason (owner 2026-11-21).
+        expect(p.p_override_reason).toBe('');
         [from.primary_id, to.primary_id] = [to.primary_id, from.primary_id];
         r.result_publication_id = this.publish(MONTH, rows);
       }

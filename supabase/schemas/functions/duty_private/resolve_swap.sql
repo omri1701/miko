@@ -57,17 +57,10 @@ begin
   select current_publication_id into current_publication from public.duty_months where month=r.month;
   select * into a from public.duty_assignments where publication_id=current_publication and day=r.from_day and end_day=r.from_end_day;
   select * into b from public.duty_assignments where publication_id=current_publication and day=r.to_day and end_day=r.to_end_day;
-  -- Consent may precede an audited availability override, but never bypasses
-  -- active membership, emergency duplication, overlap, weekends or future dates.
-  perform duty_private.validate_swap(a.id,b.id,current_publication,p_action='accept' or length(reason)>0);
- end if;
- -- A member may take a date they marked unavailable (#92): their Accept (or sending the request)
- -- waives those constraints as they stand then; the constraint itself stays. A constraint added
- -- or moved after that consent still needs the audited admin override.
- if p_action='approve' and length(reason)=0 and exists(select 1 from public.duty_constraints c where c.kind='no' and
-  ((c.member_id=r.other_id and c.day>=r.from_day and c.day<r.from_end_day and not c.day=any(r.other_waived_days))
-   or (c.member_id=r.requester_id and c.day>=r.to_day and c.day<r.to_end_day and not c.day=any(r.requester_waived_days)))) then
-  raise exception 'Availability conflict. An admin must explicitly override with a reason.';
+  -- Availability never refuses a consented swap (#92, owner 2026-11-21): the admin's approval
+  -- is the override, no reason needed; the published duty is marked manager_override. Never
+  -- bypasses active membership, emergency duplication, overlap, weekends or future dates.
+  perform duty_private.validate_swap(a.id,b.id,current_publication,true);
  end if;
  if p_action='approve' then
   update public.duty_months set publication_sequence=publication_sequence+1 where month=r.month returning publication_sequence into next_version;
@@ -103,8 +96,6 @@ begin
   accepted_by=case when p_action='accept' and side='other' then r.other_id else accepted_by end,
   accepted_at=case when p_action='accept' and side='other' then now() else accepted_at end,
   requester_accepted_at=case when p_action='accept' and side='requester' then now() else requester_accepted_at end,
-  other_waived_days=case when p_action='accept' and side='other' then coalesce((select array_agg(c.day order by c.day) from public.duty_constraints c where c.kind='no' and c.member_id=r.other_id and c.day>=r.from_day and c.day<r.from_end_day),'{}') else other_waived_days end,
-  requester_waived_days=case when p_action='accept' and side='requester' then coalesce((select array_agg(c.day order by c.day) from public.duty_constraints c where c.kind='no' and c.member_id=r.requester_id and c.day>=r.to_day and c.day<r.to_end_day),'{}') else requester_waived_days end,
   resolved_at=case when p_action='accept' then null else now() end,
   resolved_by=case when p_action='accept' then null else me end,
   result_publication_id=publication,override_reason=case when p_action='approve' then reason else '' end where id=r.id;

@@ -77,18 +77,11 @@ export function readSwapConflicts(value:unknown):SwapConflict[]{
  return value.map(c=>({member:c.member,day:c.day}));
 }
 const inside=(d:{day:string;end_day:string},day:string)=>day>=d.day&&day<d.end_day;
-/** A primary's own unavailability on the duty they would take (#92): theirs to waive by
- * consenting, so it never blocks. Anything else (emergency cover) needs an admin override. */
+/** A primary's own unavailability on the duty they would take (#92): they consent by sending or
+ * accepting, so it never blocks. Anything else (emergency cover) blocks a request. */
 export const partyConflict=(c:SwapConflict,source:DutyRow,target:DutyRow)=>
  (c.member!==null&&c.member===source.primary_id&&inside(target,c.day))||(c.member!==null&&c.member===target.primary_id&&inside(source,c.day));
 export const coverConflicts=(conflicts:SwapConflict[],source:DutyRow,target:DutyRow)=>conflicts.filter(c=>!partyConflict(c,source,target));
-/** What an admin's approval still has to override with a reason, as resolve_swap decides:
- * cover conflicts, and a party's constraint not waived by their own consent (added later). */
-export function unwaivedSwapConflicts(r:SwapRequest,source:DutyRow,target:DutyRow,conflicts:SwapConflict[]){
- return conflicts.filter(c=>!partyConflict(c,source,target)
-  ||(c.member===r.other_id&&inside({day:r.from_day,end_day:r.from_end_day},c.day)&&!(r.other_waived_days??[]).includes(c.day))
-  ||(c.member===r.requester_id&&inside({day:r.to_day,end_day:r.to_end_day},c.day)&&!(r.requester_waived_days??[]).includes(c.day)));
-}
 /** The answering member's own unavailability on the duty they would take: the date only. */
 export function swapOwnConflict(raw:Snapshot,r:SwapRequest,member:string){
  const takes=member===r.other_id?{day:r.from_day,end_day:r.from_end_day}:{day:r.to_day,end_day:r.to_end_day};
