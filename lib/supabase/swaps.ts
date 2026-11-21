@@ -94,6 +94,15 @@ export function swapOwnConflict(raw:Snapshot,r:SwapRequest,member:string){
  const takes=member===r.other_id?{day:r.from_day,end_day:r.from_end_day}:{day:r.to_day,end_day:r.to_end_day};
  return raw.constraints.find(c=>c.kind==='no'&&c.member_id===member&&inside(takes,c.day))?.day??null;
 }
+/** An admin's view of a constraint: "Dana · 5 Nov: Dentist" (no note: "Dana · 5 Nov"). */
+export const noteLabel=(member:string,d:string,note:string,{name,day}:{name:(id:string)=>string;day:(d:string)=>string})=>
+ `${name(member)} · ${day(d)}${note?`: ${note}`:''}`;
+/** The two members' own 'no' constraints on the duty each would take (other: from, requester: to),
+ * with notes: for admins only, who can read every note. */
+export function swapPartyConstraints(raw:Snapshot,r:SwapRequest){
+ return raw.constraints.filter(c=>c.kind==='no'&&((c.member_id===r.other_id&&inside({day:r.from_day,end_day:r.from_end_day},c.day))
+  ||(c.member_id===r.requester_id&&inside({day:r.to_day,end_day:r.to_end_day},c.day)))).sort((a,b)=>a.day.localeCompare(b.day));
+}
 /** Why a target day can't be picked for a swap, shown before the pick (decision 2026-11-05).
  * Built from duty_swap_availability's conflicts (who and which date, never the note or kind)
  * and the second-weekend rule, so a day the calendar still offers is one the server accepts. */
@@ -118,9 +127,11 @@ export function swapTargetWarning(source:DutyRow,target:DutyRow,conflicts:SwapCo
  const first=party.find(c=>c.member===source.primary_id)??party[0];
  return first?{person:first.member!,day:first.day}:null;
 }
-/** "You marked 5 Nov as unavailable" / "Dana marked 5 Nov as unavailable": who and when, never the note. */
-export function swapWarningText(w:SwapWarning,{me,name,day,lang}:{me:string;name:(id:string)=>string;day:(d:string)=>string;lang:'en'|'he'}){
+/** "You marked 5 Nov as unavailable" / "Dana marked 5 Nov as unavailable": who and when. Only
+ * admins pass the constraint's note (they always see notes): "Dana · 5 Nov: Dentist". */
+export function swapWarningText(w:SwapWarning,{me,name,day,lang,note}:{me:string;name:(id:string)=>string;day:(d:string)=>string;lang:'en'|'he';note?:string}){
  const he=lang==='he';
+ if(note)return noteLabel(w.person,w.day,note,{name,day});
  return w.person===me?(he?`סימנת את ${day(w.day)} כלא זמין`:`You marked ${day(w.day)} as unavailable`)
   :he?`${name(w.person)} סימן/ה את ${day(w.day)} כלא זמין`:`${name(w.person)} marked ${day(w.day)} as unavailable`;
 }

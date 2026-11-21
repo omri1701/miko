@@ -85,8 +85,13 @@ export function useCalendarInteractions({
   };
   function blockText(block: SwapBlock, from: string) {
     const members = remote.snapshot!.members;
-    return swapBlockText(block, { me: meId, lang, name: (id) => memberName(members, id), day: (d) => shortDate(d, lang) });
+    const text = swapBlockText(block, { me: meId, lang, name: (id) => memberName(members, id), day: (d) => shortDate(d, lang) });
+    // Admins always see the constraint's note.
+    const note = block.kind === 'cover' && block.person ? adminNote(block.person, block.day) : '';
+    return note ? `${text}: ${note}` : text;
   }
+  const adminNote = (member: string, day: string) =>
+    remote.isAdmin ? remote.snapshot!.constraints.find((c) => c.member_id === member && c.day === day && c.kind === 'no')?.note ?? '' : '';
   const memberName = (members: { id: string; name: string }[], id: string) =>
     members.find((m) => m.id === id)?.name ?? (lang === 'he' ? 'חבר צוות' : 'A team member');
   /** Red but still pickable (#92): a primary marked one of the target's dates unavailable. Shown
@@ -94,7 +99,8 @@ export function useCalendarInteractions({
   const swapWarning = (from: string, to: string) => {
     if (swapBlock(from, to) !== null) return null;
     const warning = swapTargetWarning(publishedDuty(from)!, publishedDuty(to)!, conflicts(publishedDuty(to)!.id) ?? []);
-    return warning && swapWarningText(warning, { me: meId, lang, name: (id) => memberName(remote.snapshot!.members, id), day: (d) => shortDate(d, lang) });
+    return warning && swapWarningText(warning, { me: meId, lang, name: (id) => memberName(remote.snapshot!.members, id), day: (d) => shortDate(d, lang),
+      note: adminNote(warning.person, warning.day) });
   };
   /** The reason a target is greyed, for its tooltip and accessible name. */
   const swapHint = (from: string, to: string) => {

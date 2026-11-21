@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {publishedSwapDuties,eligibleSwapTarget,visibleSwapRequests,swapStarter,swapWaitingOn,swapAnswerFor,swapNeedsAction,readSwapConflicts,swapSummary,swapTargetBlock,swapBlockText,swapTargetWarning,swapWarningText,unwaivedSwapConflicts,swapOwnConflict,coverConflicts} from '../lib/supabase/swaps.ts';
+import {publishedSwapDuties,eligibleSwapTarget,visibleSwapRequests,swapStarter,swapWaitingOn,swapAnswerFor,swapNeedsAction,readSwapConflicts,swapSummary,swapTargetBlock,swapBlockText,swapTargetWarning,swapWarningText,unwaivedSwapConflicts,swapOwnConflict,coverConflicts,swapPartyConstraints,noteLabel} from '../lib/supabase/swaps.ts';
 import {todayIsrael} from '../lib/rota/calendar-dates.ts';
 
 test('Israeli midnight expires yesterday, including a continuing Friday weekend',()=>{
@@ -163,6 +163,8 @@ test('swap hint text says who and which day, never the note, for engineers and a
  assert.equal(warn({person:'dana',day:'2026-11-02'},'me'),'Dana marked 02 as unavailable');
  assert.equal(warn({person:'me',day:'2026-11-04'},'me','he'),'סימנת את 04 כלא זמין');
  assert.equal(warn({person:'dana',day:'2026-11-02'},'admin','he'),'Dana סימן/ה את 02 כלא זמין');
+ // Admins always read the note (owner review of #103).
+ assert.equal(swapWarningText({person:'dana',day:'2026-11-02'},{me:'admin',name:id=>names[id],day,lang:'he',note:'Dentist'}),'Dana · 02: Dentist');
 });
 
 test('#92 consent: the answering member sees their own unavailable date; approval overrides only unwaived dates',()=>{
@@ -179,4 +181,7 @@ test('#92 consent: the answering member sees their own unavailable date; approva
  // A date added after consent (or a database without #92) still needs the override.
  assert.deepEqual(unwaivedSwapConflicts({...r,requester_waived_days:[],other_waived_days:['2026-11-02']},source,target,conflicts),[{member:'me',day:'2026-11-04'},{member:'cover',day:'2026-11-02'}]);
  assert.deepEqual(unwaivedSwapConflicts(r,source,target,conflicts),conflicts);
+ // Admin view: each party's constraint on the duty they take, with its note.
+ const notes={...raw,constraints:[...raw.constraints,{member_id:'me',day:'2026-11-04',kind:'no',note:''},{member_id:'me',day:'2026-11-02',kind:'no',note:'Own day'}]};
+ assert.deepEqual(swapPartyConstraints(notes,r).map(c=>noteLabel(c.member_id,c.day,c.note,{name:id=>id,day:d=>d.slice(8)})),['dana · 02: Secret','me · 04']);
 });

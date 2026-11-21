@@ -8,9 +8,9 @@ import {Chip,type ChipTone} from '@/components/ui/chip';
 import {Avatar} from '@/components/ui/avatar';
 import {Checkbox} from '@/components/ui/checkbox';
 import type {TeamWorkspace} from '@/hooks/use-team-workspace';
-import type {SwapRequest} from '@/lib/supabase/snapshot';
+import type {Snapshot,SwapRequest} from '@/lib/supabase/snapshot';
 import {todayIsrael} from '@/lib/supabase/snapshot';
-import {publishedSwapDuties,eligibleSwapTarget,visibleSwapRequests,swapStarter,swapWaitingOn,swapAnswerFor,swapSummary,swapDuties,swapProblem,coverConflicts,partyConflict,unwaivedSwapConflicts,swapOwnConflict,type SwapConflict,type SwapProblem} from '@/lib/supabase/swaps';
+import {publishedSwapDuties,eligibleSwapTarget,visibleSwapRequests,swapStarter,swapWaitingOn,swapAnswerFor,swapSummary,swapDuties,swapProblem,coverConflicts,partyConflict,unwaivedSwapConflicts,swapOwnConflict,swapPartyConstraints,noteLabel,type SwapConflict,type SwapProblem} from '@/lib/supabase/swaps';
 import {addDays} from '@/lib/rota/engine';
 import {toast} from 'sonner';
 import {userMessage} from '@/lib/messages';
@@ -36,11 +36,12 @@ function useSwapConflicts(remote:TeamWorkspace,from?:string,to?:string){
 const fmtDay=(day:string,lang:'en'|'he')=>new Date(day+'T12:00:00Z').toLocaleDateString(lang==='he'?'he-IL':'en-GB',{day:'numeric',month:'short',timeZone:'Asia/Jerusalem'});
 const spanOf=(start:string,end:string,lang:'en'|'he')=>fmtDay(start,lang)+(end!==addDays(start,1)?` – ${fmtDay(addDays(end,-1),lang)}`:'');
 
-function conflictAlert(conflicts:SwapConflict[]|null,footer:string,name:(id:string)=>string,t:Translate,lang:'en'|'he'){
+function conflictAlert(conflicts:SwapConflict[]|null,footer:string,name:(id:string)=>string,t:Translate,lang:'en'|'he',note:(member:string,day:string)=>string=()=>''){
  return !!conflicts?.length&&<div className="note-line" data-tone="danger" role="alert" style={{display:'block'}}>
   <strong>{t('Availability conflict','התנגשות זמינות')}</strong>
   <ul className="swap-conflicts">{conflicts.map(c=><li key={`${c.member}${c.day}`}>{c.member
-   ?t(`${name(c.member)} is unavailable on ${fmtDay(c.day,lang)}`,`ל־${name(c.member)} יש אילוץ אי־זמינות ב־${fmtDay(c.day,lang)}`)
+   ?note(c.member,c.day)?noteLabel(c.member,c.day,note(c.member,c.day),{name,day:d=>fmtDay(d,lang)})
+   :t(`${name(c.member)} is unavailable on ${fmtDay(c.day,lang)}`,`ל־${name(c.member)} יש אילוץ אי־זמינות ב־${fmtDay(c.day,lang)}`)
    :t(`Emergency cover is unavailable on ${fmtDay(c.day,lang)}`,`לכונן החירום יש אילוץ אי־זמינות ב־${fmtDay(c.day,lang)}`)}</li>)}</ul>
   <p>{footer}</p>
  </div>;
@@ -54,6 +55,8 @@ export function useSwapActions(remote:TeamWorkspace,lang:'en'|'he'){
  const [consent,setConsent]=useState<{request:SwapRequest;conflicts:SwapConflict[]}|null>(null);
  const temporary=new Set(raw.members.filter(m=>m.is_temporary).map(m=>m.id));
  const name=(id:string)=>raw.members.find(m=>m.id===id)?.name??t('Former member','חבר צוות קודם');
+ // Admins always see a constraint's note; members never see anyone's.
+ const note=(member:string,day:string)=>remote.isAdmin?raw.constraints.find(c=>c.member_id===member&&c.day===day&&c.kind==='no')?.note??'':'';
  const explain=(p:SwapProblem,step:'request'|'accept'|'approve')=>(p.person===me?t('This swap would give you a second weekend this month.','ההחלפה הזו תיתן לך סוף שבוע שני החודש.'):t(`This swap would give ${name(p.person)} a second weekend this month.`,`ההחלפה הזו תיתן ל${name(p.person)} סוף שבוע שני החודש.`))+' '+
   ({request:t('Choose another duty.','יש לבחור כוננות אחרת.'),accept:t('Decline it instead.','אפשר לסרב לה במקום.'),approve:t('Reject it instead.','אפשר לדחות אותה במקום.')}[step]);
  // Dialogs read the latest copy: a refresh (another tab, a republish) can reassign, invalidate or resolve the request while it is open.
@@ -89,14 +92,15 @@ export function useSwapActions(remote:TeamWorkspace,lang:'en'|'he'){
    description={consenting&&`${name(consenting.requester_id)} · ${spanOf(consenting.from_day,consenting.from_end_day,lang)} ↔ ${name(consenting.other_id)} · ${spanOf(consenting.to_day,consenting.to_end_day,lang)}`}
    footer={<div className="sheet-actions"><Button variant="secondary" onClick={()=>setConsent(null)}>{t('Cancel','ביטול')}</Button><Button disabled={remote.readOnly||remote.saving||!answerable} onClick={async()=>{if(consenting&&await accept(consenting))setConsent(null)}}>{t('Accept anyway','אישור בכל זאת')}</Button></div>}>
    {consent&&!answerable&&changedAlert}
-   {consent&&answerable&&conflictAlert(consent.conflicts,t('You can still accept. An admin must then approve an exception with a reason.','אפשר עדיין לאשר. לאחר מכן מנהל יצטרך לאשר חריגה עם נימוק.'),name,t,lang)}
+   {consent&&answerable&&conflictAlert(consent.conflicts,t('You can still accept. An admin must then approve an exception with a reason.','אפשר עדיין לאשר. לאחר מכן מנהל יצטרך לאשר חריגה עם נימוק.'),name,t,lang,note)}
   </Sheet>
   <Sheet open={!!review} onOpenChange={v=>!v&&setReview(null)} lang={lang} title={t('Approve swap','אישור החלפה')} description={t('Record it in the external system first. Approval publishes a new version.','יש לרשום במערכת החיצונית תחילה. האישור מפרסם גרסה חדשה.')}
    footer={<div className="sheet-actions"><Button disabled={remote.readOnly||remote.saving||!reviewable||(override&&!reason.trim())||(!!reviewConflicts?.length&&!override)||!!reviewProblem} onClick={async()=>{if(current&&await act(()=>remote.resolveSwap(current.id,'approve',override?reason:''),t('Swap approved and published','ההחלפה אושרה ופורסמה')))setReview(null)}}>{t('Approve & publish','אישור ופרסום')}</Button></div>}>
    {summary?<div className="swap-summary"><pre aria-label={t('Swap summary','סיכום ההחלפה')}>{summary}</pre><Button size="sm" variant="secondary" onClick={copySummary}><Copy/>{t('Copy summary','העתקת סיכום')}</Button></div>
     :current&&<p>{name(current.requester_id)} · {spanOf(current.from_day,current.from_end_day,lang)} ↔ {name(current.other_id)} · {spanOf(current.to_day,current.to_end_day,lang)}</p>}
    {review&&!reviewable&&changedAlert}
-   {conflictAlert(reviewConflicts,t('Approving requires an explicit override with a reason.','האישור מחייב חריגה מפורשת עם נימוק.'),name,t,lang)}
+   {current&&<ConstraintNotes raw={raw} r={current} name={name} lang={lang} skip={reviewConflicts}/>}
+   {conflictAlert(reviewConflicts,t('Approving requires an explicit override with a reason.','האישור מחייב חריגה מפורשת עם נימוק.'),name,t,lang,note)}
    <label className="check-label"><Checkbox checked={override} onCheckedChange={v=>setOverride(!!v)}/>{t('Explicitly override availability conflicts','אישור חריגה מפורשת מאילוצי זמינות')}</label>
    {override&&<label className="field-label">{t('Required audit reason','נימוק חובה לתיעוד')}<textarea rows={3} maxLength={1000} value={reason} onChange={e=>setReason(e.target.value)}/></label>}
    {reviewProblem&&<p className="note-line" role="note">{explain(reviewProblem,'approve')}</p>}
@@ -114,6 +118,13 @@ export function useSwapActions(remote:TeamWorkspace,lang:'en'|'he'){
 }
 export type SwapActions=ReturnType<typeof useSwapActions>;
 
+/** Admins: the two members' constraints this swap goes over, with their notes (#92). */
+function ConstraintNotes({raw,r,name,lang,skip=[]}:{raw:Snapshot;r:SwapRequest;name:(id:string)=>string;lang:'en'|'he';skip?:SwapConflict[]|null}){
+ // Dates the conflict alert already lists are not repeated.
+ const list=swapPartyConstraints(raw,r).filter(c=>!skip?.some(s=>s.member===c.member_id&&s.day===c.day));
+ return list.length>0&&<ul className="swap-conflicts swap-unavailable" role="note">{list.map(c=><li key={c.member_id+c.day}>{noteLabel(c.member_id,c.day,c.note,{name,day:d=>fmtDay(d,lang)})}</li>)}</ul>;
+}
+
 /** One request as a card: who, which dates, its state, and the answer it waits for from the viewer. */
 export function SwapCard({r,swaps,remote,lang}:{r:SwapRequest;swaps:SwapActions;remote:TeamWorkspace;lang:'en'|'he'}){
  const t:Translate=(en,he)=>lang==='he'?he:en,raw=remote.snapshot!,me=remote.memberId,{name,temporary}=swaps;
@@ -123,7 +134,7 @@ export function SwapCard({r,swaps,remote,lang}:{r:SwapRequest;swaps:SwapActions;
  const duties=incoming?swapDuties(raw,r):null,refused=duties?.source&&duties.target?swapProblem(raw,r.month,duties.source,duties.target,false):null;
  // #92: the answering member marked the date they would take as unavailable. The date only,
  // never the note; accepting waives it for this swap and keeps the constraint.
- const unavailable=incoming&&pending&&swapOwnConflict(raw,r,answerFor!)!==null;
+ const unavailable=!remote.isAdmin&&incoming&&pending&&swapOwnConflict(raw,r,answerFor!)!==null;
  const status:[string,ChipTone]={awaiting_engineer:[t('Waiting for an answer','ממתינה לתשובה'),'info'],awaiting_admin:[t('Waiting for an admin','ממתינה למנהל'),'warn'],approved:[t('Approved','אושרה'),'ok'],declined:[t('Declined','סורבה'),'danger'],rejected:[t('Rejected','נדחתה'),'danger'],cancelled:[t('Cancelled','בוטלה'),'neutral'],invalidated:[t('No longer applies','כבר לא תקפה'),'neutral']}[r.status] as [string,ChipTone];
  const you=(id:string)=>id===me?t('You','את/ה'):name(id).split(' ')[0];
  // Swipe toward the inline end to accept (approve), toward the start to decline (reject, cancel);
@@ -148,7 +159,8 @@ export function SwapCard({r,swaps,remote,lang}:{r:SwapRequest;swaps:SwapActions;
     {r.proposed_by&&r.proposed_by!==me&&<small>{t('Proposed by','הוצעה על ידי')} {name(r.proposed_by)}</small>}
     {waiting.length>0&&(r.proposed_by||waiting.some(id=>temporary.has(id)))&&!incoming&&<small>{t('Waiting for','ממתינה ל')}: {waiting.map(id=>temporary.has(id)?t(`${name(id)} (temporary, an admin answers)`,`${name(id)} (זמני, מנהל עונה)`):name(id)).join(', ')}</small>}
     {r.explanation&&<p className="swap-explanation">{r.explanation}</p>}{r.override_reason&&<small>{t('Admin override','חריגת מנהל')}: {r.override_reason}</small>}
-    {unavailable&&<small className="swap-unavailable" role="note">{answerFor===me?t('You marked this date as unavailable','סימנת את התאריך הזה כלא זמין'):t(`${name(answerFor!)} marked this date as unavailable`,`${name(answerFor!)} סימן/ה את התאריך הזה כלא זמין`)}</small>}
+    {unavailable&&<small className="swap-unavailable" role="note">{t('You marked this date as unavailable','סימנת את התאריך הזה כלא זמין')}</small>}
+    {remote.isAdmin&&pending&&<ConstraintNotes raw={raw} r={r} name={name} lang={lang}/>}
     {refused&&<small className="swap-refused" role="note">{swaps.explain(refused,'accept')}</small>}
    </div>
    <Chip tone={status[1]} size="sm" className="swap-status">{status[0]}</Chip>
@@ -180,12 +192,13 @@ export function SwapRequestDialog({remote,month,lang,selection,onSelection}:{rem
  const partyNotes=requestAll&&eligible?requestAll.filter(c=>partyConflict(c,source!,target!)):[];
  const name=(id:string)=>raw.members.find(m=>m.id===id)?.name??t('Former member','חבר צוות קודם');
  const member=(id:string)=>raw.members.find(m=>m.id===id);
+ const note=(id:string,day:string)=>remote.isAdmin?raw.constraints.find(c=>c.member_id===id&&c.day===day&&c.kind==='no')?.note??'':'';
  const explain=(p:SwapProblem)=>(p.person===me?t('This swap would give you a second weekend this month.','ההחלפה הזו תיתן לך סוף שבוע שני החודש.'):t(`This swap would give ${name(p.person)} a second weekend this month.`,`ההחלפה הזו תיתן ל${name(p.person)} סוף שבוע שני החודש.`))+' '+t('Choose another duty.','יש לבחור כוננות אחרת.');
  async function act(operation:()=>Promise<void>,success:string){try{await operation();toast.success(success);return true}catch(e){toast.error(userMessage((e as Error).message,t));return false}}
  function close(){onSelection(null);setExplanation('')}
  return <Sheet open={!!selection} onOpenChange={v=>!v&&close()} lang={lang} title={proposing?t('Propose swap','הצעת החלפה'):t('Ask to swap','בקשת החלפה')}
   description={proposing?t('Both engineers accept, then an admin approves.','שני המהנדסים מאשרים, ואז מנהל מאשר.'):t('The other engineer accepts, then an admin approves.','המהנדס האחר מאשר, ואז מנהל מאשר.')}
-  footer={<div className="sheet-actions"><Button variant="secondary" onClick={close}>{t('Cancel','ביטול')}</Button><Button disabled={remote.readOnly||!eligible||remote.saving||!!problem||!requestConflicts||requestConflicts.length>0} onClick={async()=>{if(source&&target&&await act(()=>remote.requestSwap(source.id,target.id,explanation),proposing?t('Proposed to both engineers','הוצע לשני המהנדסים'):t('Request sent','הבקשה נשלחה')))close()}}>{proposing?t('Send to both','שליחה לשניהם'):t('Confirm Request','אישור בקשה')}</Button></div>}>
+  footer={<div className="sheet-actions"><Button variant="secondary" onClick={close}>{t('Cancel','ביטול')}</Button><Button disabled={remote.readOnly||!eligible||remote.saving||!!problem||!requestConflicts||requestConflicts.length>0} onClick={async()=>{if(source&&target&&await act(()=>remote.requestSwap(source.id,target.id,explanation),proposing?t('Proposed to both engineers','הוצע לשני המהנדסים'):t('Request sent','הבקשה נשלחה')))close()}}>{partyNotes.length?t('Send anyway','לשלוח בכל זאת'):proposing?t('Send to both','שליחה לשניהם'):t('Confirm Request','אישור בקשה')}</Button></div>}>
   <div className="swap-review">{[source,target].map((d,i)=>d&&<div key={d.id} className="card card-inset"><div className="row">
    <span className="row-lead"><Avatar name={name(d.primary_id!)} color={member(d.primary_id!)?.color} size={36}/></span>
    <span className="row-body"><span className="row-title">{spanOf(d.day,d.end_day,lang)}</span><span className="row-subtitle">{name(d.primary_id!)}{!proposing&&` · ${i===0?t('your duty','הכוננות שלך'):t('requested duty','הכוננות המבוקשת')}`}</span></span>
@@ -193,13 +206,11 @@ export function SwapRequestDialog({remote,month,lang,selection,onSelection}:{rem
   </div></div>)}</div>
   {problem&&<p className="note-line" role="note">{explain(problem)}</p>}
   {!eligible&&<p className="note-line" data-tone="danger" role="alert">{t('These duties changed or are no longer eligible. Cancel and choose again.','הכוננויות השתנו או אינן מתאימות עוד. בטלו ובחרו שוב.')}</p>}
-  {conflictAlert(requestConflicts,t('This swap can’t be sent until the availability changes. Choose other duties instead.','אי אפשר לשלוח את ההחלפה עד שהזמינות תשתנה. בחרו כוננויות אחרות במקום.'),name,t,lang)}
-  {partyNotes.length>0&&!requestConflicts?.length&&<div className="note-line" data-tone="danger" role="note" style={{display:'block'}}>
-   <ul className="swap-conflicts">{partyNotes.map(c=><li key={`${c.member}${c.day}`}>{c.member===me
-    ?t(`You marked ${fmtDay(c.day,lang)} as unavailable`,`סימנת את ${fmtDay(c.day,lang)} כלא זמין`)
-    :t(`${name(c.member!)} marked ${fmtDay(c.day,lang)} as unavailable`,`${name(c.member!)} סימן/ה את ${fmtDay(c.day,lang)} כלא זמין`)}</li>)}</ul>
-   <p>{t('You can still send it. Accepting keeps the constraint; an admin approves as usual.','אפשר עדיין לשלוח. האישור לא מוחק את האילוץ, ומנהל מאשר כרגיל.')}</p>
-  </div>}
+  {conflictAlert(requestConflicts,t('This swap can’t be sent until the availability changes. Choose other duties instead.','אי אפשר לשלוח את ההחלפה עד שהזמינות תשתנה. בחרו כוננויות אחרות במקום.'),name,t,lang,note)}
+  {partyNotes.length>0&&!requestConflicts?.length&&<ul className="swap-conflicts swap-unavailable" role="note">{partyNotes.map(c=><li key={`${c.member}${c.day}`}>{note(c.member!,c.day)
+   ?noteLabel(c.member!,c.day,note(c.member!,c.day),{name,day:d=>fmtDay(d,lang)})
+   :c.member===me?t(`You marked ${fmtDay(c.day,lang)} as unavailable`,`סימנת את ${fmtDay(c.day,lang)} כלא זמין`)
+   :t(`${name(c.member!)} marked ${fmtDay(c.day,lang)} as unavailable`,`${name(c.member!)} סימן/ה את ${fmtDay(c.day,lang)} כלא זמין`)}</li>)}</ul>}
   <label className="field-label">{t('Explanation (optional)','הסבר (אופציונלי)')}<textarea rows={2} maxLength={1000} value={explanation} onChange={e=>setExplanation(e.target.value)}/></label>
  </Sheet>;
 }

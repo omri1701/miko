@@ -71,16 +71,17 @@ for (const lang of ['en', 'he'] as const) {
     const dialog = page.getByRole('dialog', {name: t('Ask to swap', 'בקשת החלפה')});
     await expect(dialog.getByRole('note').filter({hasText: t('You marked 5 Nov as unavailable', 'סימנת את 5 בנוב׳ כלא זמין')})).toBeVisible();
     await expect(dialog.getByRole('alert')).toHaveCount(0);
-    await expect(page.getByRole('button', {name: t('Confirm Request', 'אישור בקשה'), exact: true})).toBeEnabled();
-    // Private notes are never shown.
+    await expect(page.getByRole('button', {name: t('Send anyway', 'לשלוח בכל זאת'), exact: true})).toBeEnabled();
+    // Private notes are never shown to members.
     for (const note of ['Synthetic vacation', 'Alex private note', 'Blair private note', 'Cover private note']) await expect(page.locator('body')).not.toContainText(note);
-    await page.getByRole('button', {name: t('Confirm Request', 'אישור בקשה'), exact: true}).click();
+    await page.getByRole('button', {name: t('Send anyway', 'לשלוח בכל זאת'), exact: true}).click();
     await expect(dialog).toBeHidden();
     expect(backend.raw.swapRequests![0]).toMatchObject({requester_id: ids.a, to_day: '2026-11-05', requester_waived_days: ['2026-11-05'], status: 'awaiting_engineer'});
     expect(backend.raw.constraints.some(c => c.member_id === ids.a && c.day === '2026-11-05')).toBe(true);
   });
 
-  test(`admin swapping two others reads names on red days, by the editor button or by dragging ${lang}`, async ({page, openApp, backend}, info) => {
+  // Admins always see a constraint's note (owner review of #103).
+  test(`admin swapping two others reads names and notes on red days, by the editor button or by dragging ${lang}`, async ({page, openApp, backend}, info) => {
     const t = say(lang);
     backend.raw.months[0].status = 'published';
     // Blair marked 5 Nov (Drew's) unavailable; Casey marked Blair's 3 Nov.
@@ -91,16 +92,15 @@ for (const lang of ['en', 'he'] as const) {
     await page.getByRole('dialog', {name: t('Edit duty', 'עריכת כוננות')}).getByRole('button', {name: t('Swap with another duty…', 'החלפה עם כוננות אחרת…'), exact: true}).click();
     await expect(duty(page, '2026-11-03')).toHaveAttribute('aria-pressed', 'true');
     await targetReady(page, '2026-11-05');
-    await expectRed(page, '2026-11-05', t('Blair Birch marked 5 Nov as unavailable', 'Blair Birch סימן/ה את 5 בנוב׳ כלא זמין'));
-    await expectRed(page, '2026-11-04', t('Casey Cedar marked 3 Nov as unavailable', 'Casey Cedar סימן/ה את 3 בנוב׳ כלא זמין'));
+    await expectRed(page, '2026-11-05', t('Blair Birch · 5 Nov: Admin-only note', 'Blair Birch · 5 בנוב׳: Admin-only note'));
+    await expectRed(page, '2026-11-04', t('Casey Cedar · 3 Nov: Another note', 'Casey Cedar · 3 בנוב׳: Another note'));
     await expectGreen(page, '2026-11-09');
-    await expect(page.locator('body')).not.toContainText('Admin-only note');
     await page.keyboard.press('Escape');
     // Dropping on a red day opens the proposal, which can still be sent.
     await hold(page, '2026-11-03', '2026-11-04', info.project.name === 'mobile');
     await expect(page.getByRole('dialog', {name: t('Propose swap', 'הצעת החלפה')})).toBeVisible();
-    await expect(page.getByRole('dialog').getByRole('note').filter({hasText: t('Casey Cedar marked 3 Nov as unavailable', 'Casey Cedar סימן/ה את 3 בנוב׳ כלא זמין')})).toBeVisible();
-    await expect(page.getByRole('button', {name: t('Send to both', 'שליחה לשניהם'), exact: true})).toBeEnabled();
+    await expect(page.getByRole('dialog').getByRole('note').filter({hasText: t('Casey Cedar · 3 Nov: Another note', 'Casey Cedar · 3 בנוב׳: Another note')})).toBeVisible();
+    await expect(page.getByRole('button', {name: t('Send anyway', 'לשלוח בכל זאת'), exact: true})).toBeEnabled();
   });
 
   test(`a past day is greyed: it has passed ${lang}`, async ({page, openApp, backend}) => {

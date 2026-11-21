@@ -134,8 +134,8 @@ for (const lang of ['en', 'he'] as const) test(`availability alert names whose c
   await targetReady(page, '2026-11-04');
   await expect(duty(page, '2026-11-04')).toHaveAttribute('title', t('You marked 4 Nov as unavailable', 'סימנת את 4 בנוב׳ כלא זמין'));
   await duty(page, '2026-11-04').focus(); await page.keyboard.press('Space');
-  await expect(page.getByRole('dialog').getByRole('note')).toContainText(t('You marked 4 Nov as unavailable', 'סימנת את 4 בנוב׳ כלא זמין'));
-  await expect(page.getByRole('button', {name: t('Confirm Request', 'אישור בקשה'), exact: true})).toBeEnabled();
+  await expect(page.getByRole('dialog').getByRole('note')).toHaveText(t('You marked 4 Nov as unavailable', 'סימנת את 4 בנוב׳ כלא זמין'));
+  await expect(page.getByRole('button', {name: t('Send anyway', 'לשלוח בכל זאת'), exact: true})).toBeEnabled();
   await expect(page.locator('body')).not.toContainText('Synthetic vacation');
   await page.keyboard.press('Escape');
   expect(backend.calls.filter(c => c.name === 'duty_request_swap')).toHaveLength(0);
@@ -175,8 +175,9 @@ for (const lang of ['en', 'he'] as const) test(`a member accepts a date they mar
   await page.getByRole('button', {name: t('Approve', 'אישור'), exact: true}).click();
   const dialog = page.getByRole('dialog', {name: t('Approve swap', 'אישור החלפה')});
   await expect(dialog.getByLabel(t('Swap summary', 'סיכום ההחלפה'))).toContainText(t('Duty swap: Alex Atlas ⇄ Blair Birch', 'החלפת כוננויות: Alex Atlas ⇄ Blair Birch'));
-  // No extra warning or reason for the date Blair waived.
+  // No extra warning or reason for the date Blair waived; the admin reads its note.
   await expect(dialog.getByRole('alert')).toHaveCount(0);
+  await expect(dialog.getByRole('note')).toHaveText(t('Blair Birch · 2 Nov: Late private note', 'Blair Birch · 2 בנוב׳: Late private note'));
   const approve = dialog.getByRole('button', {name: t('Approve & publish', 'אישור ופרסום')});
   await expect(approve).toBeEnabled();
   await approve.click();
