@@ -235,22 +235,52 @@ test('#89 rule 1: each kind links to its own screen: the request, the duty day, 
 });
 
 // Issue #89 rule 2: the service worker reuses an open window; it opens one only when none is open.
-async function tapNotification(windows, url) {
-  const listeners = {}, calls = {opened: [], posted: [], focused: 0};
-  const clients = windows.map(href => ({url: href, postMessage: data => calls.posted.push(data), focus: async () => {calls.focused++;}}));
+// Mirrors a phone: matchAll includes uncontrolled windows, focus() may fail, and a backgrounded
+// app may miss the message (no ack) or read the stashed link on resuming instead.
+async function tapNotification(windows, url, app = 'ack') {
+  const listeners = {}, calls = {opened: [], posted: [], focused: [], navigated: []}, store = new Map();
+  const caches = {open: async () => ({put: async (key, response) => {store.set(key, await response.text());}, delete: async key => store.delete(key), match: async key => store.get(key)}),
+    keys: async () => [], delete: async () => true};
+  const clients = windows.map(w => ({url: 'https://miko.example/', focused: false, visibilityState: 'hidden', ...w,
+    postMessage(data, ports) {
+      calls.posted.push({client: this.name, ...data});
+      if (app === 'ack') ports[0].postMessage('duty-opened');
+      if (app === 'resume') store.delete('/__duty-pending-link'); // the app took the stash instead
+    },
+    async focus() {calls.focused.push(this.name); if (w.focusFails) throw Error('not allowed'); return this;},
+    async navigate(href) {if (w.uncontrolled) throw TypeError('not controlled'); calls.navigated.push(href); return this;}}));
   const self = {location: new URL('https://miko.example/'), addEventListener: (type, fn) => {listeners[type] = fn;},
-    clients: {matchAll: async () => clients, openWindow: async href => {calls.opened.push(href);}}, registration: {}};
-  vm.runInNewContext(readFileSync(new URL('../public/sw.js', import.meta.url), 'utf8'), {self, URL, caches: {}, fetch: () => {}, Response: {}});
+    clients: {matchAll: async options => {calls.options = options; return clients;}, openWindow: async href => {calls.opened.push(href);}}, registration: {}};
+  vm.runInNewContext(readFileSync(new URL('../public/sw.js', import.meta.url), 'utf8'),
+    {self, URL, caches, fetch: () => {}, Response, MessageChannel, setTimeout: fn => setTimeout(fn, 5), clearTimeout, Date, JSON});
   let done;
   listeners.notificationclick({notification: {data: {url}, close() {}}, waitUntil: promise => {done = promise;}});
   await done;
-  return JSON.parse(JSON.stringify(calls)); // plain objects from the worker's own realm
+  return JSON.parse(JSON.stringify({...calls, stashed: store.size})); // plain objects from the worker's own realm
 }
 test('#89 rule 2: tapping with the app open navigates that window instead of opening a second one', async () => {
-  const link = '/?tab=home&swap=30000000-0000-4000-8000-0000000000aa&month=2026-12&day=2026-12-03';
-  const open = await tapNotification(['https://miko.example/'], link);
-  assert.deepEqual(open, {opened: [], posted: [{type: 'duty-open', url: link}], focused: 1});
+  const link = '/?tab=home&swap=30000000-0000-4000-8000-0000000000aa&month=2026-12&day=2026-12-03', href = `https://miko.example${link}`;
+  // The app hears it and acknowledges: focused and told, nothing reloads or opens.
+  const heard = await tapNotification([{name: 'app'}], link);
+  assert.deepEqual(heard.options, {type: 'window', includeUncontrolled: true});
+  delete heard.options;
+  assert.deepEqual(heard, {opened: [], posted: [{client: 'app', type: 'duty-open', url: link}], focused: ['app'], navigated: [], stashed: 0});
+  // Backgrounded and frozen, the message is lost: the window itself navigates to the link.
+  const lost = await tapNotification([{name: 'app'}], link, 'lost');
+  assert.deepEqual([lost.navigated, lost.opened, lost.stashed], [[href], [], 0]);
+  // Resumed, the app read the stashed link instead of the message: no reload.
+  const resumed = await tapNotification([{name: 'app'}], link, 'resume');
+  assert.deepEqual([resumed.navigated, resumed.opened], [[], []]);
+  // focus() refused (some phones): still told, and still no second window.
+  const refused = await tapNotification([{name: 'app', focusFails: true}], link);
+  assert.deepEqual([refused.posted.length, refused.opened], [1, []]);
+  // An uncontrolled window cannot navigate: only then a new window.
+  assert.deepEqual((await tapNotification([{name: 'app', uncontrolled: true}], link, 'lost')).opened, [href]);
+  // Several windows: the one the user last looked at.
+  const many = await tapNotification([{name: 'old'}, {name: 'shown', visibilityState: 'visible'}, {name: 'other', url: 'https://other.example/'}], link);
+  assert.deepEqual(many.focused, ['shown']);
+  // No window: one opens on the link; a foreign link opens the app home.
   const closed = await tapNotification([], link);
-  assert.deepEqual(closed, {opened: [`https://miko.example${link}`], posted: [], focused: 0});
-  assert.deepEqual((await tapNotification([], 'https://evil.example/')).opened, ['https://miko.example/'], 'foreign links open the app home');
+  assert.deepEqual([closed.opened, closed.posted], [[href], []]);
+  assert.deepEqual((await tapNotification([], 'https://evil.example/')).opened, ['https://miko.example/']);
 });

@@ -49,14 +49,42 @@ test('#89 rule 2: with the app open, a tap navigates in place without reloading'
   await openApp('a', page);
   await expect(page.locator('[data-settings-button]')).toBeVisible();
   await page.evaluate(() => {(window as unknown as {sameWindow: boolean}).sameWindow = true;});
-  // public/sw.js focuses the open window and posts the link (unit-tested in tests/push.test.mjs).
-  const post = (url: string) => page.evaluate(url => navigator.serviceWorker.dispatchEvent(new MessageEvent('message', {data: {type: 'duty-open', url}})), url);
-  await post('/?tab=schedule&month=2026-11&duty=2026-11-02');
+  // public/sw.js focuses the open window and posts the link with a reply port (unit-tested in
+  // tests/push.test.mjs); the app must acknowledge, or the worker reloads the window on the link.
+  const post = (url: string) => page.evaluate(url => new Promise<unknown>(resolve => {
+    const channel = new MessageChannel();
+    channel.port1.onmessage = event => resolve(event.data);
+    setTimeout(() => resolve('no answer'), 2000);
+    navigator.serviceWorker.dispatchEvent(new MessageEvent('message', {data: {type: 'duty-open', url}, ports: [channel.port2]}));
+  }), url);
+  expect(await post('/?tab=schedule&month=2026-11&duty=2026-11-02')).toBe('duty-opened');
   await expect(tab(page, 'Schedule')).toHaveAttribute('aria-selected', 'true');
   await expect(day(page, '2026-11-02')).toHaveClass(/flash-day/);
-  await post(`/?tab=home&swap=${REQUEST}&month=${MONTH}&day=2026-11-03`);
+  expect(await post(`/?tab=home&swap=${REQUEST}&month=${MONTH}&day=2026-11-03`)).toBe('duty-opened');
   await expect(tab(page, 'Home')).toHaveAttribute('aria-selected', 'true');
   await expect(page.locator(`[data-swap-card="${REQUEST}"]`)).toBeInViewport();
+  expect(await page.evaluate(() => (window as unknown as {sameWindow?: boolean}).sameWindow)).toBe(true);
+});
+
+test('#89 rule 2: resumed from the background after missing the message, the app opens the stashed link', async ({page, openApp, backend}) => {
+  openRequest(backend);
+  await openApp('a', page);
+  await expect(tab(page, 'Home')).toHaveAttribute('aria-selected', 'true');
+  await page.evaluate(() => {(window as unknown as {sameWindow: boolean}).sameWindow = true;});
+  // Backgrounded: the phone froze the page, so the worker's message never arrived; the worker
+  // stashed the link (public/sw.js) and focused the window, which comes back to the foreground.
+  const visibility = (state: 'hidden' | 'visible') => page.evaluate(state => {
+    Object.defineProperty(document, 'visibilityState', {configurable: true, get: () => state});
+    document.dispatchEvent(new Event('visibilitychange'));
+  }, state);
+  await visibility('hidden');
+  await page.evaluate(() => caches.open('duty-links-v1').then(cache => cache.put('/__duty-pending-link',
+    new Response(JSON.stringify({url: '/?tab=schedule&month=2026-11&duty=2026-11-02', at: Date.now()})))));
+  await visibility('visible');
+  await expect(tab(page, 'Schedule')).toHaveAttribute('aria-selected', 'true');
+  await expect(day(page, '2026-11-02')).toHaveClass(/flash-day/);
+  // Taken once: the worker sees it gone and does not reload the window.
+  expect(await page.evaluate(() => caches.open('duty-links-v1').then(cache => cache.match('/__duty-pending-link')).then(r => !!r))).toBe(false);
   expect(await page.evaluate(() => (window as unknown as {sameWindow?: boolean}).sameWindow)).toBe(true);
 });
 

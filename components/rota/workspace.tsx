@@ -25,7 +25,7 @@ import {editablePublishedDuty,publishedWeekend} from '@/lib/supabase/published-e
 import {PublishedWeekendEditor} from '@/components/rota/published-weekend-editor';
 import {SettingsScreen} from '@/components/rota/settings-screen';
 import {DEEP_LINK_KEYS, deepLink, type DeepLink} from '@/lib/push/settings';
-import {currentSubscription, describe} from '@/lib/push/browser';
+import {clearPendingLink, currentSubscription, describe, takePendingLink} from '@/lib/push/browser';
 import {PublicationHistory} from '@/components/rota/publication-history';
 import {SwapRequestDialog, useSwapActions} from '@/components/rota/swap-requests';
 import {WorkspaceAvailability} from './workspace-availability';
@@ -80,20 +80,38 @@ export function RotaWorkspace({remote, lang, setLang}: {remote: TeamWorkspace; l
     }
     // A notification tapped while the app is open: public/sw.js focuses this window and
     // sends the link, so it navigates here instead of opening a second window (issue #89).
-    const open = (event: MessageEvent) => {
-      if (event.data?.type !== 'duty-open' || typeof event.data.url !== 'string') return;
-      const next = deepLink(event.data.url.replace(/^\/\?/, '?'));
+    const go = (url: string) => {
+      const next = deepLink(url.replace(/^\/\?/, '?'));
       if (next.month) setMonth(next.month);
       if (next.tab) setTab(next.tab);
       setTarget(next.day || next.duty || next.swap || next.focus ? next : null);
     };
+    const open = (event: MessageEvent) => {
+      if (event.data?.type !== 'duty-open' || typeof event.data.url !== 'string') return;
+      // Heard: the worker then neither reloads this window nor opens another.
+      event.ports?.[0]?.postMessage('duty-opened');
+      clearPendingLink();
+      go(event.data.url);
+    };
+    // Resumed from the background, a frozen app may have missed the message: the worker left the link.
+    const resumed = () => {if (document.visibilityState === 'visible') void takePendingLink().then(url => url && go(url));};
     navigator.serviceWorker?.addEventListener('message', open);
+    navigator.serviceWorker?.startMessages?.();
+    document.addEventListener('visibilitychange', resumed);
+    window.addEventListener('focus', resumed);
+    window.addEventListener('pageshow', resumed);
+    resumed(); // the phone may have reloaded the app on the tap
     // The offline shell (public/sw.js); push subscribes through the same registration.
     navigator.serviceWorker?.register('/sw.js', {scope: '/'}).catch(() => {});
     // A device that already receives notifications belongs to whoever is signed in now.
     if (!remote.readOnly && typeof Notification !== 'undefined' && Notification.permission === 'granted')
       void currentSubscription().then(subscription => subscription && remote.personal.saveDevice(describe(subscription))).catch(() => {});
-    return () => navigator.serviceWorker?.removeEventListener('message', open);
+    return () => {
+      navigator.serviceWorker?.removeEventListener('message', open);
+      document.removeEventListener('visibilitychange', resumed);
+      window.removeEventListener('focus', resumed);
+      window.removeEventListener('pageshow', resumed);
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps -- once per signed-in workspace
   }, []);
   const state = remote.state!;
