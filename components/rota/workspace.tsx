@@ -24,8 +24,8 @@ import {PublishedDutyEditor} from '@/components/rota/published-duty-editor';
 import {editablePublishedDuty,publishedWeekend} from '@/lib/supabase/published-edit';
 import {PublishedWeekendEditor} from '@/components/rota/published-weekend-editor';
 import {SettingsScreen} from '@/components/rota/settings-screen';
-import {deepLink} from '@/lib/push/settings';
-import {currentSubscription, describe} from '@/lib/push/browser';
+import {DEEP_LINK_KEYS, deepLink, type DeepLink} from '@/lib/push/settings';
+import {clearPendingLink, currentSubscription, describe, takePendingLink} from '@/lib/push/browser';
 import {PublicationHistory} from '@/components/rota/publication-history';
 import {SwapRequestDialog, useSwapActions} from '@/components/rota/swap-requests';
 import {WorkspaceAvailability} from './workspace-availability';
@@ -71,26 +71,77 @@ export function RotaWorkspace({remote, lang, setLang}: {remote: TeamWorkspace; l
   const [link] = useState(() => typeof window === 'undefined' ? {} : deepLink(window.location.search));
   const [month, setMonth] = useState(() => link.month ?? initialCalendarMonth()), [tab, setTab] = useState<string>(link.tab ?? 'home');
   const [welcome, setWelcome] = useState(() => typeof window !== 'undefined' && !welcomeSeen());
+  // The exact target inside that screen (a day, a swap request, the approvals), resolved once rendered.
+  const [target, setTarget] = useState<(DeepLink & {refreshed?: boolean}) | null>(() => link.day || link.duty || link.swap || link.focus ? link : null);
   useEffect(() => {
     const url = new URL(window.location.href);
-    if (url.searchParams.has('tab') || url.searchParams.has('month')) {
-      url.searchParams.delete('tab'); url.searchParams.delete('month');
+    if (DEEP_LINK_KEYS.some(key => url.searchParams.has(key))) {
+      for (const key of DEEP_LINK_KEYS) url.searchParams.delete(key);
       window.history.replaceState(window.history.state, '', url.pathname + url.search + url.hash);
     }
-    // A notification tapped while the app is open (public/sw.js falls back to a message).
-    const open = (event: MessageEvent) => {
-      if (event.data?.type !== 'duty-open' || typeof event.data.url !== 'string') return;
-      const next = deepLink(event.data.url.replace(/^\/\?/, '?'));
+    // A notification tapped while the app is open: public/sw.js focuses this window and
+    // sends the link, so it navigates here instead of opening a second window (issue #89).
+    // One tap can arrive several ways (message, broadcast, stash): handle it once.
+    let last = {url: '', at: 0};
+    const go = (url: string) => {
+      const now = performance.now();
+      if (url === last.url && now - last.at < 5000) return;
+      last = {url, at: now};
+      const next = deepLink(url.replace(/^\/\?/, '?'));
       if (next.month) setMonth(next.month);
       if (next.tab) setTab(next.tab);
+      setTarget(next.day || next.duty || next.swap || next.focus ? next : null);
+    };
+    const open = (event: MessageEvent) => {
+      if (event.data?.type !== 'duty-open' || typeof event.data.url !== 'string') return;
+      // Heard: the worker then neither reloads this window nor opens another.
+      event.ports?.[0]?.postMessage('duty-opened');
+      clearPendingLink();
+      go(event.data.url);
+    };
+    // Resumed from the background, a frozen app may have missed the message: the worker left the link.
+    // The phone shows the app before the just-woken worker has stashed the link, so look a few times.
+    let looking = 0;
+    const resumed = () => {
+      if (document.visibilityState !== 'visible') return;
+      const run = ++looking;
+      const look = (left: number[]) => void takePendingLink().then(url => {
+        if (url) go(url);
+        else if (left.length && run === looking) setTimeout(() => look(left.slice(1)), left[0]);
+      });
+      look([300, 700, 1500, 2500, 5000]);
+    };
+    // iOS resumes a suspended Home Screen app without always firing visibilitychange: a timer that
+    // fires far later than scheduled means the app was frozen and is back.
+    let tick = performance.now();
+    const frozen = setInterval(() => {const now = performance.now(); if (now - tick > 4000) resumed(); tick = now;}, 1000);
+    // The worker also broadcasts the link, which a resumed app receives even when the phone did
+    // not list its window (no postMessage) and it missed the stash.
+    const channel = typeof BroadcastChannel === 'undefined' ? null : new BroadcastChannel('duty-links');
+    if (channel) channel.onmessage = event => {
+      if (event.data?.type !== 'duty-open' || typeof event.data.url !== 'string') return;
+      clearPendingLink(); go(event.data.url);
     };
     navigator.serviceWorker?.addEventListener('message', open);
+    navigator.serviceWorker?.startMessages?.();
+    document.addEventListener('visibilitychange', resumed);
+    window.addEventListener('focus', resumed);
+    window.addEventListener('pageshow', resumed);
+    // Opened on a link (a cold start): that link wins and the worker's copy is dropped. Otherwise
+    // the phone may have reloaded the app on the tap, so look for one.
+    if (Object.keys(link).length) clearPendingLink(); else resumed();
     // The offline shell (public/sw.js); push subscribes through the same registration.
     navigator.serviceWorker?.register('/sw.js', {scope: '/'}).catch(() => {});
     // A device that already receives notifications belongs to whoever is signed in now.
     if (!remote.readOnly && typeof Notification !== 'undefined' && Notification.permission === 'granted')
       void currentSubscription().then(subscription => subscription && remote.personal.saveDevice(describe(subscription))).catch(() => {});
-    return () => navigator.serviceWorker?.removeEventListener('message', open);
+    return () => {
+      navigator.serviceWorker?.removeEventListener('message', open);
+      clearInterval(frozen); channel?.close();
+      document.removeEventListener('visibilitychange', resumed);
+      window.removeEventListener('focus', resumed);
+      window.removeEventListener('pageshow', resumed);
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps -- once per signed-in workspace
   }, []);
   const state = remote.state!;
@@ -315,6 +366,51 @@ export function RotaWorkspace({remote, lang, setLang}: {remote: TeamWorkspace; l
     {isManager && viewingDraft && !!metrics.conflicts.length && <p className="note-line" data-tone="warn">{t(`${metrics.conflicts.length} duties conflict with availability`, `${metrics.conflicts.length} כוננויות מתנגשות עם אילוצים`)}</p>}
   </>;
   const openSchedule = (m: string) => {if (m !== month) goToMonth(m); setTab('schedule');};
+  // A notification's exact target (issue #89); when it no longer exists, the closest screen and a short note.
+  function resolve(target: DeepLink & {refreshed?: boolean}) {
+    const raw = remote.snapshot!;
+    const openSwap = !!target.swap && swaps.requests.some(r => r.id === target.swap && ['awaiting_engineer', 'awaiting_admin'].includes(r.status));
+    const mineOn = (day: string) => {
+      const current = raw.months.find(m => m.month === day.slice(0, 7))?.current_publication_id;
+      return raw.assignments.some(a => a.publication_id === current && a.day === day && (a.primary_id === meId || a.secondary_id === meId));
+    };
+    const missing = target.swap ? !openSwap : target.duty ? !mineOn(target.duty) : target.focus === 'approvals' && !(isManager && raw.members.some(m => m.status === 'pending'));
+    // The notification may be newer than this copy of the team (a request made after the app
+    // loaded, a reverse swap of one just approved): reload once before calling it gone. A swap's
+    // two dates always reload first: an app left in the background still shows the old owners.
+    if ((missing || (target.or && !openSwap)) && !target.refreshed) {void remote.refresh().catch(() => {}).finally(() => setTarget({...target, refreshed: true})); return;}
+    const note = (en: string, he: string) => toast.info(t(en, he), {id: 'deep-link'});
+    const reveal = (selector: string) => setTimeout(() => document.querySelector(selector)?.scrollIntoView({block: 'center'}), 60);
+    const showDay = (first?: string) => {
+      setTab('schedule');
+      // Of a swap's two dates, the one that is the member's duty now: each person their own day.
+      const day = [first, target.or].find(d => d && mineOn(d)) ?? first;
+      if (!day) return;
+      if (day.slice(0, 7) !== month) goToMonth(day.slice(0, 7));
+      setSelectedDay(day); setFlashDays([day]);
+      reveal(`button[data-date="${day}"]`);
+    };
+    if (target.swap) {
+      if (openSwap) {setTab('home'); reveal(`[data-swap-card="${CSS.escape(target.swap)}"]`);}
+      else {showDay(target.day); note('This swap request was already handled.', 'בקשת ההחלפה הזו כבר טופלה.');}
+    } else if (target.duty) {
+      showDay(target.duty);
+      if (missing) note('This duty has changed. Here is the current schedule.', 'הכוננות הזו השתנתה. זה הלוח העדכני.');
+    } else if (target.day) showDay(target.day);
+    else if (target.or) showDay(target.or);
+    else if (target.focus === 'approvals') {
+      setTab('team');
+      if (!missing) reveal('.join-requests');
+      else note('No one is waiting for approval now.', 'אין כרגע מי שממתין לאישור.');
+    }
+  }
+  useEffect(() => {
+    if (!target) return;
+    // After this render commits, so the target screen exists to scroll to.
+    const timer = setTimeout(() => {setTarget(null); resolve(target);}, 0);
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- runs once per link
+  }, [target]);
   return <>
     <AppToaster/>
     <AppShell lang={lang} t={t} tab={tab} onRefresh={() => remote.refresh()} setTab={next => {setTab(next); if (next !== 'schedule') {setPickingFrom(null); setSheetDuty(null);}}} disabled={!!remote.saving}

@@ -26,8 +26,15 @@ export function settingsPayload(state: NotificationSettings): NotificationSettin
     eveningTime: state.eveningTime, morning: state.morning, morningTime: state.morningTime, members: state.members};
 }
 
-/** The tab and month a notification opens (`/?tab=schedule&month=2026-12`). */
-export function deepLink(search: string): {tab?: 'schedule' | 'availability' | 'team'; month?: string} {
-  const query = new URLSearchParams(search), tab = query.get('tab'), month = query.get('month');
-  return {...(tab === 'schedule' || tab === 'availability' || tab === 'team' ? {tab} : {}), ...(month && /^\d{4}-(0[1-9]|1[0-2])$/.test(month) ? {month} : {})};
+/** Where a notification opens (issue #89): a tab and month, plus the exact target —
+ * `day` (show that day; with `or`, whichever of the two is the member's duty now), `duty` (the member's own duty on that day), `swap` (an open
+ * request on Home) or `focus=approvals` (the join requests). */
+export type DeepLink = {tab?: 'home' | 'schedule' | 'availability' | 'team'; month?: string; day?: string; or?: string; duty?: string; swap?: string; focus?: 'approvals'};
+export const DEEP_LINK_KEYS = ['tab', 'month', 'day', 'or', 'duty', 'swap', 'focus'] as const;
+const DAY = /^\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$/;
+export function deepLink(search: string): DeepLink {
+  const query = new URLSearchParams(search), tab = query.get('tab'), month = query.get('month'), day = query.get('day'), or = query.get('or'), duty = query.get('duty'), swap = query.get('swap');
+  return {...(tab === 'home' || tab === 'schedule' || tab === 'availability' || tab === 'team' ? {tab} : {}), ...(month && /^\d{4}-(0[1-9]|1[0-2])$/.test(month) ? {month} : {}),
+    ...(day && DAY.test(day) ? {day} : {}), ...(or && DAY.test(or) ? {or} : {}), ...(duty && DAY.test(duty) ? {duty} : {}), ...(swap && /^[A-Za-z0-9-]{1,64}$/.test(swap) ? {swap} : {}),
+    ...(query.get('focus') === 'approvals' ? {focus: 'approvals' as const} : {})};
 }
