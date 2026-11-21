@@ -279,8 +279,9 @@ test('#89 rule 2: tapping with the app open navigates that window instead of ope
   // Several windows: the one the user last looked at.
   const many = await tapNotification([{name: 'old'}, {name: 'shown', visibilityState: 'visible'}, {name: 'other', url: 'https://other.example/'}], link);
   assert.deepEqual(many.focused, ['shown']);
-  // No window: one opens on the link; a foreign link opens the app home.
+  // No window listed (closed, or a suspended phone app the phone does not list): one opens on the
+  // link, and the link stays stashed for a running app to take when it comes forward.
   const closed = await tapNotification([], link);
-  assert.deepEqual([closed.opened, closed.posted], [[href], []]);
+  assert.deepEqual([closed.opened, closed.posted, closed.stashed], [[href], [], 1]);
   assert.deepEqual((await tapNotification([], 'https://evil.example/')).opened, ['https://miko.example/']);
 });

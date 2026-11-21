@@ -144,3 +144,34 @@ test('#89 a member who signed up after the app loaded opens in the approvals lis
   await expect(page.getByText('Pat Pending', {exact: true})).toBeVisible();
   await expect(page.getByText('No one is waiting for approval now.', {exact: true})).toHaveCount(0);
 });
+
+test('#89 rule 2: the app comes forward before the worker stashed the link, and still opens it', async ({page, openApp, backend}) => {
+  openRequest(backend);
+  await openApp('a', page);
+  await expect(tab(page, 'Home')).toHaveAttribute('aria-selected', 'true');
+  await page.evaluate(() => {(window as unknown as {sameWindow: boolean}).sameWindow = true;});
+  const visibility = (state: 'hidden' | 'visible') => page.evaluate(state => {
+    Object.defineProperty(document, 'visibilityState', {configurable: true, get: () => state});
+    document.dispatchEvent(new Event('visibilitychange'));
+  }, state);
+  // The phone did not list the suspended window, so the worker could only stash the link; the
+  // app is shown first and the stash lands a moment later.
+  await visibility('hidden');
+  await visibility('visible');
+  await page.evaluate(() => new Promise(resolve => setTimeout(resolve, 600)));
+  await page.evaluate(() => caches.open('duty-links-v1').then(cache => cache.put('/__duty-pending-link',
+    new Response(JSON.stringify({url: '/?tab=schedule&month=2026-11&duty=2026-11-02', at: Date.now()})))));
+  await expect(tab(page, 'Schedule')).toHaveAttribute('aria-selected', 'true');
+  await expect(day(page, '2026-11-02')).toHaveClass(/flash-day/);
+  expect(await page.evaluate(() => (window as unknown as {sameWindow?: boolean}).sameWindow)).toBe(true);
+});
+
+test('#89 a cold start on a link drops the stashed copy from the worker', async ({page, openApp}) => {
+  await openApp('a', page, {month: null});
+  await page.evaluate(() => caches.open('duty-links-v1').then(cache => cache.put('/__duty-pending-link',
+    new Response(JSON.stringify({url: '/?tab=team&focus=approvals', at: Date.now()})))));
+  await tap(page, '/?tab=schedule&month=2026-11&duty=2026-11-02');
+  await expect(tab(page, 'Schedule')).toHaveAttribute('aria-selected', 'true');
+  await expect.poll(() => page.evaluate(() => caches.open('duty-links-v1').then(cache => cache.match('/__duty-pending-link')).then(r => !!r))).toBe(false);
+  await expect(tab(page, 'Schedule')).toHaveAttribute('aria-selected', 'true');
+});

@@ -94,13 +94,25 @@ export function RotaWorkspace({remote, lang, setLang}: {remote: TeamWorkspace; l
       go(event.data.url);
     };
     // Resumed from the background, a frozen app may have missed the message: the worker left the link.
-    const resumed = () => {if (document.visibilityState === 'visible') void takePendingLink().then(url => url && go(url));};
+    // The phone shows the app before the just-woken worker has stashed the link, so look a few times.
+    let looking = 0;
+    const resumed = () => {
+      if (document.visibilityState !== 'visible') return;
+      const run = ++looking;
+      const look = (left: number[]) => void takePendingLink().then(url => {
+        if (url) go(url);
+        else if (left.length && run === looking) setTimeout(() => look(left.slice(1)), left[0]);
+      });
+      look([300, 700, 1500, 2500]);
+    };
     navigator.serviceWorker?.addEventListener('message', open);
     navigator.serviceWorker?.startMessages?.();
     document.addEventListener('visibilitychange', resumed);
     window.addEventListener('focus', resumed);
     window.addEventListener('pageshow', resumed);
-    resumed(); // the phone may have reloaded the app on the tap
+    // Opened on a link (a cold start): that link wins and the worker's copy is dropped. Otherwise
+    // the phone may have reloaded the app on the tap, so look for one.
+    if (Object.keys(link).length) clearPendingLink(); else resumed();
     // The offline shell (public/sw.js); push subscribes through the same registration.
     navigator.serviceWorker?.register('/sw.js', {scope: '/'}).catch(() => {});
     // A device that already receives notifications belongs to whoever is signed in now.

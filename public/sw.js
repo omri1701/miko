@@ -50,7 +50,8 @@ self.addEventListener('push', event => {
 
 // A tap with the app already open (issue #89 rule 2) navigates that window, never a second one.
 // A backgrounded phone app can miss a message (iOS/Android freeze it), so three layers:
-// 1. the link is stashed, and the app reads (and removes) it when it comes back to the foreground;
+// 1. the link is stashed first, and the app reads (and removes) it when it comes back to the foreground,
+//    even when the phone does not list the suspended window at all;
 // 2. the window is focused and sent the link, which the app acknowledges on a port;
 // 3. with no acknowledgement in time, the window itself navigates to the link.
 const LINKS = 'duty-links-v1', PENDING = '/__duty-pending-link', ACK_MS = 2500;
@@ -74,11 +75,14 @@ self.addEventListener('notificationclick', event => {
   const link = event.notification.data && LINK.test(event.notification.data.url) ? event.notification.data.url : '/';
   const target = new URL(link, self.location.origin).href;
   event.waitUntil((async () => {
+    // First, whatever follows: a suspended phone app is often not listed below, and openWindow then
+    // only brings the running app forward unchanged; the app takes this link when it comes forward.
+    await stash(link);
     const windows = (await self.clients.matchAll({type: 'window', includeUncontrolled: true})).filter(client => new URL(client.url).origin === self.location.origin);
     // The window the user last looked at: focused, then visible, then any.
     const open = windows.find(client => client.focused) ?? windows.find(client => client.visibilityState === 'visible') ?? windows[0];
+    // A cold start opens on the link itself and drops the stash (components/rota/workspace.tsx).
     if (!open) {await self.clients.openWindow(target); return;}
-    await stash(link);
     let client = open;
     try {client = (await open.focus()) ?? open;} catch {}
     if (await acknowledged(client, link)) {await unstash(); return;}
