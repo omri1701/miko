@@ -3,13 +3,13 @@
 // in-app sizes (PNG + WebP), favicon, Home Screen and maskable icons and iOS startup screens on
 // full-bleed navy. Only ever downscales, in halving steps, so nothing is blurred. File names never
 // change, so installed Home Screen apps keep finding them. Run: node scripts/render-icons.mjs [prod|dev|local ...]
-// (default: all). dev and local recolour the same logo (navy -> the environment's dark colour, cyan -> its light
-// colour, anti-aliasing blended in between) into public/env/<name>/ (same file names); no splash screens.
+// (default: all). dev and local recolour the same logo (only the blue lines -> the environment's light
+// colour, anti-aliasing blended in between; the white wordmark is untouched) into public/env/<name>/ (same file names); no splash screens.
 import {chromium} from '@playwright/test';
 import {mkdirSync, readFileSync, writeFileSync} from 'node:fs';
 import {fileURLToPath} from 'node:url';
 import {resolve} from 'node:path';
-import {BRAND_COLOR, BRAND_CYAN, LOGO_SIZES} from '../lib/brand.ts';
+import {BRAND_COLOR, LOGO_SIZES} from '../lib/brand.ts';
 import {BRAND_ENVIRONMENTS, assetPath} from '../lib/brand-environment.ts';
 
 const root = fileURLToPath(new URL('../', import.meta.url));
@@ -28,19 +28,21 @@ await page.setContent('<!doctype html><body></body>');
 await page.evaluate(async src => {
   const img = new Image(); img.src = src; await img.decode();
   const hex = h => [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16));
-  window.setPalette = (from, to) => {
+  // Recolours ONLY the logo's blue lines: p + t * (light - blue), t = how far the pixel lies from the navy toward the blue.
+  // Navy (t = 0) and the white "miko" wordmark (R far above the blue's) stay exactly as they are; anti-aliasing blends smoothly.
+  window.setPalette = (light) => {
     window.source = new OffscreenCanvas(img.naturalWidth, img.naturalHeight);
     const x = window.source.getContext('2d'); x.drawImage(img, 0, 0);
-    if (!to) return;
-    const [n, c, d, l] = [hex(from[0]), hex(from[1]), hex(to[0]), hex(to[1])], v = c.map((k, i) => k - n[i]), len = v.reduce((a, k) => a + k * k, 0);
+    if (!light) return;
+    const n = [10, 12, 64], c = [35, 200, 225], l = hex(light), v = c.map((k, i) => k - n[i]), len = v.reduce((a, k) => a + k * k, 0);
     const data = x.getImageData(0, 0, img.naturalWidth, img.naturalHeight), px = data.data;
     for (let i = 0; i < px.length; i += 4) {
       const t = Math.min(1, Math.max(0, [0, 1, 2].reduce((a, k) => a + (px[i + k] - n[k]) * v[k], 0) / len));
-      for (let k = 0; k < 3; k++) px[i + k] = Math.round(d[k] + t * (l[k] - d[k]));
+      const keep = 1 - Math.min(1, Math.max(0, (px[i] - 45) / 210)); // 0 on white, 1 on blue/navy
+      for (let k = 0; k < 3; k++) px[i + k] = Math.round(Math.min(255, Math.max(0, px[i + k] + keep * t * (l[k] - c[k]))));
     }
     x.putImageData(data, 0, 0);
   };
-  // Downscale in halving steps (each high-quality), then once to the exact size.
   window.scaled = size => {
     let canvas = new OffscreenCanvas(img.naturalWidth, img.naturalHeight); canvas.getContext('2d').drawImage(window.source, 0, 0);
     while (canvas.width / 2 >= size) {
@@ -65,7 +67,7 @@ async function save(file, width, height, fill, background = BRAND_ENVIRONMENTS[v
 }
 for (variant of variants) {
   const {dark, light} = BRAND_ENVIRONMENTS[variant];
-  await page.evaluate(a => window.setPalette(...a), variant === 'prod' ? [[BRAND_COLOR, BRAND_CYAN]] : [[BRAND_COLOR, BRAND_CYAN], [dark, light]]);
+  await page.evaluate(l => window.setPalette(l), variant === 'prod' ? null : light);
   mkdirSync(out('brand'), {recursive: true});
   // In-app logo (components/brand/logo.tsx picks one by display size × pixel ratio).
   for (const size of LOGO_SIZES) for (const type of ['png', 'webp']) await save(`brand/logo-${size}.${type}`, size, size, 1, null, `image/${type}`);

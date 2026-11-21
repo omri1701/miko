@@ -4,7 +4,7 @@
 // deployments, DUTY_SUPABASE_TARGET (set by the local launchers) otherwise. With neither (tests, plain
 // `next start`) the unchanged navy brand applies.
 export type BrandEnvironment = 'prod' | 'dev' | 'local';
-/** dark is the logo's navy (icon background, same in every environment); light replaces ONLY its cyan lines. */
+/** dark is the logo's navy (icon background, same in every environment); light replaces ONLY its blue lines (the white "miko" wordmark and the navy never change). */
 export const BRAND_ENVIRONMENTS: Record<BrandEnvironment, {dark: string; light: string; nameSuffix: string}> = {
   prod: {dark: '#090442', light: '#19f2f7', nameSuffix: ''},
   dev: {dark: '#090442', light: '#3ddc84', nameSuffix: ' Dev'},
