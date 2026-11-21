@@ -77,9 +77,10 @@ export function pushLink(kind: PushKind, params: PushParams, fallback: string): 
     // Still open: the request itself on Home. Settled: its first day in the schedule.
     case 'swap_new': case 'swap_accepted': case 'swap_awaiting_admin': {
       const request = params.request && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(params.request) ? params.request.toLowerCase() : undefined;
-      return request ? link({tab: 'home', swap: request, month, day: day(params.fromDay)}) : month ? link({tab: 'schedule', month, day: day(params.fromDay)}) : fallback;
+      return request ? link({tab: 'home', swap: request, month, day: day(params.fromDay), or: day(params.toDay)}) : month ? link({tab: 'schedule', month, day: day(params.fromDay), or: day(params.toDay)}) : fallback;
     }
-    case 'swap_declined': case 'swap_rejected': case 'swap_approved': return month ? link({tab: 'schedule', month, day: day(params.fromDay)}) : fallback;
+    // Both dates: each recipient sees the one that is theirs now (after approval, the day they got).
+    case 'swap_declined': case 'swap_rejected': case 'swap_approved': return month ? link({tab: 'schedule', month, day: day(params.fromDay), or: day(params.toDay)}) : fallback;
     case 'member_waiting': return link({tab: 'team', focus: 'approvals'});
   }
 }

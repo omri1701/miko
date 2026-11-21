@@ -211,10 +211,11 @@ test('#89 rule 1: each kind links to its own screen: the request, the duty day, 
     deadline_3: '/?tab=availability&month=2026-12', deadline_1: '/?tab=availability&month=2026-12',
     published: '/?tab=schedule&month=2026-12', republished: '/?tab=schedule&month=2026-12',
     edit: '/?tab=schedule&month=2026-12&day=2026-12-03',
-    swap_new: `/?tab=home&swap=${request}&month=2026-12&day=2026-12-03`, swap_accepted: `/?tab=home&swap=${request}&month=2026-12&day=2026-12-03`,
-    swap_awaiting_admin: `/?tab=home&swap=${request}&month=2026-12&day=2026-12-03`,
-    swap_declined: '/?tab=schedule&month=2026-12&day=2026-12-03', swap_rejected: '/?tab=schedule&month=2026-12&day=2026-12-03',
-    swap_approved: '/?tab=schedule&month=2026-12&day=2026-12-03',
+    swap_new: `/?tab=home&swap=${request}&month=2026-12&day=2026-12-03&or=2026-12-10`, swap_accepted: `/?tab=home&swap=${request}&month=2026-12&day=2026-12-03&or=2026-12-10`,
+    swap_awaiting_admin: `/?tab=home&swap=${request}&month=2026-12&day=2026-12-03&or=2026-12-10`,
+    // Both dates of a settled swap: each recipient's app opens the one that is theirs now.
+    swap_declined: '/?tab=schedule&month=2026-12&day=2026-12-03&or=2026-12-10', swap_rejected: '/?tab=schedule&month=2026-12&day=2026-12-03&or=2026-12-10',
+    swap_approved: '/?tab=schedule&month=2026-12&day=2026-12-03&or=2026-12-10',
     remind_evening: '/?tab=schedule&month=2026-12&duty=2026-12-03', remind_morning: '/?tab=schedule&month=2026-12&duty=2026-12-03',
     member_waiting: '/?tab=team&focus=approvals',
   };
@@ -228,7 +229,7 @@ test('#89 rule 1: each kind links to its own screen: the request, the duty day, 
   }
   // Missing or malformed params keep the database's link; a bad request id never reaches the URL.
   assert.equal(pushLink('remind_morning', {}, db), db);
-  assert.equal(pushLink('swap_new', {...params, request: 'x&tab=team'}, db), '/?tab=schedule&month=2026-12&day=2026-12-03');
+  assert.equal(pushLink('swap_new', {...params, request: 'x&tab=team'}, db), '/?tab=schedule&month=2026-12&day=2026-12-03&or=2026-12-10');
   assert.deepEqual(deepLink(`?tab=home&swap=${request}&month=2026-12&day=2026-12-03`), {tab: 'home', swap: request, month: '2026-12', day: '2026-12-03'});
   assert.deepEqual(deepLink('?tab=schedule&duty=2026-12-03&focus=approvals'), {tab: 'schedule', duty: '2026-12-03', focus: 'approvals'});
   assert.deepEqual(deepLink('?day=2026-13-01&duty=x&swap=a%20b&focus=all'), {});
@@ -237,22 +238,25 @@ test('#89 rule 1: each kind links to its own screen: the request, the duty day, 
 // Issue #89 rule 2: the service worker reuses an open window; it opens one only when none is open.
 // Mirrors a phone: matchAll includes uncontrolled windows, focus() may fail, and a backgrounded
 // app may miss the message (no ack) or read the stashed link on resuming instead.
-async function tapNotification(windows, url, app = 'ack') {
-  const listeners = {}, calls = {opened: [], posted: [], focused: [], navigated: []}, store = new Map();
+async function tapNotification(windows, url, app = 'ack', later = null) {
+  const listeners = {}, calls = {opened: [], posted: [], focused: [], navigated: [], broadcast: []}, store = new Map();
   const caches = {open: async () => ({put: async (key, response) => {store.set(key, await response.text());}, delete: async key => store.delete(key), match: async key => store.get(key)}),
     keys: async () => [], delete: async () => true};
-  const clients = windows.map(w => ({url: 'https://miko.example/', focused: false, visibilityState: 'hidden', ...w,
+  const client = w => ({url: 'https://miko.example/', focused: false, visibilityState: 'hidden', ...w,
     postMessage(data, ports) {
       calls.posted.push({client: this.name, ...data});
       if (app === 'ack') ports[0].postMessage('duty-opened');
       if (app === 'resume') store.delete('/__duty-pending-link'); // the app took the stash instead
     },
     async focus() {calls.focused.push(this.name); if (w.focusFails) throw Error('not allowed'); return this;},
-    async navigate(href) {if (w.uncontrolled) throw TypeError('not controlled'); calls.navigated.push(href); return this;}}));
+    async navigate(href) {if (w.uncontrolled) throw TypeError('not controlled'); calls.navigated.push(href); return this;}});
+  const clients = windows.map(client);
+  later = later && later.map(client);
   const self = {location: new URL('https://miko.example/'), addEventListener: (type, fn) => {listeners[type] = fn;},
-    clients: {matchAll: async options => {calls.options = options; return clients;}, openWindow: async href => {calls.opened.push(href);}}, registration: {}};
+    clients: {matchAll: async options => {calls.options = options; const listed = later && calls.opened.length ? later : clients; return listed;}, openWindow: async href => {calls.opened.push(href);}}, registration: {}};
   vm.runInNewContext(readFileSync(new URL('../public/sw.js', import.meta.url), 'utf8'),
-    {self, URL, caches, fetch: () => {}, Response, MessageChannel, setTimeout: fn => setTimeout(fn, 5), clearTimeout, Date, JSON});
+    {self, URL, caches, fetch: () => {}, Response, MessageChannel, setTimeout: fn => setTimeout(fn, 5), clearTimeout, Date, JSON,
+      BroadcastChannel: class {constructor(name) {this.name = name;} postMessage(data) {calls.broadcast.push({channel: this.name, ...data});} close() {}}});
   let done;
   listeners.notificationclick({notification: {data: {url}, close() {}}, waitUntil: promise => {done = promise;}});
   await done;
@@ -264,7 +268,8 @@ test('#89 rule 2: tapping with the app open navigates that window instead of ope
   const heard = await tapNotification([{name: 'app'}], link);
   assert.deepEqual(heard.options, {type: 'window', includeUncontrolled: true});
   delete heard.options;
-  assert.deepEqual(heard, {opened: [], posted: [{client: 'app', type: 'duty-open', url: link}], focused: ['app'], navigated: [], stashed: 0});
+  assert.deepEqual(heard, {opened: [], posted: [{client: 'app', type: 'duty-open', url: link}], focused: ['app'], navigated: [], stashed: 0,
+    broadcast: [{channel: 'duty-links', type: 'duty-open', url: link}]});
   // Backgrounded and frozen, the message is lost: the window itself navigates to the link.
   const lost = await tapNotification([{name: 'app'}], link, 'lost');
   assert.deepEqual([lost.navigated, lost.opened, lost.stashed], [[href], [], 0]);
@@ -283,5 +288,11 @@ test('#89 rule 2: tapping with the app open navigates that window instead of ope
   // link, and the link stays stashed for a running app to take when it comes forward.
   const closed = await tapNotification([], link);
   assert.deepEqual([closed.opened, closed.posted, closed.stashed], [[href], [], 1]);
+  // iOS: a suspended app is not listed, openWindow just brings it forward, and its window is listed
+  // a moment later: it is sent the link then, and the link is broadcast to every page of the app.
+  const suspended = await tapNotification([], link, 'ack', [{name: 'app'}]);
+  assert.deepEqual(suspended.opened, [href]);
+  assert.deepEqual(suspended.posted, [{client: 'app', type: 'duty-open', url: link}]);
+  assert.equal(suspended.broadcast.length, 2);
   assert.deepEqual((await tapNotification([], 'https://evil.example/')).opened, ['https://miko.example/']);
 });

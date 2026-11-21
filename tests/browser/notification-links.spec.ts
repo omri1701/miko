@@ -175,3 +175,42 @@ test('#89 a cold start on a link drops the stashed copy from the worker', async 
   await expect.poll(() => page.evaluate(() => caches.open('duty-links-v1').then(cache => cache.match('/__duty-pending-link')).then(r => !!r))).toBe(false);
   await expect(tab(page, 'Schedule')).toHaveAttribute('aria-selected', 'true');
 });
+
+// Each recipient of a settled swap sees the day that is theirs now, even from a stale app.
+for (const [who, theirs, gave] of [['a', '2026-11-03', '2026-11-02'], ['b', '2026-11-02', '2026-11-03']] as const) {
+  test(`#89 after an approved swap, ${who} opens on the new duty date, not the one given away`, async ({page, openApp, backend}) => {
+    await openApp(who, page);
+    await expect(page.locator('[data-settings-button]')).toBeVisible();
+    // Alex asked Blair: 2 ↔ 3 November. The admin approves while this app sits in the background.
+    for (const row of backend.raw.assignments.filter(d => d.publication_id && ['2026-11-02', '2026-11-03'].includes(d.day)))
+      row.primary_id = row.day === '2026-11-02' ? ids.b : ids.a;
+    await page.evaluate(url => navigator.serviceWorker.dispatchEvent(new MessageEvent('message', {data: {type: 'duty-open', url}})),
+      '/?tab=schedule&month=2026-11&day=2026-11-02&or=2026-11-03');
+    await expect(tab(page, 'Schedule')).toHaveAttribute('aria-selected', 'true');
+    await expect(day(page, theirs)).toHaveClass(/flash-day/);
+    await expect(day(page, gave)).not.toHaveClass(/flash-day/);
+  });
+}
+
+test('#89 rule 2 (iOS): a resumed app the phone did not list gets the broadcast link', async ({page, openApp}) => {
+  await openApp('a', page);
+  await expect(tab(page, 'Home')).toHaveAttribute('aria-selected', 'true');
+  // No postMessage, no visibility events: only the worker's broadcast (public/sw.js).
+  await page.evaluate(url => {const c = new BroadcastChannel('duty-links'); c.postMessage({type: 'duty-open', url}); c.close();}, '/?tab=schedule&month=2026-11&duty=2026-11-02');
+  await expect(tab(page, 'Schedule')).toHaveAttribute('aria-selected', 'true');
+  await expect(day(page, '2026-11-02')).toHaveClass(/flash-day/);
+});
+
+test('#89 rule 2 (iOS): a frozen app that resumes without visibility events takes the stashed link', async ({page, openApp}) => {
+  await openApp('a', page);
+  await expect(tab(page, 'Home')).toHaveAttribute('aria-selected', 'true');
+  // Frozen for ~5 s (the main thread blocked), during which the worker stashed the link.
+  await page.evaluate(async () => {
+    await caches.open('duty-links-v1').then(cache => cache.put('/__duty-pending-link',
+      new Response(JSON.stringify({url: '/?tab=schedule&month=2026-11&duty=2026-11-02', at: Date.now()}))));
+    const end = performance.now() + 5000;
+    while (performance.now() < end) { /* frozen */ }
+  });
+  await expect(tab(page, 'Schedule')).toHaveAttribute('aria-selected', 'true');
+  await expect(day(page, '2026-11-02')).toHaveClass(/flash-day/);
+});

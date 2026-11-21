@@ -58,6 +58,10 @@ const LINKS = 'duty-links-v1', PENDING = '/__duty-pending-link', ACK_MS = 2500;
 const stash = link => caches.open(LINKS).then(cache => cache.put(PENDING, new Response(JSON.stringify({url: link, at: Date.now()})))).catch(() => {});
 // Resolves true when the stash was still there (the app never read it).
 const unstash = () => caches.open(LINKS).then(cache => cache.delete(PENDING)).catch(() => true);
+// To every open page of the app, listed by the phone or not (components/rota/workspace.tsx).
+function broadcast(link) {
+  try {const channel = new BroadcastChannel('duty-links'); channel.postMessage({type: 'duty-open', url: link}); channel.close();} catch {}
+}
 function acknowledged(client, link) {
   return new Promise(resolve => {
     let channel;
@@ -78,11 +82,20 @@ self.addEventListener('notificationclick', event => {
     // First, whatever follows: a suspended phone app is often not listed below, and openWindow then
     // only brings the running app forward unchanged; the app takes this link when it comes forward.
     await stash(link);
+    broadcast(link);
     const windows = (await self.clients.matchAll({type: 'window', includeUncontrolled: true})).filter(client => new URL(client.url).origin === self.location.origin);
     // The window the user last looked at: focused, then visible, then any.
     const open = windows.find(client => client.focused) ?? windows.find(client => client.visibilityState === 'visible') ?? windows[0];
     // A cold start opens on the link itself and drops the stash (components/rota/workspace.tsx).
-    if (!open) {await self.clients.openWindow(target); return;}
+    if (!open) {
+      await self.clients.openWindow(target);
+      // iOS: openWindow only brings a suspended app forward, which lists its window a moment later.
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      for (const client of await self.clients.matchAll({type: 'window', includeUncontrolled: true}))
+        if (new URL(client.url).origin === self.location.origin) try {client.postMessage({type: 'duty-open', url: link});} catch {}
+      broadcast(link);
+      return;
+    }
     let client = open;
     try {client = (await open.focus()) ?? open;} catch {}
     if (await acknowledged(client, link)) {await unstash(); return;}

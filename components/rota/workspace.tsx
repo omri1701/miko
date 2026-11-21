@@ -80,7 +80,12 @@ export function RotaWorkspace({remote, lang, setLang}: {remote: TeamWorkspace; l
     }
     // A notification tapped while the app is open: public/sw.js focuses this window and
     // sends the link, so it navigates here instead of opening a second window (issue #89).
+    // One tap can arrive several ways (message, broadcast, stash): handle it once.
+    let last = {url: '', at: 0};
     const go = (url: string) => {
+      const now = performance.now();
+      if (url === last.url && now - last.at < 5000) return;
+      last = {url, at: now};
       const next = deepLink(url.replace(/^\/\?/, '?'));
       if (next.month) setMonth(next.month);
       if (next.tab) setTab(next.tab);
@@ -103,7 +108,18 @@ export function RotaWorkspace({remote, lang, setLang}: {remote: TeamWorkspace; l
         if (url) go(url);
         else if (left.length && run === looking) setTimeout(() => look(left.slice(1)), left[0]);
       });
-      look([300, 700, 1500, 2500]);
+      look([300, 700, 1500, 2500, 5000]);
+    };
+    // iOS resumes a suspended Home Screen app without always firing visibilitychange: a timer that
+    // fires far later than scheduled means the app was frozen and is back.
+    let tick = performance.now();
+    const frozen = setInterval(() => {const now = performance.now(); if (now - tick > 4000) resumed(); tick = now;}, 1000);
+    // The worker also broadcasts the link, which a resumed app receives even when the phone did
+    // not list its window (no postMessage) and it missed the stash.
+    const channel = typeof BroadcastChannel === 'undefined' ? null : new BroadcastChannel('duty-links');
+    if (channel) channel.onmessage = event => {
+      if (event.data?.type !== 'duty-open' || typeof event.data.url !== 'string') return;
+      clearPendingLink(); go(event.data.url);
     };
     navigator.serviceWorker?.addEventListener('message', open);
     navigator.serviceWorker?.startMessages?.();
@@ -120,6 +136,7 @@ export function RotaWorkspace({remote, lang, setLang}: {remote: TeamWorkspace; l
       void currentSubscription().then(subscription => subscription && remote.personal.saveDevice(describe(subscription))).catch(() => {});
     return () => {
       navigator.serviceWorker?.removeEventListener('message', open);
+      clearInterval(frozen); channel?.close();
       document.removeEventListener('visibilitychange', resumed);
       window.removeEventListener('focus', resumed);
       window.removeEventListener('pageshow', resumed);
@@ -346,12 +363,15 @@ export function RotaWorkspace({remote, lang, setLang}: {remote: TeamWorkspace; l
     };
     const missing = target.swap ? !openSwap : target.duty ? !mineOn(target.duty) : target.focus === 'approvals' && !(isManager && raw.members.some(m => m.status === 'pending'));
     // The notification may be newer than this copy of the team (a request made after the app
-    // loaded, a reverse swap of one just approved): reload once before calling it gone.
-    if (missing && !target.refreshed) {void remote.refresh().catch(() => {}).finally(() => setTarget({...target, refreshed: true})); return;}
+    // loaded, a reverse swap of one just approved): reload once before calling it gone. A swap's
+    // two dates always reload first: an app left in the background still shows the old owners.
+    if ((missing || (target.or && !openSwap)) && !target.refreshed) {void remote.refresh().catch(() => {}).finally(() => setTarget({...target, refreshed: true})); return;}
     const note = (en: string, he: string) => toast.info(t(en, he), {id: 'deep-link'});
     const reveal = (selector: string) => setTimeout(() => document.querySelector(selector)?.scrollIntoView({block: 'center'}), 60);
-    const showDay = (day?: string) => {
+    const showDay = (first?: string) => {
       setTab('schedule');
+      // Of a swap's two dates, the one that is the member's duty now: each person their own day.
+      const day = [first, target.or].find(d => d && mineOn(d)) ?? first;
       if (!day) return;
       if (day.slice(0, 7) !== month) goToMonth(day.slice(0, 7));
       setSelectedDay(day); setFlashDays([day]);
@@ -364,6 +384,7 @@ export function RotaWorkspace({remote, lang, setLang}: {remote: TeamWorkspace; l
       showDay(target.duty);
       if (missing) note('This duty has changed. Here is the current schedule.', 'הכוננות הזו השתנתה. זה הלוח העדכני.');
     } else if (target.day) showDay(target.day);
+    else if (target.or) showDay(target.or);
     else if (target.focus === 'approvals') {
       setTab('team');
       if (!missing) reveal('.join-requests');
