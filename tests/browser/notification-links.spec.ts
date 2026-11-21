@@ -7,9 +7,9 @@ const tab = (page: Page, name: string) => page.getByRole('tab', {name, exact: tr
 const day = (page: Page, date: string) => page.locator(`button[data-date="${date}"]`).first();
 
 // Blair asks Alex to swap 3 ↔ 2 November: the request waits for Alex.
-function openRequest(backend: Backend) {
+function openRequest(backend: Backend, id = REQUEST, requester = ids.b, other = ids.a) {
   const from = backend.raw.assignments.find(d => d.day === '2026-11-03' && d.publication_id)!, to = backend.raw.assignments.find(d => d.day === '2026-11-02' && d.publication_id)!;
-  backend.raw.swapRequests!.unshift({id: REQUEST, month: MONTH, source_publication_id: from.publication_id!, requester_id: ids.b, other_id: ids.a, from_day: from.day, from_end_day: from.end_day,
+  backend.raw.swapRequests!.unshift({id, month: MONTH, source_publication_id: from.publication_id!, requester_id: requester, other_id: other, from_day: from.day, from_end_day: from.end_day,
     to_day: to.day, to_end_day: to.end_day, explanation: '', status: 'awaiting_engineer', accepted_by: null, accepted_at: null, created_at: NOW, resolved_at: null, resolved_by: null,
     result_publication_id: null, override_reason: '', proposed_by: null, requester_accepted_at: null});
 }
@@ -107,4 +107,40 @@ test('#89 rule 3: no one waiting for approval opens the Team tab with a note', a
   await tap(page, '/?tab=team&focus=approvals');
   await expect(tab(page, 'Team')).toHaveAttribute('aria-selected', 'true');
   await expect(page.getByText('No one is waiting for approval now.', {exact: true})).toBeVisible();
+});
+
+test('#89 a request made after the app loaded, the reverse of one just approved, opens instead of "already handled"', async ({page, openApp, backend}) => {
+  // Blair and Alex swapped 3 ↔ 2 November; the app has that settled request.
+  openRequest(backend);
+  Object.assign(backend.raw.swapRequests![0], {status: 'approved', resolved_at: NOW, resolved_by: ids.admin});
+  await openApp('a', page);
+  await expect(page.locator('[data-settings-button]')).toBeVisible();
+  // Then the reverse swap is asked: a new request the open app hasn't loaded yet.
+  const REVERSE = '30000000-0000-4000-8000-0000000000bb';
+  openRequest(backend, REVERSE);
+  await page.evaluate(url => navigator.serviceWorker.dispatchEvent(new MessageEvent('message', {data: {type: 'duty-open', url}})),
+    `/?tab=home&swap=${REVERSE}&month=${MONTH}&day=2026-11-03`);
+  await expect(tab(page, 'Home')).toHaveAttribute('aria-selected', 'true');
+  await expect(page.locator(`[data-swap-card="${REVERSE}"]`)).toBeInViewport();
+  await expect(page.getByText('This swap request was already handled.', {exact: true})).toHaveCount(0);
+  // Also on a cold open whose loaded copy predates the request.
+  const LATER = '30000000-0000-4000-8000-0000000000cc';
+  await page.reload();
+  await expect(page.locator('[data-settings-button]')).toBeVisible();
+  openRequest(backend, LATER);
+  await page.evaluate(url => navigator.serviceWorker.dispatchEvent(new MessageEvent('message', {data: {type: 'duty-open', url}})),
+    `/?tab=home&swap=${LATER}&month=${MONTH}&day=2026-11-03`);
+  await expect(page.locator(`[data-swap-card="${LATER}"]`)).toBeInViewport();
+  await expect(page.getByText('This swap request was already handled.', {exact: true})).toHaveCount(0);
+});
+
+test('#89 a member who signed up after the app loaded opens in the approvals list', async ({page, openApp, backend}) => {
+  backend.raw.members.find(m => m.id === ids.pending)!.status = 'approved';
+  await openApp('admin', page);
+  await expect(page.locator('[data-settings-button]')).toBeVisible();
+  backend.raw.members.find(m => m.id === ids.pending)!.status = 'pending';
+  await page.evaluate(() => navigator.serviceWorker.dispatchEvent(new MessageEvent('message', {data: {type: 'duty-open', url: '/?tab=team&focus=approvals'}})));
+  await expect(tab(page, 'Team')).toHaveAttribute('aria-selected', 'true');
+  await expect(page.getByText('Pat Pending', {exact: true})).toBeVisible();
+  await expect(page.getByText('No one is waiting for approval now.', {exact: true})).toHaveCount(0);
 });

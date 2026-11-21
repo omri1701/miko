@@ -71,7 +71,7 @@ export function RotaWorkspace({remote, lang, setLang}: {remote: TeamWorkspace; l
   const [month, setMonth] = useState(() => link.month ?? initialCalendarMonth()), [tab, setTab] = useState<string>(link.tab ?? 'home');
   const [welcome, setWelcome] = useState(() => typeof window !== 'undefined' && !welcomeSeen());
   // The exact target inside that screen (a day, a swap request, the approvals), resolved once rendered.
-  const [target, setTarget] = useState<DeepLink | null>(() => link.day || link.duty || link.swap || link.focus ? link : null);
+  const [target, setTarget] = useState<(DeepLink & {refreshed?: boolean}) | null>(() => link.day || link.duty || link.swap || link.focus ? link : null);
   useEffect(() => {
     const url = new URL(window.location.href);
     if (DEEP_LINK_KEYS.some(key => url.searchParams.has(key))) {
@@ -325,7 +325,17 @@ export function RotaWorkspace({remote, lang, setLang}: {remote: TeamWorkspace; l
   </>;
   const openSchedule = (m: string) => {if (m !== month) goToMonth(m); setTab('schedule');};
   // A notification's exact target (issue #89); when it no longer exists, the closest screen and a short note.
-  function resolve(target: DeepLink) {
+  function resolve(target: DeepLink & {refreshed?: boolean}) {
+    const raw = remote.snapshot!;
+    const openSwap = !!target.swap && swaps.requests.some(r => r.id === target.swap && ['awaiting_engineer', 'awaiting_admin'].includes(r.status));
+    const mineOn = (day: string) => {
+      const current = raw.months.find(m => m.month === day.slice(0, 7))?.current_publication_id;
+      return raw.assignments.some(a => a.publication_id === current && a.day === day && (a.primary_id === meId || a.secondary_id === meId));
+    };
+    const missing = target.swap ? !openSwap : target.duty ? !mineOn(target.duty) : target.focus === 'approvals' && !(isManager && raw.members.some(m => m.status === 'pending'));
+    // The notification may be newer than this copy of the team (a request made after the app
+    // loaded, a reverse swap of one just approved): reload once before calling it gone.
+    if (missing && !target.refreshed) {void remote.refresh().catch(() => {}).finally(() => setTarget({...target, refreshed: true})); return;}
     const note = (en: string, he: string) => toast.info(t(en, he), {id: 'deep-link'});
     const reveal = (selector: string) => setTimeout(() => document.querySelector(selector)?.scrollIntoView({block: 'center'}), 60);
     const showDay = (day?: string) => {
@@ -336,22 +346,15 @@ export function RotaWorkspace({remote, lang, setLang}: {remote: TeamWorkspace; l
       reveal(`button[data-date="${day}"]`);
     };
     if (target.swap) {
-      if (swaps.requests.some(r => r.id === target.swap && ['awaiting_engineer', 'awaiting_admin'].includes(r.status))) {
-        setTab('home'); reveal(`[data-swap-card="${CSS.escape(target.swap)}"]`);
-      } else {
-        showDay(target.day);
-        note('This swap request was already handled.', 'בקשת ההחלפה הזו כבר טופלה.');
-      }
+      if (openSwap) {setTab('home'); reveal(`[data-swap-card="${CSS.escape(target.swap)}"]`);}
+      else {showDay(target.day); note('This swap request was already handled.', 'בקשת ההחלפה הזו כבר טופלה.');}
     } else if (target.duty) {
-      const raw = remote.snapshot!, day = target.duty;
-      const current = raw.months.find(m => m.month === day.slice(0, 7))?.current_publication_id;
-      const mine = raw.assignments.some(a => a.publication_id === current && a.day === day && (a.primary_id === meId || a.secondary_id === meId));
-      showDay(day);
-      if (!mine) note('This duty has changed. Here is the current schedule.', 'הכוננות הזו השתנתה. זה הלוח העדכני.');
+      showDay(target.duty);
+      if (missing) note('This duty has changed. Here is the current schedule.', 'הכוננות הזו השתנתה. זה הלוח העדכני.');
     } else if (target.day) showDay(target.day);
     else if (target.focus === 'approvals') {
       setTab('team');
-      if (isManager && remote.snapshot!.members.some(m => m.status === 'pending')) reveal('.join-requests');
+      if (!missing) reveal('.join-requests');
       else note('No one is waiting for approval now.', 'אין כרגע מי שממתין לאישור.');
     }
   }
