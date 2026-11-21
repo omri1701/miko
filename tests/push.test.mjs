@@ -4,7 +4,9 @@
 // language and idempotency).
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {PUSH_KINDS, pushText, pushDate, pushMonth} from '../lib/push/messages.ts';
+import {PUSH_KINDS, pushLink, pushText, pushDate, pushMonth} from '../lib/push/messages.ts';
+import {readFileSync} from 'node:fs';
+import vm from 'node:vm';
 import {authorized, dispatch, outcome, parseDispatch, payload, refusalLog, serviceReason} from '../lib/push/dispatch.ts';
 import {supportedPushEndpoint, base64url, vapidKeyBytes, validVapidPublicKey, vapidSubjectProblem} from '../lib/push/endpoint.ts';
 import {DEFAULT_SETTINGS, deepLink, readNotificationState, settingsPayload, validTime} from '../lib/push/settings.ts';
@@ -79,7 +81,7 @@ test('dispatch writes each message in its own language and never contacts other 
   assert.deepEqual(result.results, [{id: '1', outcome: 'sent', status: 201}, {id: '2', outcome: 'gone', status: 410}, {id: '3', outcome: 'retry', status: 429},
     {id: '4', outcome: 'unknown'}, {id: '5', outcome: 'rejected'}, {id: '6', outcome: 'rejected'}, {id: '7', outcome: 'rejected'}]);
   assert.equal(sent.length, 4, 'only allowed push services with valid keys are contacted');
-  assert.deepEqual(sent[0].body, {title: 'Duty tomorrow', body: 'You’re on duty on Thu, Dec 3.', url: '/?tab=schedule&month=2026-12', tag: 'duty-12', lang: 'en'});
+  assert.deepEqual(sent[0].body, {title: 'Duty tomorrow', body: 'You’re on duty on Thu, Dec 3.', url: '/?tab=schedule&month=2026-12&duty=2026-12-03', tag: 'duty-12', lang: 'en'});
   assert.equal(sent[1].body.lang, 'he'); assert.equal(sent[1].body.title, 'כוננות מחר');
   assert.deepEqual(sent[0].options, {TTL: 21600, urgency: 'high', topic: 'duty-12'});
   assert.equal(JSON.parse(payload(message({kind: 'published', params: {month: '2026-12'}}))).title, 'December 2026 is published');
@@ -200,4 +202,97 @@ test('every notification carries its own tag, so a new event of the same kind al
   assert.equal(first.tag, 'duty-101');
   assert.equal(second.tag, 'duty-102');
   assert.notEqual(first.tag, second.tag);
+});
+
+// Issue #89 rule 1: every notification kind opens the screen it is about.
+test('#89 rule 1: each kind links to its own screen: the request, the duty day, the approvals', () => {
+  const request = '30000000-0000-4000-8000-0000000000aa', p = {...params, request}, db = '/?tab=schedule&month=2026-12';
+  const expected = {
+    deadline_3: '/?tab=availability&month=2026-12', deadline_1: '/?tab=availability&month=2026-12',
+    published: '/?tab=schedule&month=2026-12', republished: '/?tab=schedule&month=2026-12',
+    edit: '/?tab=schedule&month=2026-12&day=2026-12-03',
+    swap_new: `/?tab=home&swap=${request}&month=2026-12&day=2026-12-03&or=2026-12-10`, swap_accepted: `/?tab=home&swap=${request}&month=2026-12&day=2026-12-03&or=2026-12-10`,
+    swap_awaiting_admin: `/?tab=home&swap=${request}&month=2026-12&day=2026-12-03&or=2026-12-10`,
+    // Both dates of a settled swap: each recipient's app opens the one that is theirs now.
+    swap_declined: '/?tab=schedule&month=2026-12&day=2026-12-03&or=2026-12-10', swap_rejected: '/?tab=schedule&month=2026-12&day=2026-12-03&or=2026-12-10',
+    swap_approved: '/?tab=schedule&month=2026-12&day=2026-12-03&or=2026-12-10',
+    remind_evening: '/?tab=schedule&month=2026-12&duty=2026-12-03', remind_morning: '/?tab=schedule&month=2026-12&duty=2026-12-03',
+    member_waiting: '/?tab=team&focus=approvals',
+  };
+  assert.deepEqual(Object.keys(expected).sort(), [...PUSH_KINDS].sort(), 'every existing kind is covered');
+  for (const kind of PUSH_KINDS) {
+    assert.equal(pushLink(kind, p, db), expected[kind], kind);
+    // The sender carries the request id through validation into the notification.
+    const [parsed] = parseDispatch({messages: [message({kind, params: p, url: db})]});
+    assert.equal(JSON.parse(payload(parsed)).url, expected[kind], `${kind} payload`);
+    assert.deepEqual(deepLink(expected[kind].slice(1)).tab, expected[kind].match(/tab=([a-z]+)/)[1], `${kind} the app reads the tab`);
+  }
+  // Missing or malformed params keep the database's link; a bad request id never reaches the URL.
+  assert.equal(pushLink('remind_morning', {}, db), db);
+  assert.equal(pushLink('swap_new', {...params, request: 'x&tab=team'}, db), '/?tab=schedule&month=2026-12&day=2026-12-03&or=2026-12-10');
+  assert.deepEqual(deepLink(`?tab=home&swap=${request}&month=2026-12&day=2026-12-03`), {tab: 'home', swap: request, month: '2026-12', day: '2026-12-03'});
+  assert.deepEqual(deepLink('?tab=schedule&duty=2026-12-03&focus=approvals'), {tab: 'schedule', duty: '2026-12-03', focus: 'approvals'});
+  assert.deepEqual(deepLink('?day=2026-13-01&duty=x&swap=a%20b&focus=all'), {});
+});
+
+// Issue #89 rule 2: the service worker reuses an open window; it opens one only when none is open.
+// Mirrors a phone: matchAll includes uncontrolled windows, focus() may fail, and a backgrounded
+// app may miss the message (no ack) or read the stashed link on resuming instead.
+async function tapNotification(windows, url, app = 'ack', later = null) {
+  const listeners = {}, calls = {opened: [], posted: [], focused: [], navigated: [], broadcast: []}, store = new Map();
+  const caches = {open: async () => ({put: async (key, response) => {store.set(key, await response.text());}, delete: async key => store.delete(key), match: async key => store.get(key)}),
+    keys: async () => [], delete: async () => true};
+  const client = w => ({url: 'https://miko.example/', focused: false, visibilityState: 'hidden', ...w,
+    postMessage(data, ports) {
+      calls.posted.push({client: this.name, ...data});
+      if (app === 'ack') ports[0].postMessage('duty-opened');
+      if (app === 'resume') store.delete('/__duty-pending-link'); // the app took the stash instead
+    },
+    async focus() {calls.focused.push(this.name); if (w.focusFails) throw Error('not allowed'); return this;},
+    async navigate(href) {if (w.uncontrolled) throw TypeError('not controlled'); calls.navigated.push(href); return this;}});
+  const clients = windows.map(client);
+  later = later && later.map(client);
+  const self = {location: new URL('https://miko.example/'), addEventListener: (type, fn) => {listeners[type] = fn;},
+    clients: {matchAll: async options => {calls.options = options; const listed = later && calls.opened.length ? later : clients; return listed;}, openWindow: async href => {calls.opened.push(href);}}, registration: {}};
+  vm.runInNewContext(readFileSync(new URL('../public/sw.js', import.meta.url), 'utf8'),
+    {self, URL, caches, fetch: () => {}, Response, MessageChannel, setTimeout: fn => setTimeout(fn, 5), clearTimeout, Date, JSON,
+      BroadcastChannel: class {constructor(name) {this.name = name;} postMessage(data) {calls.broadcast.push({channel: this.name, ...data});} close() {}}});
+  let done;
+  listeners.notificationclick({notification: {data: {url}, close() {}}, waitUntil: promise => {done = promise;}});
+  await done;
+  return JSON.parse(JSON.stringify({...calls, stashed: store.size})); // plain objects from the worker's own realm
+}
+test('#89 rule 2: tapping with the app open navigates that window instead of opening a second one', async () => {
+  const link = '/?tab=home&swap=30000000-0000-4000-8000-0000000000aa&month=2026-12&day=2026-12-03', href = `https://miko.example${link}`;
+  // The app hears it and acknowledges: focused and told, nothing reloads or opens.
+  const heard = await tapNotification([{name: 'app'}], link);
+  assert.deepEqual(heard.options, {type: 'window', includeUncontrolled: true});
+  delete heard.options;
+  assert.deepEqual(heard, {opened: [], posted: [{client: 'app', type: 'duty-open', url: link}], focused: ['app'], navigated: [], stashed: 0,
+    broadcast: [{channel: 'duty-links', type: 'duty-open', url: link}]});
+  // Backgrounded and frozen, the message is lost: the window itself navigates to the link.
+  const lost = await tapNotification([{name: 'app'}], link, 'lost');
+  assert.deepEqual([lost.navigated, lost.opened, lost.stashed], [[href], [], 0]);
+  // Resumed, the app read the stashed link instead of the message: no reload.
+  const resumed = await tapNotification([{name: 'app'}], link, 'resume');
+  assert.deepEqual([resumed.navigated, resumed.opened], [[], []]);
+  // focus() refused (some phones): still told, and still no second window.
+  const refused = await tapNotification([{name: 'app', focusFails: true}], link);
+  assert.deepEqual([refused.posted.length, refused.opened], [1, []]);
+  // An uncontrolled window cannot navigate: only then a new window.
+  assert.deepEqual((await tapNotification([{name: 'app', uncontrolled: true}], link, 'lost')).opened, [href]);
+  // Several windows: the one the user last looked at.
+  const many = await tapNotification([{name: 'old'}, {name: 'shown', visibilityState: 'visible'}, {name: 'other', url: 'https://other.example/'}], link);
+  assert.deepEqual(many.focused, ['shown']);
+  // No window listed (closed, or a suspended phone app the phone does not list): one opens on the
+  // link, and the link stays stashed for a running app to take when it comes forward.
+  const closed = await tapNotification([], link);
+  assert.deepEqual([closed.opened, closed.posted, closed.stashed], [[href], [], 1]);
+  // iOS: a suspended app is not listed, openWindow just brings it forward, and its window is listed
+  // a moment later: it is sent the link then, and the link is broadcast to every page of the app.
+  const suspended = await tapNotification([], link, 'ack', [{name: 'app'}]);
+  assert.deepEqual(suspended.opened, [href]);
+  assert.deepEqual(suspended.posted, [{client: 'app', type: 'duty-open', url: link}]);
+  assert.equal(suspended.broadcast.length, 2);
+  assert.deepEqual((await tapNotification([], 'https://evil.example/')).opened, ['https://miko.example/']);
 });
