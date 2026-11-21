@@ -939,7 +939,6 @@ textarea{resize:vertical;min-height:76px}
 [dir=rtl] .swap-slot[data-leaving]{animation-name:fly-off-rtl}
 @keyframes fly-off{to{transform:translateX(110%) rotate(3deg);opacity:0}}@keyframes fly-off-rtl{to{transform:translateX(-110%) rotate(-3deg);opacity:0}}
 @media(prefers-reduced-motion:no-preference){
- [data-slot=tabs-content][data-state=active]{animation:tab-in 200ms var(--ease)}
  .app-shell:not(.startup-skeleton) .home>*,.team-list>.team-row:not(.mobile-drag-preview),.team-list>.team-group,.swap-cards>.swap-slot:not([data-leaving]),.bell-list>li,.settings-sheet .sheet-body>*{animation:fade-up 280ms var(--ease) both}
  .home>:nth-child(2),.team-list>:nth-child(2),.swap-cards>:nth-child(2),.bell-list>:nth-child(2),.settings-sheet .sheet-body>:nth-child(2){animation-delay:30ms}
  .home>:nth-child(3),.team-list>:nth-child(3),.swap-cards>:nth-child(3),.bell-list>:nth-child(3),.settings-sheet .sheet-body>:nth-child(3){animation-delay:60ms}
@@ -949,7 +948,8 @@ textarea{resize:vertical;min-height:76px}
  .home>:nth-child(n+7),.team-list>:nth-child(n+7),.swap-cards>:nth-child(n+7),.bell-list>:nth-child(n+7),.settings-sheet .sheet-body>:nth-child(n+7){animation-delay:180ms}
  .value-changed{animation:value-flash 300ms var(--spring)}
 }
-@keyframes tab-in{from{opacity:0}}
+/* Switching tabs shows the screen as it is (#115): the entrance plays once, for the screen the app opens on. */
+.app-shell [data-settled][data-slot=tabs-content] :is(.home>*,.hero,.team-list>.team-row,.team-list>.team-group,.swap-cards>.swap-slot:not([data-leaving])){animation:none}
 @keyframes value-flash{from{transform:scale(1.25);opacity:.4}}
 /* Theme switches cross-fade (hooks/use-theme.ts wraps the change in a view transition). */
 ::view-transition-old(root),::view-transition-new(root){animation-duration:240ms;animation-timing-function:ease}

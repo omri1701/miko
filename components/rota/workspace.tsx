@@ -259,26 +259,26 @@ export function RotaWorkspace({remote, lang, setLang}: {remote: TeamWorkspace; l
   let primary: PrimaryAction | undefined, menu: MenuItem[] = [];
   if (isManager) {
     const generating = t('Generating…', 'משבץ…');
-    const plan: PrimaryAction = {label: planLabel, busyLabel: generating, icon: allocation.busy ? <LoaderCircle className="spin"/> : <Sparkles/>, onClick: allocation.show, busy: allocation.busy,
+    const plan: PrimaryAction = {label: planLabel, busyLabel: generating, icon: allocation.working ? <LoaderCircle className="spin"/> : <Sparkles/>, onClick: allocation.show, busy: allocation.working,
       disabled: remote.readOnly || (generationClosed && !monthDetails.generated) || !metrics.active.length, reason: generationClosed && !monthDetails.generated ? closedReason : !metrics.active.length ? t('Add active members first', 'יש להוסיף חברי צוות פעילים קודם') : undefined};
     if (monthDetails.status === 'published') primary = {label: t('Reopen', 'פתיחה לעריכה'), variant: 'secondary', icon: <History/>, disabled: remote.readOnly, onClick: async () => {
       if (!publication) return;
       try {await remote.restore(publication);} catch (e) {toast.error(userMessage((e as Error).message, t));}
     }};
     else if (!viewingDraft) primary = undefined;
-    else if (publishable) primary = {label: t('Publish', 'פרסום'), icon: <Check/>, disabled: remote.readOnly || allocation.busy, onClick: () => setPublishOpen(true)};
+    else if (publishable) primary = {label: t('Publish', 'פרסום'), icon: <Check/>, disabled: remote.readOnly || allocation.working, onClick: () => setPublishOpen(true)};
     else if (!monthDetails.generated) primary = plan;
-    else primary = {...plan, label: t('Review plan', 'בדיקת התוכנית'), dot: reviewNotes > 0, disabled: remote.readOnly || allocation.busy, reason: publishBlockers.join(' · ') || undefined};
+    else primary = {...plan, label: t('Review plan', 'בדיקת התוכנית'), dot: reviewNotes > 0, disabled: remote.readOnly || allocation.working, reason: publishBlockers.join(' · ') || undefined};
     menu = [
-      ...(viewingDraft && primary !== plan && primary?.label !== planLabel ? [{key: 'plan', label: planLabel, icon: <Sparkles/>, onSelect: allocation.show, disabled: plan.disabled || allocation.busy, reason: plan.reason}] : []),
+      ...(viewingDraft && primary !== plan && primary?.label !== planLabel ? [{key: 'plan', label: planLabel, icon: <Sparkles/>, onSelect: allocation.show, disabled: plan.disabled || allocation.working, reason: plan.reason}] : []),
       {key: 'versions', label: t('Versions', 'גרסאות'), icon: <History/>, onSelect: () => setHistoryOpen(true)},
       {key: 'deadline', label: t('Constraints deadline', 'מועד אחרון לאילוצים'), icon: <SlidersHorizontal/>, onSelect: () => setSettings(true), disabled: remote.readOnly},
       ...(viewingDraft ? [
         {key: 'special', label: t('Special block', 'מקטע מיוחד'), icon: <Plus/>, onSelect: () => {draft.special.setOpen(true); draft.special.setTitle('');}, disabled: remote.readOnly},
-        {key: 'clear', label: t('Clear board', 'ניקוי הלוח'), icon: <Eraser/>, onSelect: () => draft.clear.setOpen(true), disabled: remote.readOnly || allocation.busy || !draft.clear.count,
-          reason: allocation.busy ? t('Wait for Generate to finish', 'יש להמתין לסיום השיבוץ') : !draft.clear.count ? t('Nothing to clear', 'אין מה לנקות') : undefined},
+        {key: 'clear', label: t('Clear board', 'ניקוי הלוח'), icon: <Eraser/>, onSelect: () => draft.clear.setOpen(true), disabled: remote.readOnly || allocation.working || !draft.clear.count,
+          reason: allocation.working ? t('Wait for Generate to finish', 'יש להמתין לסיום השיבוץ') : !draft.clear.count ? t('Nothing to clear', 'אין מה לנקות') : undefined},
       ] : []),
-      ...(reopened ? [{key: 'cancel', label: t('Cancel draft', 'ביטול טיוטה'), icon: <Trash2/>, danger: true, onSelect: () => setCancelDraftMonth(month), disabled: remote.readOnly || allocation.busy}] : []),
+      ...(reopened ? [{key: 'cancel', label: t('Cancel draft', 'ביטול טיוטה'), icon: <Trash2/>, danger: true, onSelect: () => setCancelDraftMonth(month), disabled: remote.readOnly || allocation.working}] : []),
     ];
   }
   const status = isManager
@@ -318,7 +318,7 @@ export function RotaWorkspace({remote, lang, setLang}: {remote: TeamWorkspace; l
     {isManager && viewingDraft && generationClosed && monthDetails.status === 'draft' && <p className="note-line">{closedReason}</p>}
     {isManager && viewingDraft && !remote.readOnly && !!publishBlockers.length && <p className="note-line" role="note" data-publish-blocked>
       <span>{t('Publish waits: ', 'הפרסום ממתין: ')}{publishBlockers.join(' · ')}</span>
-      {confirmedTotals && <Button size="xs" variant="link" disabled={allocation.busy} onClick={allocation.show}>{t('Open plan', 'פתיחת התוכנית')}</Button>}
+      {confirmedTotals && <Button size="xs" variant="link" disabled={allocation.working} onClick={allocation.show}>{t('Open plan', 'פתיחת התוכנית')}</Button>}
     </p>}
     {isManager && viewingDraft && !!metrics.conflictDays.length && <ul className="conflict-lines" data-conflicts>
       {metrics.conflictDays.map(({person: who, date, duty: b}) => <li key={who + date}>
@@ -326,6 +326,10 @@ export function RotaWorkspace({remote, lang, setLang}: {remote: TeamWorkspace; l
       </li>)}
     </ul>}
   </>;
+  // Every tab except the one the app opened on, and that one once left, shows without its entrance (#115).
+  const [tabs, setTabs] = useState({tab, opened: tab, left: false});
+  if (tabs.tab !== tab) setTabs({tab, opened: tabs.opened, left: true});
+  const settled = (value: string) => value !== tabs.opened || tabs.left || undefined;
   const openSchedule = (m: string) => {if (m !== month) goToMonth(m); setTab('schedule');};
   return <>
     <AppToaster/>
@@ -343,7 +347,7 @@ export function RotaWorkspace({remote, lang, setLang}: {remote: TeamWorkspace; l
       </div>}
       <fieldset disabled={!!remote?.saving} className="workspace-controls">
         <div>
-          <TabsContent value="home">
+          <TabsContent value="home" data-settled={settled('home')}>
             <HomeScreen remote={remote} swaps={swaps} today={today} lang={lang} t={t} onSchedule={openSchedule} onAvailability={m => {if (m !== month) goToMonth(m); setTab('availability');}} onTeam={() => setTab('team')}
               onSwap={(m, day) => {
                 if (m !== month) goToMonth(m);
@@ -354,7 +358,7 @@ export function RotaWorkspace({remote, lang, setLang}: {remote: TeamWorkspace; l
                 toast.info(t('Now choose the duty to swap with', 'עכשיו בוחרים את הכוננות להחלפה'), {id: 'swap-pick'});
               }}/>
           </TabsContent>
-          <TabsContent value="schedule" forceMount style={{display: tab === 'schedule' ? undefined : 'none'}}>
+          <TabsContent value="schedule" data-settled={settled('schedule')} forceMount style={{display: tab === 'schedule' ? undefined : 'none'}}>
             <MonthBar month={month} label={monthLabel} status={status} t={t} onChange={navigateMonth} onSwipe={swipeMonth} arrival={nameArrival} primary={primary} menu={menu}>
               {reopened && <Segmented label={t('Schedule version', 'גרסת לוח')} value={viewingDraft ? 'draft' : 'published'} onChange={setVersion}
                 options={[{value: 'draft', label: t('Draft', 'טיוטה')}, {value: 'published', label: t('Published', 'פורסם')}]}/>}
@@ -367,11 +371,11 @@ export function RotaWorkspace({remote, lang, setLang}: {remote: TeamWorkspace; l
             {mobile && selectedDay && <DayDetails date={selectedDay} duty={selectedDuty && ownerMonth(selectedDuty) === month ? selectedDuty : undefined} state={calendarState} lang={lang} t={t} meId={meId}
               interactive={!remote.readOnly} onOpen={b => setSheetDuty(b)}/>}
           </TabsContent>
-          <TabsContent value="availability">
+          <TabsContent value="availability" data-settled={settled('availability')}>
             <WorkspaceAvailability state={state} month={month} monthLabel={monthLabel} onMonth={changeMonth} person={person} setPerson={setPerson} dateCells={dateCells} lang={lang} isManager={isManager} meId={meId}
               constraintsClosed={constraintsClosed || remote.readOnly} deadline={monthDetails.deadline} t={t} saveConstraints={saveConstraints} schedule={scheduleFor} lastMonth={constraintsLast} lockDay={remote.readOnly ? undefined : constraintsLockDay} locked={!!constraintsMonthLock}/>
           </TabsContent>
-          <TabsContent value="team">
+          <TabsContent value="team" data-settled={settled('team')}>
             <WorkspaceTeam remote={remote} state={state} metrics={metrics} month={month} monthLabel={monthLabel} onMonth={changeMonth} meId={meId} isManager={isManager} lang={lang} t={t} update={update}/>
           </TabsContent>
         </div>

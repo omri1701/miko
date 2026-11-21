@@ -195,7 +195,12 @@ name follows the finger and sharpens as it arrives. Past 48px or a flick the mon
 and the calendar (or the Availability grid) refreshes in place, blurred to sharp, with no
 slide. The chevrons slide the calendar and roll the name. Hebrew mirrors all of it, and
 reduced motion makes it instant. The landed month is the peek without the blur. Refreshes
-keep the grid mounted and fade in only the chips whose person changed. Safe areas go through `--sat/--sab/--sal/--sar` (`env()` with a 0
+keep the grid mounted and blink once only the days whose duty changed (who, the backup, the
+title); a month change, the other version or a tab switch blinks nothing. Switching months or
+tabs shows no spinner, dimming or "Saving…": the admin's background read of the month holds
+the save lock quietly (a save meanwhile waits for it), and "Plan the month" says
+"Generating…" only after Generate or Save. Entrance animations play once, on the tab the app
+opens on (#115). Safe areas go through `--sat/--sab/--sal/--sar` (`env()` with a 0
 fallback; `data-safe-area=test` forces iPhone insets in specs); the status bar style stays
 `default` so its text is readable in both themes, and `theme-color` follows the chosen theme.
 

@@ -3,7 +3,9 @@ import {findMe, readSnapshot, type Snapshot} from './snapshot.ts';
 import {errorMessage, type DutyClient, type Functions, type MutationArgs, type MutationName} from './rpc.ts';
 import {assertWritable, isReadOnly} from './write-policy.ts';
 
-type Scope = {client: DutyClient; id: string; snapshot: Snapshot | null; request: number; bootstrap: Promise<void> | null; read: {sequence: number; promise: Promise<void>} | null; save: Promise<unknown> | null};
+type Scope = {client: DutyClient; id: string; snapshot: Snapshot | null; request: number; bootstrap: Promise<void> | null; read: {sequence: number; promise: Promise<void>} | null; save: Promise<unknown> | null;
+  /** The held lock is a quiet read (a generation context): nothing shows as saving, and a write waits for it. */
+  quiet?: boolean};
 
 const missingDutyLocks = 'Duty locks are unavailable on this database. Required migration: 20261028204239_duty_editor_locks.sql. Use LOCAL with pending migrations applied.';
 function assertDutyLockSupport(snapshot: Snapshot) {
@@ -119,6 +121,8 @@ export function createWorkspace(callbacks: {
     const current = scope;
     if (current) {try {assertWritable(current.client);} catch (error) {return Promise.reject(error);}}
     if (!current || current.snapshot?.revision == null) return Promise.reject(Error('Sign in with an approved account first.'));
+    // A quiet read finishes first; the write then uses the revision it leaves (#115).
+    if (current.save && current.quiet) return current.save.then(() => {}, () => {}).then(() => mutate(name, args));
     if (current.save) return Promise.reject(Error('Please wait for the current save.'));
     const revision = current.snapshot.revision;
     const lockState = name === 'duty_save_schedule' ? (args as MutationArgs<'duty_save_schedule'>).p_state : undefined;
@@ -158,12 +162,13 @@ export function createWorkspace(callbacks: {
   }
   /** Generation uses its original revision, never mutate()'s latest revision.
    * Share the identity/save lock and final reload with ordinary workspace writes. */
-  function captured<T>(revision: number, operation: (client: DutyClient) => Promise<T>, resultRevision?: (result: T) => number): Promise<T> {
+  function captured<T>(revision: number, operation: (client: DutyClient) => Promise<T>, resultRevision?: (result: T) => number, {quiet = false} = {}): Promise<T> {
     const current = scope;
     if (!current || current.snapshot?.revision !== revision) return Promise.reject(Error('The team data changed. Refresh and review allocation.'));
     try {assertWritable(current.client);} catch (error) {return Promise.reject(error);}
     if (current.save) return Promise.reject(Error('Please wait for the current save.'));
-    current.request++; callbacks.saving(true);
+    // A quiet read keeps the lock but shows nothing: the screen must not dim on a month change (#115).
+    current.request++; current.quiet = quiet; if (!quiet) callbacks.saving(true);
     const save = (async () => {
       try {
         const result = await operation(current.client);
@@ -176,7 +181,7 @@ export function createWorkspace(callbacks: {
         if (scope === current) await load(current).catch(() => {});
         throw error;
       } finally {
-        if (scope === current) {current.save = null; callbacks.saving(false);}
+        if (scope === current) {current.save = null; current.quiet = false; if (!quiet) callbacks.saving(false);}
       }
     })();
     current.save = save;

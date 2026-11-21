@@ -1,5 +1,5 @@
 'use client';
-import {useLayoutEffect,useRef,useState,type CSSProperties,type ReactNode,type Ref} from 'react';
+import {useLayoutEffect,useRef,useState,type ReactNode,type Ref} from 'react';
 import {Pencil,Trash2} from 'lucide-react';
 import {toast} from 'sonner';
 import {EditorDialog} from '@/components/rota/editor-dialog';
@@ -19,16 +19,19 @@ type EditKind='no'|'prefer'|'clear';
  * neighbour month (`preview`) is the same grid, read-only, while it slides in. */
 function AvailabilityGrid({state,month,person,cells,lang,disabled,mobile,schedule,selection=[],preview=false,bind,onTap,lockDay}:{state:State;month:string;person:string;cells:string[];lang:'en'|'he';disabled:boolean;mobile:boolean;schedule?:ReactNode;selection?:string[];preview?:boolean;bind?:Ref<HTMLDivElement>;onTap?:(d:string)=>void;lockDay?:(d:string)=>string|null}){
  const t=(a:string,b:string)=>lang==='en'?a:b;
- const ghost=useRef<HTMLDivElement>(null),[rows,setRows]=useState('');
+ const ghost=useRef<HTMLDivElement>(null),layers=useRef<HTMLDivElement>(null);
+ // Written straight onto the element, before the month stage measures the new month in the same
+ // commit: a re-render would show the previous month's rows for a frame and the grid would bounce (#115).
  useLayoutEffect(()=>{
-  const grid=ghost.current?.querySelector<HTMLElement>('.calendar-grid');
-  if(!grid){setRows('');return}
-  const read=()=>setRows(getComputedStyle(grid).gridTemplateRows);
+  const grid=ghost.current?.querySelector<HTMLElement>('.calendar-grid'),host=layers.current;
+  if(!host)return;
+  if(!grid){host.style.removeProperty('--schedule-rows');return}
+  const read=()=>host.style.setProperty('--schedule-rows',getComputedStyle(grid).gridTemplateRows);
   read();
   const observer=new ResizeObserver(read);observer.observe(grid);
   return()=>observer.disconnect();
  },[schedule]);
- return <div className="availability-layers" style={rows?{'--schedule-rows':rows} as CSSProperties:undefined}>
+ return <div ref={layers} className="availability-layers">
   {schedule&&<div ref={ghost} className="schedule-ghost" aria-hidden="true" inert>{schedule}</div>}
   <CalendarSurface lang={lang} dir={mobile&&lang==='he'?'rtl':'ltr'} gridRef={bind} gridClassName={`availability-grid${preview?'':' gesture-grid'}`}>{cells.map(d=>{
    const outside=calendarOwnerMonth(d)!==month,status=outside?undefined:state.constraints[person]?.[d],selected=selection.includes(d),n=outside?undefined:state.constraintNotes?.[person]?.[d];

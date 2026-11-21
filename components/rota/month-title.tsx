@@ -14,6 +14,8 @@ export function useMonthDirection(month: string) {
 }
 
 const SLIDE = 220, GAP = 24;
+/** The name's arrival played: hiding and showing the screen again must not replay it (#115). */
+const settle = (node: HTMLElement) => {node.removeAttribute('data-dir'); node.removeAttribute('data-arrive');};
 const reduced = () => typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
 /** The month heading every month screen shares. Chevrons roll the name like an odometer. Dragging
@@ -70,7 +72,10 @@ export function MonthTitle({month, label, status, t, onChange, onSwipe, arrival 
   // eslint-disable-next-line react-hooks/exhaustive-deps -- paints the freshly mounted neighbour.
   }, [peek]);
   // A new month (any cause): the name is back in place.
+  // A name that changed while its screen was hidden (another tab changed the month) just shows,
+  // rather than rolling in when the screen comes back (#115).
   useLayoutEffect(() => {busy.current = false; last.current = 0; paint(0, 0, false);
+    if (name.current && !name.current.getClientRects().length) settle(name.current);
   // eslint-disable-next-line react-hooks/exhaustive-deps -- runs once per month change.
   }, [month]);
   const end = (commit: boolean) => {
@@ -117,7 +122,7 @@ export function MonthTitle({month, label, status, t, onChange, onSwipe, arrival 
     <Button variant="ghost" size="icon" disabled={loading || !canGo(-1)} aria-label={t('Previous month', 'חודש קודם')} onClick={() => onChange?.(-1)}><Prev/></Button>
     <h2 className="month-heading" data-swipe={onChange ? '' : undefined}>
       <span className="month-roll" ref={roll}>
-        <span key={month} ref={name} className="month-name" data-dir={mode === 'roll' ? direction ?? undefined : undefined} data-arrive={mode === 'blur' && direction ? '' : undefined}>{label}</span>
+        <span key={month} ref={name} className="month-name" onAnimationEnd={e => settle(e.currentTarget)} data-dir={mode === 'roll' ? direction ?? undefined : undefined} data-arrive={mode === 'blur' && direction ? '' : undefined}>{label}</span>
         {peek !== 0 && <span ref={next} className="month-name-peek" aria-hidden="true">{calendarMonthLabel(monthNext(month, peek), rtl ? 'he' : 'en')}</span>}
       </span>
       {status}

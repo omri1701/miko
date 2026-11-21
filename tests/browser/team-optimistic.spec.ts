@@ -174,7 +174,8 @@ for(const moveFocus of [false,true])test(`keyboard reorder survives delayed allo
  const refreshing=page.waitForRequest('**/rest/v1/rpc/duty_generation_context');
  try {
   await handle.focus();await page.keyboard.press('ArrowDown');await refreshing;
-  await expect(handle).toBeDisabled();
+  // The follow-up read is quiet (#115): nothing dims while it runs.
+  await expect(handle).toBeEnabled();
   if(moveFocus)await other.focus();
  }finally{held.release()}
  await expect(page.locator('.team-list')).toHaveAttribute('aria-busy','false');
