@@ -193,8 +193,9 @@ export class Backend {
       const manager = canManage(this.raw, signIn);
       expect(manager || [a.primary_id, b.primary_id].includes(user)).toBe(true);
       const inside = (d: DutyRow, day: string) => day >= d.day && day < d.end_day;
-      return this.raw.constraints.filter(c => c.kind === 'no' && (([b.primary_id, a.secondary_id].includes(c.member_id) && inside(a, c.day)) ||
-        ([a.primary_id, b.secondary_id].includes(c.member_id) && inside(b, c.day)))).map(c => ({member: manager || [a.primary_id, b.primary_id].includes(c.member_id) ? c.member_id : null, day: c.day}));
+      // Only the two primaries: emergency cover doesn't move (#116).
+      return this.raw.constraints.filter(c => c.kind === 'no' && ((c.member_id === b.primary_id && inside(a, c.day)) ||
+        (c.member_id === a.primary_id && inside(b, c.day)))).map(c => ({member: c.member_id, day: c.day}));
     }
     if (name === 'duty_calendar_status' || name === 'duty_calendar_reset' || name === 'duty_calendar_language') {
       // Mirrors duty_private.calendar_*: own feed only, approved active members, never the hash.

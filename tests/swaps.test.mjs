@@ -107,7 +107,8 @@ test('an admin answers for a temporary member, never for anyone else, in resolve
 test('availability conflicts carry who and when only; malformed responses fail closed',()=>{
  assert.deepEqual(readSwapConflicts([{member:'b',day:'2026-11-02',note:'ignored'}]),[{member:'b',day:'2026-11-02'}]);
  assert.deepEqual(readSwapConflicts([]),[]);
- assert.deepEqual(readSwapConflicts([{member:null,day:'2026-11-03'}]),[{member:null,day:'2026-11-03'}]);
+ // #116: emergency cover's constraints are no swap conflict; an older database's anonymous cover entry is dropped.
+ assert.deepEqual(readSwapConflicts([{member:null,day:'2026-11-03'},{member:'b',day:'2026-11-04'}]),[{member:'b',day:'2026-11-04'}]);
  for(const bad of [null,{},[{member:'b'}],[{member:1,day:'2026-11-02'}],[{member:'b',day:'2 Nov'}]])assert.throws(()=>readSwapConflicts(bad));
 });
 
@@ -125,7 +126,7 @@ test('approval summary names both members, dates and points moved in English and
  assert.match(swapSummary({...input,to:{label:'x',points:1},lang:'en'}),/change: 0 pts/);
 });
 
-test('swap target hints: the swap’s own person, then the other primary, cover and second weekends',()=>{
+test('swap target hints: the swap’s own person, then the other primary and second weekends; never the cover’s constraints (#116)',()=>{
  const members=['me','dana','avi','cover'].map(id=>({id,name:id[0].toUpperCase()+id.slice(1),active:true,status:'approved'}));
  const source={id:'s',publication_id:'p',day:'2026-11-02',end_day:'2026-11-03',primary_id:'me',secondary_id:'cover'};
  const target={id:'t',publication_id:'p',day:'2026-11-04',end_day:'2026-11-05',primary_id:'dana',secondary_id:null};
@@ -134,7 +135,8 @@ test('swap target hints: the swap’s own person, then the other primary, cover 
  assert.equal(block([]),null);
  assert.deepEqual(block([{member:'dana',day:'2026-11-02'},{member:'me',day:'2026-11-04'}]),{kind:'takes-target',person:'me',day:'2026-11-04'});
  assert.deepEqual(block([{member:'dana',day:'2026-11-02'}]),{kind:'takes-source',person:'dana'});
- assert.deepEqual(block([{member:null,day:'2026-11-02'}]),{kind:'cover',person:null,day:'2026-11-02'});
+ // #116: the cover's own unavailable day (not a primary's) blocks nothing.
+ assert.equal(block([{member:'cover',day:'2026-11-02'}]),null);
  // Emergency cover who left the team blocks every pair, as validate_swap does.
  assert.deepEqual(swapTargetBlock({...raw,members:members.map(m=>m.id==='cover'?{...m,active:false}:m)},'2026-11',source,target,[]),{kind:'inactive'});
  // A second weekend is checked locally from the published rows.
@@ -152,7 +154,6 @@ test('swap hint text says who and which day, never the note, for engineers and a
  assert.equal(say({kind:'takes-target',person:'avi',day:'2026-11-04'},'admin','avi'),'Avi can’t take 04');
  assert.equal(say({kind:'takes-source',person:'dana'},'admin','avi'),'Dana can’t take Avi’s day');
  assert.equal(say({kind:'takes-source',person:'me'},'me','avi'),'You can’t take Avi’s day');
- assert.equal(say({kind:'cover',person:null,day:'2026-11-02'},'me','me'),'Emergency cover can’t take 02');
  assert.equal(say({kind:'weekend',person:'dana'},'admin','avi'),'This would give Dana a second weekend');
  assert.equal(say({kind:'past'},'me','me'),'This day has passed');
  assert.equal(say({kind:'takes-target',person:'me',day:'2026-11-04'},'me','me','he'),'אין לך אפשרות לקחת את 04');

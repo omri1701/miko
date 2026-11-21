@@ -39,9 +39,8 @@ const spanOf=(start:string,end:string,lang:'en'|'he')=>fmtDay(start,lang)+(end!=
 function conflictAlert(conflicts:SwapConflict[]|null,footer:string,name:(id:string)=>string,t:Translate,lang:'en'|'he'){
  return !!conflicts?.length&&<div className="note-line" data-tone="danger" role="alert" style={{display:'block'}}>
   <strong>{t('Availability conflict','התנגשות זמינות')}</strong>
-  <ul className="swap-conflicts">{conflicts.map(c=><li key={`${c.member}${c.day}`}>{c.member
-   ?t(`${name(c.member)} is unavailable on ${fmtDay(c.day,lang)}`,`ל־${name(c.member)} יש אילוץ אי־זמינות ב־${fmtDay(c.day,lang)}`)
-   :t(`Emergency cover is unavailable on ${fmtDay(c.day,lang)}`,`לכונן החירום יש אילוץ אי־זמינות ב־${fmtDay(c.day,lang)}`)}</li>)}</ul>
+  <ul className="swap-conflicts">{conflicts.map(c=><li key={`${c.member}${c.day}`}>
+   {t(`${name(c.member)} is unavailable on ${fmtDay(c.day,lang)}`,`ל־${name(c.member)} יש אילוץ אי־זמינות ב־${fmtDay(c.day,lang)}`)}</li>)}</ul>
   <p>{footer}</p>
  </div>;
 }

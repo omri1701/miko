@@ -68,13 +68,14 @@ export function visibleSwapRequests(requests:SwapRequest[],me:string,admin:boole
   .sort((a,b)=>Number(swapNeedsAction(b,me,admin,temporary))-Number(swapNeedsAction(a,me,admin,temporary))||b.created_at.localeCompare(a.created_at));
 }
 
-/** A member's unavailability that blocks a swap: who and which date, never the note.
- * Members see emergency cover's conflicts without a name (member null). */
-export type SwapConflict={member:string|null;day:string};
+/** A primary's unavailability that blocks a swap: who and which date, never the note.
+ * Emergency cover doesn't move, so its constraints are no swap conflict (#116): an older
+ * database's anonymous cover entry (member null) is dropped. */
+export type SwapConflict={member:string;day:string};
 export function readSwapConflicts(value:unknown):SwapConflict[]{
  if(!Array.isArray(value)||value.some(c=>typeof c!=='object'||c===null||(c.member!==null&&typeof c.member!=='string')||typeof c.day!=='string'||!/^\d{4}-\d{2}-\d{2}$/.test(c.day)))
   throw Error('Invalid availability check');
- return value.map(c=>({member:c.member,day:c.day}));
+ return value.filter(c=>c.member!==null).map(c=>({member:c.member,day:c.day}));
 }
 /** Why a target day can't be picked for a swap, shown before the pick (decision 2026-11-05).
  * Built from duty_swap_availability's conflicts (who and which date, never the note or kind)
@@ -82,7 +83,6 @@ export function readSwapConflicts(value:unknown):SwapConflict[]{
 export type SwapBlock=
  |{kind:'takes-target';person:string;day:string}
  |{kind:'takes-source';person:string}
- |{kind:'cover';person:string|null;day:string}
  |{kind:'weekend';person:string}
  |{kind:'inactive'}
  |{kind:'past'};
@@ -90,12 +90,11 @@ export function swapTargetBlock(raw:Snapshot,month:string,source:DutyRow,target:
  const inside=(d:DutyRow,day:string)=>day>=d.day&&day<d.end_day;
  // validate_swap refuses a pair whose emergency cover left the team.
  if([source.secondary_id,target.secondary_id].some(id=>id&&!raw.members.some(m=>m.id===id&&m.active&&m.status==='approved')))return {kind:'inactive'};
- // The swap's own person first, then the other primary, then emergency cover.
+ // The swap's own person first, then the other primary; the cover's constraints never block (#116).
  const mine=conflicts.find(c=>c.member===source.primary_id&&inside(target,c.day));
- if(mine)return {kind:'takes-target',person:mine.member!,day:mine.day};
+ if(mine)return {kind:'takes-target',person:mine.member,day:mine.day};
  const theirs=conflicts.find(c=>c.member===target.primary_id&&inside(source,c.day));
- if(theirs)return {kind:'takes-source',person:theirs.member!};
- if(conflicts[0])return {kind:'cover',person:conflicts[0].member,day:conflicts[0].day};
+ if(theirs)return {kind:'takes-source',person:theirs.member};
  const problem=swapProblem(raw,month,source,target,false);
  return problem?.kind==='weekend'?{kind:'weekend',person:problem.person}:null;
 }
@@ -112,9 +111,6 @@ export function swapBlockText(block:SwapBlock,{me,sourceOwner,name,day,lang}:{me
    return block.person===me?(he?`אין לך אפשרות לקחת את ${whose}`:`You can’t take ${whose}`)
     :he?`ל${name(block.person)} אין אפשרות לקחת את ${whose}`:`${name(block.person)} can’t take ${whose}`;
   }
-  case 'cover':return block.person
-   ?he?`ל${name(block.person)} אין אפשרות לכסות את ${day(block.day)}`:`${name(block.person)} can’t cover ${day(block.day)}`
-   :he?`לכונן החירום אין אפשרות ב־${day(block.day)}`:`Emergency cover can’t take ${day(block.day)}`;
   case 'weekend':return block.person===me?(he?'ההחלפה תיתן לך סוף שבוע שני':'This would give you a second weekend')
    :he?`ההחלפה תיתן ל${name(block.person)} סוף שבוע שני`:`This would give ${name(block.person)} a second weekend`;
  }

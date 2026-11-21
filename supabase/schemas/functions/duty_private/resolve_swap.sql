@@ -66,10 +66,14 @@ begin
   insert into public.duty_publications(month,version,published_by) values(r.month,next_version,me) returning id into publication;
   insert into public.duty_assignments(publication_id,day,end_day,primary_id,secondary_id,manager_override,title,extra_points,saturday_extra_points,locked)
   select publication,d.day,d.end_day,case when d.id=a.id then r.other_id when d.id=b.id then r.requester_id else d.primary_id end,
+   -- A swapped row's exception covers its new primary's unavailability; the cover didn't move,
+   -- so an earlier approval of the cover's day carries over and is never granted here (#116).
    d.secondary_id,case when d.id in (a.id,b.id) then exists(
     select 1 from public.duty_constraints c where c.kind='no' and c.day>=d.day and c.day<d.end_day
-    and c.member_id in (case when d.id=a.id then r.other_id else r.requester_id end,d.secondary_id)
-   ) else d.manager_override end,d.title,d.extra_points,d.saturday_extra_points,d.locked
+    and c.member_id=case when d.id=a.id then r.other_id else r.requester_id end
+   ) or (d.manager_override and exists(
+    select 1 from public.duty_constraints c where c.kind='no' and c.day>=d.day and c.day<d.end_day and c.member_id=d.secondary_id
+   )) else d.manager_override end,d.title,d.extra_points,d.saturday_extra_points,d.locked
   from public.duty_assignments d where d.publication_id=current_publication;
   -- A weighted swap moves points between the two engineers: the copied plan's targets
   -- follow it, so a reopened copy of this version still matches its plan (2026-11-06).
