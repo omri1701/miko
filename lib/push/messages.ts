@@ -6,7 +6,7 @@ export const PUSH_KINDS = ['deadline_3', 'deadline_1', 'published', 'republished
   'swap_declined', 'swap_rejected', 'swap_approved', 'remind_evening', 'remind_morning', 'member_waiting'] as const;
 export type PushKind = typeof PUSH_KINDS[number];
 export type PushParams = {month?: string; deadline?: string; version?: number; day?: string; count?: number; fromDay?: string; toDay?: string;
-  endDay?: string; role?: 'primary' | 'secondary'; name?: string};
+  endDay?: string; role?: 'primary' | 'secondary'; name?: string; request?: string};
 export type PushText = {title: string; body: string};
 
 const DAY = /^\d{4}-\d{2}-\d{2}$/, MONTH = /^\d{4}-(0[1-9]|1[0-2])$/;
@@ -56,5 +56,30 @@ export function pushText(kind: PushKind, params: PushParams, lang: PushLanguage)
       return {title: t('New member waiting', 'חבר צוות חדש ממתין'),
         body: name ? t(`${name} is waiting for your approval.`, `${name} ממתין/ה לאישור שלך.`) : t('Someone is waiting for your approval.', 'מישהו ממתין לאישור שלך.')};
     }
+  }
+}
+
+/** The screen a notification opens (issue #89), from its kind and dates: an open swap request,
+ * the duty day, the approvals list. `fallback` is the database's own link, used when the
+ * params lack what the exact target needs. The app falls back again when the target is gone. */
+export function pushLink(kind: PushKind, params: PushParams, fallback: string): string {
+  const month = params.month && MONTH.test(params.month) ? params.month : undefined;
+  const day = (value?: string) => value && DAY.test(value) ? value : undefined;
+  const link = (query: Record<string, string | undefined>) => '/?' + Object.entries(query).filter(([, v]) => v).map(([k, v]) => `${k}=${v}`).join('&');
+  switch (kind) {
+    case 'deadline_3': case 'deadline_1': return month ? link({tab: 'availability', month}) : fallback;
+    case 'published': case 'republished': return month ? link({tab: 'schedule', month}) : fallback;
+    case 'edit': return month ? link({tab: 'schedule', month, day: day(params.day)}) : fallback;
+    case 'remind_evening': case 'remind_morning': {
+      const duty = day(params.day);
+      return duty ? link({tab: 'schedule', month: duty.slice(0, 7), duty}) : fallback;
+    }
+    // Still open: the request itself on Home. Settled: its first day in the schedule.
+    case 'swap_new': case 'swap_accepted': case 'swap_awaiting_admin': {
+      const request = params.request && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(params.request) ? params.request.toLowerCase() : undefined;
+      return request ? link({tab: 'home', swap: request, month, day: day(params.fromDay)}) : month ? link({tab: 'schedule', month, day: day(params.fromDay)}) : fallback;
+    }
+    case 'swap_declined': case 'swap_rejected': case 'swap_approved': return month ? link({tab: 'schedule', month, day: day(params.fromDay)}) : fallback;
+    case 'member_waiting': return link({tab: 'team', focus: 'approvals'});
   }
 }

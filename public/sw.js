@@ -10,7 +10,7 @@ self.addEventListener('install', event => {
   event.waitUntil(caches.open(CACHE).then(cache => cache.addAll(SHELL)).catch(() => {}).then(() => self.skipWaiting()));
 });
 self.addEventListener('activate', event => {
-  event.waitUntil(caches.keys().then(keys => Promise.all(keys.filter(key => key !== CACHE).map(key => caches.delete(key)))).then(() => self.clients.claim()));
+  event.waitUntil(caches.keys().then(keys => Promise.all(keys.filter(key => key !== CACHE && key !== LINKS).map(key => caches.delete(key)))).then(() => self.clients.claim()));
 });
 
 self.addEventListener('fetch', event => {
@@ -48,19 +48,44 @@ self.addEventListener('push', event => {
   }));
 });
 
+// A tap with the app already open (issue #89 rule 2) navigates that window, never a second one.
+// A backgrounded phone app can miss a message (iOS/Android freeze it), so three layers:
+// 1. the link is stashed, and the app reads (and removes) it when it comes back to the foreground;
+// 2. the window is focused and sent the link, which the app acknowledges on a port;
+// 3. with no acknowledgement in time, the window itself navigates to the link.
+const LINKS = 'duty-links-v1', PENDING = '/__duty-pending-link', ACK_MS = 2500;
+const stash = link => caches.open(LINKS).then(cache => cache.put(PENDING, new Response(JSON.stringify({url: link, at: Date.now()})))).catch(() => {});
+// Resolves true when the stash was still there (the app never read it).
+const unstash = () => caches.open(LINKS).then(cache => cache.delete(PENDING)).catch(() => true);
+function acknowledged(client, link) {
+  return new Promise(resolve => {
+    let channel;
+    const settle = heard => {clearTimeout(timer); channel?.port1.close(); resolve(heard);};
+    const timer = setTimeout(() => settle(false), ACK_MS);
+    try {
+      channel = new MessageChannel();
+      channel.port1.onmessage = () => settle(true);
+      client.postMessage({type: 'duty-open', url: link}, [channel.port2]);
+    } catch {settle(false);}
+  });
+}
 self.addEventListener('notificationclick', event => {
   event.notification.close();
   const link = event.notification.data && LINK.test(event.notification.data.url) ? event.notification.data.url : '/';
   const target = new URL(link, self.location.origin).href;
   event.waitUntil((async () => {
-    const windows = await self.clients.matchAll({type: 'window', includeUncontrolled: true});
-    const open = windows.find(client => new URL(client.url).origin === self.location.origin);
-    if (open) {
-      // The open app switches tab and month itself, keeping any unsaved edit (no reload).
-      open.postMessage({type: 'duty-open', url: link});
-      await open.focus();
-      return;
-    }
+    const windows = (await self.clients.matchAll({type: 'window', includeUncontrolled: true})).filter(client => new URL(client.url).origin === self.location.origin);
+    // The window the user last looked at: focused, then visible, then any.
+    const open = windows.find(client => client.focused) ?? windows.find(client => client.visibilityState === 'visible') ?? windows[0];
+    if (!open) {await self.clients.openWindow(target); return;}
+    await stash(link);
+    let client = open;
+    try {client = (await open.focus()) ?? open;} catch {}
+    if (await acknowledged(client, link)) {await unstash(); return;}
+    // The app read the stash on resuming: done. Not heard at all: a reload on the link
+    // (only a controlled window can navigate), else a new window.
+    if (!await unstash()) return;
+    try {if (await client.navigate(target)) return;} catch {}
     await self.clients.openWindow(target);
   })());
 });
