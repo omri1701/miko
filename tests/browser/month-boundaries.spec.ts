@@ -1,4 +1,4 @@
-import {test,expect,ids,touchEvent, switchLanguage} from './fixtures';
+import {test,expect,ids,touchEvent, switchLanguage, editConstraintDay} from './fixtures';
 import {webkit,devices} from '@playwright/test';
 import {blocks,ownerMonth} from '../../lib/rota/engine';
 
@@ -19,6 +19,10 @@ for(const iphone of [false,true])for(const split of [false,true])for(const lang 
       }
       const schedule=structuredClone({months:backend.raw.months,assignments:backend.raw.assignments,publications:backend.raw.publications});
       await openApp('a',page);
+      // Constraints open for the current month and the next two (#111): today is in November 2027,
+      // so December 2027 and January 2028 can be edited.
+      await page.clock.setFixedTime(new Date('2027-11-10T10:00:00Z'));
+      await page.evaluate(()=>window.dispatchEvent(new Event('focus')));
       // The app opens on Home; Schedule (tab 1) and Availability (tab 2) carry the month.
       const scheduleTab=page.getByRole('tab').nth(1),availabilityTab=page.getByRole('tab').nth(2);
       await scheduleTab.click();
@@ -48,12 +52,12 @@ for(const iphone of [false,true])for(const split of [false,true])for(const lang 
       await expect(grid.locator('[data-date="2028-01-01"]')).toHaveCount(0);
       await availabilityTab.click();
       const days=page.locator('.availability-day');
-      await expect(days.first().locator('strong')).toHaveText('2');
+      await expect(days.first().locator('.day-number')).toHaveText('2');
       await expect(days).toHaveCount(35);
       await nav.first().click();
       await expect(days).toHaveCount(35);
       const saturday=days.last(),friday=days.nth(33);
-      await expect(saturday.locator('strong')).toHaveText('1');
+      await expect(saturday.locator('.day-number')).toHaveText('1');
       await expect(saturday).toBeEnabled();
       await expect(saturday).toHaveAttribute('data-gesture-key','2028-01-01');
       await expect(days.first()).toBeDisabled();
@@ -99,7 +103,7 @@ for(const iphone of [false,true])for(const split of [false,true])for(const lang 
       for(let i=0;i<13;i++)await page.getByRole('button',{name:'Next month',exact:true}).click();
       await availabilityTab.click();
       await expect(days.last()).toHaveClass(/\bno\b/);
-      await days.last().click();await expect(page.getByRole('dialog').locator('textarea')).toHaveValue('Actual Saturday');
+      await editConstraintDay(page,days.last());await expect(page.getByRole('dialog').locator('textarea')).toHaveValue('Actual Saturday');
       expect({months:backend.raw.months,assignments:backend.raw.assignments,publications:backend.raw.publications}).toEqual(schedule);
     } finally {await browser?.close();}
   });

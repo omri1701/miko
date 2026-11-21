@@ -223,8 +223,15 @@ admins, **Edit**. Hold-and-drag still proposes a swap, swiping the calendar chan
 with a slide, and Escape cancels a pick. Admins get one state-driven primary action
 (**Plan the month → Review plan / Publish → Reopen**) and a ⋯ menu (Plan the month, Versions,
 Constraints deadline, Special block, Clear board, Cancel draft); a reopened month adds a
-Draft / Published switch. **Availability** is the grid with a due chip and, for admins, the
-member picker. **Team** shows this month's coverage, the ordered team (hold the grip to
+Draft / Published switch. A draft lists each availability conflict as a line (name · date · note);
+a tap selects that day, and conflicting days are red; Publish waits until they are resolved. **Availability** is the grid with a due chip and, for admins, the
+member picker. Its grid is the Schedule calendar's own surface: the same panel, weekday row,
+columns and row heights (copied from that month's Schedule calendar, rendered hidden
+underneath), so switching tabs leaves every day box in place on PC and phones; notes show in
+the cells on PC. It swipes between months like the calendar (the chevrons slide it too). Constraints open for the current Israel month and the next two only: the
+chevrons and swipes stop at the third month, a later month (reached from Schedule) shows Closed,
+and the database refuses a member's write past that window; admins are not limited, as with deadlines. The
+Unavailable / Preferred counts sit under the grid and count only the shown month's days. **Team** shows this month's coverage, the ordered team (hold the grip to
 reorder, Up/Down on the keyboard), points and the live net balance; a tap opens the member
 sheet (points, balance, and for admins role, No weekends, Active and colour), a swipe on a
 row reveals Deactivate / Activate (works with a mouse too; a long swipe triggers it), and
@@ -265,7 +272,9 @@ Availability and duty editors use the same Sheet (a bottom sheet on phones, a pa
 Outside clicks, Escape, a swipe down and Close discard unsaved edits; pending saves block
 dismissal. Focus returns to the calendar.
 Availability notes appear in the editor and accessible date labels; only dates
-with notes have a tiny corner dot. One fixed line shows the unique selected-day count during selection and editing (and
+with notes have a tiny corner dot. On a phone, tapping an unavailable day with a note opens
+the whole note first, with Edit; other days open the editor directly. Members only ever
+receive their own notes (admins see everyone's). One fixed line shows the unique selected-day count during selection and editing (and
 nothing when idle), with no calendar movement.
 The modal title shows the actual localized date or chronological date range.
 Range edits apply to every selected date. Replacing conflicting availability or

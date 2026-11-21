@@ -52,7 +52,7 @@ export async function verifyProductionCss(directory = '.next') {
   // These belong to the shared custom stylesheet, independently of utility discovery.
   // Checking the files linked by HTML catches stale output as well as omitted assets.
   for (const selector of ['.mobile-navigation', '.mobile-nav-selection', '.tabbar', '.side',
-    '.mobile-availability-weekdays', '.calendar-grid', '.availability-grid', '.team-grip', '.editor-dialog',
+    '.availability-layers', '.calendar-grid', '.availability-grid', '.team-grip', '.editor-dialog',
     '.month-bar', '.sheet', '.menu', '.hero']) {
     assert(css.includes(selector), `Production CSS is missing ${selector}`);
   }

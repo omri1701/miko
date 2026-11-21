@@ -47,7 +47,8 @@ for(const identity of ['admin','a'] as const) test(`month navigation survives em
     for(const tab of monthTabs) {
       await page.getByRole('tab').nth(tab).click();
       // One deep round trip; the other tab/language passes cover the seeded months, New Year and an empty month.
-      await traverseMonths(page,language==='en'&&tab===1?24:4);
+      // Constraints stop at the third month (#111): November → December under NOW.
+      await traverseMonths(page,tab===2?1:language==='en'&&tab===1?24:4,tab===2);
     }
   }
   await page.reload();

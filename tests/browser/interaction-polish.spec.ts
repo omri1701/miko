@@ -1,4 +1,4 @@
-import {test,expect,ids,touchEvent,NOW, switchLanguage, openDutySheet, monthAction} from './fixtures';
+import {test,expect,ids,touchEvent,NOW, switchLanguage, openDutySheet, monthAction, editConstraintDay} from './fixtures';
 import type {Page,Locator} from '@playwright/test';
 
 const day=(page:Page,date:string)=>page.locator(`.availability-day[data-gesture-key="${date}"]`);
@@ -28,7 +28,7 @@ for(const lang of ['en','he'] as const){
   // The same date is empty for the manager, and constrained with a note for Alex.
   await day(page,'2026-11-04').click();await expect(remove).toHaveCount(0);await page.keyboard.press('Escape');
   await page.getByRole('combobox').click();await page.getByRole('option',{name:'Alex Atlas',exact:true}).click();
-  await day(page,'2026-11-04').click();await expect(remove).toBeVisible();await remove.click();
+  await editConstraintDay(page,day(page,'2026-11-04'));await expect(remove).toBeVisible();await remove.click();
   const confirm=page.getByRole('alertdialog');
   const cancel=confirm.getByRole('button',{name:lang==='en'?'Cancel':'ביטול',exact:true});
   await expect(cancel).toBeVisible();await cancel.click();

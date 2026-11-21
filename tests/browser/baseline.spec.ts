@@ -1,5 +1,5 @@
 import type {Page} from '@playwright/test';
-import {test, expect, monthAction, ids, MONTH, duty, drag, switchLanguage} from './fixtures';
+import {test, expect, monthAction, ids, MONTH, duty, drag, switchLanguage, editConstraintDay} from './fixtures';
 
 const schedule = (page: Page) => page.getByRole('tab', {name: 'Schedule', exact: true}).click();
 /** A tap opens the duty sheet on PC; on phones it shows the day's details, whose row opens the sheet. */
@@ -167,7 +167,7 @@ test('engineer availability save, preference and removal before deadline', async
   await page.getByLabel('Description (optional)').fill('Synthetic appointment');
   await page.getByRole('button', {name: 'Save', exact: true}).click();
   await expect(page.getByRole('button', {name: /^5 Nov.*Unavailable.*Synthetic appointment/})).toBeVisible();
-  await page.getByRole('button', {name: /^5 Nov.*Unavailable/}).click();
+  await editConstraintDay(page, page.getByRole('button', {name: /^5 Nov.*Unavailable/}));
   await page.getByRole('button', {name: 'Prefer duty', exact: true}).click();
   await page.getByRole('button', {name: 'Save', exact: true}).click();
   await expect(page.getByRole('button', {name: /^5 Nov.*Preferred/})).toBeVisible();

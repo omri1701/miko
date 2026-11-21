@@ -558,6 +558,31 @@ export async function dragTo(page: Page, x: number, y: number, tx: number, ty: n
     await page.mouse.move(tx, ty, {steps: 8}); await page.mouse.up();
   }
 }
+export type Gesture = {move: (dx: number) => Promise<void>; end: () => Promise<void>};
+/** A horizontal drag: real touch input (CDP) on phones, a mouse drag on PC. */
+export async function press(page: Page, x: number, y: number, mobile: boolean): Promise<Gesture> {
+  if (!mobile) {
+    await page.mouse.move(x, y); await page.mouse.down();
+    return {move: async dx => page.mouse.move(x + dx, y, {steps: 6}), end: async () => page.mouse.up()};
+  }
+  const cdp = await page.context().newCDPSession(page);
+  let at = x;
+  await cdp.send('Input.dispatchTouchEvent', {type: 'touchStart', touchPoints: [{x, y}]});
+  return {
+    move: async dx => {for (let step = 1; step <= 6; step++) await cdp.send('Input.dispatchTouchEvent', {type: 'touchMove', touchPoints: [{x: at + (x + dx - at) * step / 6, y}]}); at = x + dx;},
+    end: async () => {await cdp.send('Input.dispatchTouchEvent', {type: 'touchEnd', touchPoints: []}); await cdp.detach();},
+  };
+}
+/** Opens a Constraints day's editor. On a phone an unavailable day with a note shows the note
+ * first (#95), so this goes through its Edit button. */
+export async function editConstraintDay(page: Page, day: ReturnType<Page['locator']>) {
+  const noted = await day.evaluate(e => e.classList.contains('no') && !!e.querySelector('.mobile-note-dot') && matchMedia('(max-width: 600px)').matches);
+  await day.click();
+  if (!noted) return;
+  const sheet = page.locator('.constraint-note-sheet');
+  await sheet.getByRole('button', {name: /^(Edit|עריכה)$/}).click();
+  await expect(sheet).toHaveCount(0);
+}
 export async function touchEvent(page: Page, type: string, x: number, y: number) {
   await page.evaluate(({type, x, y}) => {
     const target = document.elementFromPoint(x, y)!;

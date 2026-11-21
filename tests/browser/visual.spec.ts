@@ -269,3 +269,34 @@ for (const lang of ['en', 'he'] as const) test(`calendar subscription ${lang}`, 
   await expect(section.getByRole('group')).toBeVisible();
   await snapshot(page, `calendar-subscription-reset-${lang}`);
 });
+
+// #110: a draft's availability conflicts as lines (name · date · note) and red days; #111: Constraints at its last month.
+for (const lang of ['en', 'he'] as const) test(`draft availability conflicts ${lang}`, async ({page, openApp, backend}) => {
+  for (const row of backend.raw.assignments.filter(r => r.publication_id === null)) {
+    if (row.day === '2026-11-04') row.primary_id = ids.a;
+    if (row.day === '2026-11-25') row.primary_id = ids.b;
+  }
+  backend.raw.constraints.push({member_id: ids.b, day: '2026-11-25', kind: 'no', note: ''});
+  await openApp();
+  if (lang === 'he') await switchLanguage(page, 'he');
+  await schedule(page, lang);
+  await expect(page.locator('[data-conflicts] .conflict-line')).toHaveCount(2);
+  await snapshot(page, `draft-conflicts-${lang}`);
+  await page.emulateMedia({colorScheme: 'dark'});
+  await snapshot(page, `draft-conflicts-dark-${lang}`);
+  await page.emulateMedia({colorScheme: 'light'});
+  // A tapped line selects its day.
+  await page.locator('[data-conflicts] .conflict-line').last().click();
+  await expect(duty(page, '2026-11-25')).toHaveClass(/\bselected-day\b/);
+  await snapshot(page, `draft-conflict-selected-${lang}`);
+});
+
+for (const lang of ['en', 'he'] as const) test(`constraints at the last open month ${lang}`, async ({page, openApp}) => {
+  await openApp('a');
+  if (lang === 'he') await switchLanguage(page, 'he');
+  await page.getByRole('tab', {name: lang === 'en' ? 'Availability' : 'אילוצים', exact: true}).click();
+  await page.getByRole('button', {name: lang === 'en' ? 'Next month' : 'חודש הבא', exact: true}).last().click();
+  await expect(page.locator('.availability-screen .month-name')).toHaveText(lang === 'en' ? 'December 2026' : 'דצמבר 2026');
+  await expect(page.getByRole('button', {name: lang === 'en' ? 'Next month' : 'חודש הבא', exact: true}).last()).toBeDisabled();
+  await snapshot(page, `constraints-last-month-${lang}`);
+});

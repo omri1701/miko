@@ -13,6 +13,11 @@ begin
   m:=to_char(d,'YYYY-MM');
   insert into public.duty_months(month,deadline) values(m,date_trunc('month',d)::date-7) on conflict do nothing;
   if not manager and exists(select 1 from public.duty_months where month=m and (status='published' or deadline < (now() at time zone 'Asia/Jerusalem')::date)) then raise exception 'Constraints are closed for this month' using errcode='42501'; end if;
+  -- Members enter constraints for this Israel month and the next two only, and never for a day
+  -- that has passed (#111); the window moves at Israel midnight. Admins keep editing any month,
+  -- as with deadlines.
+  if not manager and m > to_char(date_trunc('month',now() at time zone 'Asia/Jerusalem')+interval '2 months','YYYY-MM') then raise exception 'constraints-window-closed:%',m using errcode='42501'; end if;
+  if not manager and d < (now() at time zone 'Asia/Jerusalem')::date then raise exception 'constraints-day-passed' using errcode='42501'; end if;
   if p_kind='clear' then delete from public.duty_constraints where member_id=p_member and day=d;
   else insert into public.duty_constraints(member_id,day,kind,note) values(p_member,d,p_kind,trim(coalesce(p_note,''))) on conflict(member_id,day) do update set kind=excluded.kind,note=excluded.note; end if;
   -- Availability is independent of the working schedule. In particular, an

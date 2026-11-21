@@ -1,4 +1,4 @@
-import {test,expect,duty,ids,openDutySheet, switchLanguage} from './fixtures';
+import {test,expect,duty,ids,openDutySheet, switchLanguage, editConstraintDay} from './fixtures';
 import type {Page,Locator} from '@playwright/test';
 
 /** Every editor is a Sheet (decision 2026-11-06): a bottom sheet on phones, a side panel on PC. It never
@@ -97,7 +97,7 @@ test('availability fits the screen, supports every dismissal, and discards unsav
  await openApp('a');await page.getByRole('tab',{name:'Availability',exact:true}).click();
  const cell=page.locator('.availability-day[data-gesture-key="2026-11-04"]');
  for(const dismissal of ['outside','escape','close']){
-  await cell.click();const dialog=page.getByRole('dialog');await fits(page,dialog);
+  await editConstraintDay(page,cell);const dialog=page.getByRole('dialog');await fits(page,dialog);
   await expect(page.getByLabel('Description (optional)')).toHaveValue('Synthetic vacation');
   await page.getByLabel('Description (optional)').fill('Unsaved local changes');
   if(dismissal==='outside')await page.mouse.click(5,5);
