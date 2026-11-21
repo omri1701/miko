@@ -1,7 +1,9 @@
 import type {CSSProperties} from 'react';
 import {APP_NAME, LOGO_SIZES, logoSrc} from '@/lib/brand';
+import {currentBrandEnvironment, publicAsset} from '@/lib/brand-environment';
 
-const srcSet = (type: 'png' | 'webp') => LOGO_SIZES.map(size => `${logoSrc(size, type)} ${size}w`).join(', ');
+const logoUrl = (size: (typeof LOGO_SIZES)[number], type: 'png' | 'webp') => publicAsset(currentBrandEnvironment(), logoSrc(size, type).slice(1));
+const srcSet = (type: 'png' | 'webp') => LOGO_SIZES.map(size => `${logoUrl(size, type)} ${size}w`).join(', ');
 
 /** The round logo (already says "miko") and the name: the only component that draws the brand.
  * The browser picks the WebP (or PNG) size for the display size × pixel ratio. */
@@ -9,7 +11,7 @@ export function Logo({size = 36, className = ''}: {size?: number; className?: st
   return <span className={`logo ${className}`} style={{'--logo-size': `${size}px`} as CSSProperties} aria-hidden="true">
     <picture>
       <source type="image/webp" srcSet={srcSet('webp')} sizes={`${size}px`}/>
-      <img src={logoSrc(LOGO_SIZES[1], 'png')} srcSet={srcSet('png')} sizes={`${size}px`} alt="" width={size} height={size} decoding="async" draggable={false}/>
+      <img src={logoUrl(LOGO_SIZES[1], 'png')} srcSet={srcSet('png')} sizes={`${size}px`} alt="" width={size} height={size} decoding="async" draggable={false}/>
     </picture>
   </span>;
 }
