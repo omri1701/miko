@@ -206,3 +206,99 @@ test('#95 rule 5: the counts cover only the shown month and follow the month cha
   await expect(summary).toContainText('2 unavailable');
   await expect(summary).toContainText('1 preferred');
 });
+
+// #111: constraints only for this Israel month and the next two (October–December under NOW).
+const monthButton = (page: Page, he: boolean, next: boolean) => page.getByRole('button', {name: next ? (he ? 'חודש הבא' : 'Next month') : (he ? 'חודש קודם' : 'Previous month'), exact: true}).last();
+for (const lang of ['en', 'he'] as const) test(`#111 rules 1-2: the buttons and swipes stop at the third month ${lang}`, async ({page, openApp}, info) => {
+  const he = lang === 'he';
+  await openConstraints(page, openApp, he);
+  await monthButton(page, he, true).click();
+  await expect(heading(page)).toHaveText(he ? 'דצמבר 2026' : 'December 2026');
+  // Rule 1: December is open; rule 2: there is no next month to go to.
+  await expect(day(page, '2026-12-10')).toBeEnabled();
+  await expect(monthButton(page, he, true)).toBeDisabled();
+  await expect(monthButton(page, he, false)).toBeEnabled();
+  if (info.project.name === 'mobile') {
+    const toward = he ? 1 : -1;
+    // The grid only stretches: no January beside it, and it stays December.
+    const grid = (await page.locator('.constraint-editor .month-stage').boundingBox())!;
+    let g = await press(page, grid.x + grid.width / 2, grid.y + 30, true);
+    await g.move(toward * grid.width * .3);
+    await expect(page.locator('.constraint-editor .month-peek')).toHaveCount(0);
+    await g.move(toward * grid.width * .7);
+    await g.end();
+    await expect(heading(page)).toHaveText(he ? 'דצמבר 2026' : 'December 2026');
+    // The month name too.
+    const name = (await page.locator('.availability-screen .month-heading').boundingBox())!;
+    g = await press(page, name.x + name.width / 2, name.y + name.height / 2, true);
+    await g.move(toward * 160);
+    await expect(page.locator('.availability-screen .month-name-peek')).toHaveCount(0);
+    await g.end();
+    await expect(heading(page)).toHaveText(he ? 'דצמבר 2026' : 'December 2026');
+  }
+  await monthButton(page, he, false).click();
+  await expect(heading(page)).toHaveText(he ? 'נובמבר 2026' : 'November 2026');
+});
+
+/** A tap on a closed day: no editor, a short toast saying why (#111). */
+async function tapClosed(page: Page, date: string, text: string) {
+  // A closed day never joins a range selection, so it has no gesture key.
+  const cell = page.locator(`.month-pane:not(.month-peek) .availability-day[data-date="${date}"]`);
+  await expect(cell).toHaveAttribute('aria-disabled', 'true');
+  await expect(cell).not.toHaveAttribute('data-gesture-key');
+  // Playwright waits for aria-disabled to clear; a finger or mouse taps it at once.
+  await cell.click({force: true});
+  await expect(page.locator('[data-sonner-toast]').filter({hasText: text})).toBeVisible();
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+}
+
+for (const lang of ['en', 'he'] as const) test(`#111 rules 1 and 3: past months can be viewed but not edited; a month past the window neither ${lang}`, async ({page, openApp}) => {
+  const he = lang === 'he';
+  await openApp('a');
+  if (he) await switchLanguage(page, 'he');
+  await page.getByRole('tab', {name: he ? 'לוח' : 'Schedule', exact: true}).click();
+  await page.getByRole('button', {name: he ? 'חודש הבא' : 'Next month', exact: true}).last().click();
+  await page.getByRole('button', {name: he ? 'חודש הבא' : 'Next month', exact: true}).last().click();
+  await expect(page.locator('.month-name:visible')).toHaveText(he ? 'ינואר 2027' : 'January 2027');
+  // January, reached from Schedule, isn't open yet: read-only, Closed, and Next stays put.
+  await page.getByRole('tab', {name: tabName(he), exact: true}).click();
+  await expect(heading(page)).toHaveText(he ? 'ינואר 2027' : 'January 2027');
+  await expect(page.locator('.availability-screen .month-status')).toHaveText(he ? 'סגור' : 'Closed');
+  await expect(monthButton(page, he, true)).toBeDisabled();
+  await tapClosed(page, '2027-01-12', he ? 'ינואר עוד לא נפתח' : "January isn't open yet");
+  // Back toward the window: December is open again.
+  await monthButton(page, he, false).click();
+  await expect(heading(page)).toHaveText(he ? 'דצמבר 2026' : 'December 2026');
+  await expect(day(page, '2026-12-10')).toBeEnabled();
+  await expect(day(page, '2026-12-10')).not.toHaveAttribute('aria-disabled', 'true');
+  // Rule 3: earlier months can still be viewed (back past October, the current month), never edited.
+  for (const label of he ? ['נובמבר 2026', 'אוקטובר 2026', 'ספטמבר 2026'] : ['November 2026', 'October 2026', 'September 2026']) {
+    await monthButton(page, he, false).click();
+    await expect(heading(page)).toHaveText(label);
+  }
+  await expect(page.locator('.availability-screen .month-status')).toHaveText(he ? 'סגור' : 'Closed');
+  await tapClosed(page, '2026-09-15', he ? 'ספטמבר כבר נסגר' : 'September is closed');
+});
+
+for (const lang of ['en', 'he'] as const) test(`#111 rule 3: days of the current month that have passed can't be edited ${lang}`, async ({page, openApp}) => {
+  // An admin, whose current month (October under NOW, the 9th) has no deadline.
+  const he = lang === 'he';
+  await openConstraints(page, openApp, he, 'admin');
+  await monthButton(page, he, false).click();
+  await expect(heading(page)).toHaveText(he ? 'אוקטובר 2026' : 'October 2026');
+  await tapClosed(page, '2026-10-08', he ? 'היום הזה כבר עבר' : 'This day has passed');
+  // Today and later still open the editor.
+  await day(page, '2026-10-09').click();
+  await expect(page.getByRole('dialog').getByRole('textbox')).toBeVisible();
+});
+
+for (const lang of ['en', 'he'] as const) test(`#111 rule 4: the database's refusal shows a translated message ${lang}`, async ({page, openApp}) => {
+  const he = lang === 'he';
+  await openConstraints(page, openApp, he);
+  // As duty_private.set_constraints refuses a write past the window (a clock that moved on).
+  await page.route('**/rest/v1/rpc/duty_set_constraints', route => route.fulfill({status: 403, json: {message: 'constraints-window-closed:2026-12', code: '42501'}}));
+  await monthButton(page, he, true).click();
+  await day(page, '2026-12-10').click();
+  await page.getByRole('dialog').getByRole('button', {name: he ? 'שמירה' : 'Save', exact: true}).click();
+  await expect(page.locator('[data-sonner-toast]').filter({hasText: he ? 'דצמבר עוד לא נפתח' : "December isn't open yet"})).toBeVisible();
+});

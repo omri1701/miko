@@ -22,9 +22,11 @@ const reduced = () => typeof window !== 'undefined' && window.matchMedia('(prefe
  * sharp when it arrives. Past the threshold or on a flick the month changes (`onSwipe`, so the
  * screen can refresh in place without a slide); a short drag snaps back. `arrival` is how the name
  * changes when something else changed the month: `roll` (chevrons) or `blur` (a calendar swipe). */
-export function MonthTitle({month, label, status, t, onChange, onSwipe, arrival = 'roll', loading = false}: {
+export function MonthTitle({month, label, status, t, onChange, onSwipe, arrival = 'roll', loading = false, canGo = () => true}: {
   month: string; label: string; status?: ReactNode; t: Translate; onChange?: (offset: number) => void;
   onSwipe?: (offset: number) => void; arrival?: 'roll' | 'blur'; loading?: boolean;
+  /** False for a direction with no month to go to (#111): its chevron is disabled and the name only stretches. */
+  canGo?: (offset: number) => boolean;
 }) {
   const rtl = t('ltr', 'rtl') === 'rtl', Prev = rtl ? ChevronRight : ChevronLeft, Next = rtl ? ChevronLeft : ChevronRight;
   const direction = useMonthDirection(month);
@@ -76,7 +78,7 @@ export function MonthTitle({month, label, status, t, onChange, onSwipe, arrival 
     roll.current?.removeAttribute('data-dragging');
     if (!g?.sliding) return;
     const {slot} = metrics(), speed = Math.abs(g.dx) / Math.max(1, performance.now() - g.t), offset = offsetOf(g.dx);
-    if (commit && (Math.abs(g.dx) > Math.min(48, slot * .45) || (speed > .5 && Math.abs(g.dx) > 20))) {
+    if (commit && canGo(offset) && (Math.abs(g.dx) > Math.min(48, slot * .45) || (speed > .5 && Math.abs(g.dx) > 20))) {
       busy.current = true;
       const land = () => {setSlidTo(monthNext(month, offset)); (onSwipe ?? onChange)?.(offset);};
       if (reduced()) {land(); return;}
@@ -100,7 +102,9 @@ export function MonthTitle({month, label, status, t, onChange, onSwipe, arrival 
           g.sliding = true; e.currentTarget.setPointerCapture(e.pointerId); roll.current?.setAttribute('data-dragging', '');
         }
         g.dx = dx;
-        const offset = offsetOf(dx), shown = band(dx, metrics().slot);
+        const offset = offsetOf(dx);
+        if (!canGo(offset)) {last.current = dx * .15; if (peek) setPeek(0); paint(dx * .15, 0, false); return;}
+        const shown = band(dx, metrics().slot);
         last.current = shown;
         if (offset !== peek) setPeek(offset);
         paint(shown, offset, false);
@@ -110,7 +114,7 @@ export function MonthTitle({month, label, status, t, onChange, onSwipe, arrival 
         // A touch starts captured by the text under the finger; that release bubbles here when the
         // heading takes the capture and must not end the swipe (the mobile "nothing happens" bug).
         if (e.target === e.currentTarget && drag.current?.sliding) end(true);}}>
-    <Button variant="ghost" size="icon" disabled={loading} aria-label={t('Previous month', 'חודש קודם')} onClick={() => onChange?.(-1)}><Prev/></Button>
+    <Button variant="ghost" size="icon" disabled={loading || !canGo(-1)} aria-label={t('Previous month', 'חודש קודם')} onClick={() => onChange?.(-1)}><Prev/></Button>
     <h2 className="month-heading" data-swipe={onChange ? '' : undefined}>
       <span className="month-roll" ref={roll}>
         <span key={month} ref={name} className="month-name" data-dir={mode === 'roll' ? direction ?? undefined : undefined} data-arrive={mode === 'blur' && direction ? '' : undefined}>{label}</span>
@@ -118,6 +122,6 @@ export function MonthTitle({month, label, status, t, onChange, onSwipe, arrival 
       </span>
       {status}
     </h2>
-    <Button variant="ghost" size="icon" disabled={loading} aria-label={t('Next month', 'חודש הבא')} onClick={() => onChange?.(1)}><Next/></Button>
+    <Button variant="ghost" size="icon" disabled={loading || !canGo(1)} aria-label={t('Next month', 'חודש הבא')} onClick={() => onChange?.(1)}><Next/></Button>
   </div>;
 }

@@ -11,7 +11,7 @@ import {useMobileLayout} from '@/hooks/use-mobile-layout';
 
 /** The month grid (decision 2026-11-06): names in member colours, the member's own duties
  * highlighted, today ringed; a tap goes to `onSelect`, a hold-and-drag proposes a swap. */
-export function WorkspaceCalendar({state, calendarState, calendarBlocks, dateCells, today, month, lang, t, fmt, nickname, meId, readOnly, requesting, interactions, onSelect, selectedDay, pickingFrom, notices, flashDays, preview = false}: {
+export function WorkspaceCalendar({state, calendarState, calendarBlocks, dateCells, today, month, lang, t, fmt, nickname, meId, readOnly, requesting, interactions, onSelect, selectedDay, pickingFrom, notices, flashDays, conflictDuties, preview = false}: {
   state: State; calendarState: State; calendarBlocks: Duty[]; dateCells: string[]; today: string; month: string; lang: Language; t: Translate; fmt: FormatDate;
   nickname: (id?: string) => string; meId: string; readOnly: boolean; requesting: boolean; interactions: CalendarInteractions;
   /** A tap or Enter on a day that isn't part of a swap in progress. */
@@ -23,6 +23,8 @@ export function WorkspaceCalendar({state, calendarState, calendarBlocks, dateCel
   notices?: ReactNode;
   /** Days pointed at from elsewhere (the plan's split-weekend notice): they pulse once. */
   flashDays?: readonly string[];
+  /** A draft's duties that clash with someone's availability: their days show red (#110). */
+  conflictDuties?: ReadonlySet<string>;
   /** The neighbouring month sliding in (month-stage.tsx): the same grid, without the gesture surface. */
   preview?: boolean;
 }) {
@@ -94,6 +96,7 @@ export function WorkspaceCalendar({state, calendarState, calendarBlocks, dateCel
             d === today ? 'today' : '',
             selectedDay === d ? 'selected-day' : '',
             flashDays?.includes(d) ? 'flash-day' : '',
+            b && interactive && conflictDuties?.has(b.id) ? 'conflict-day' : '',
             cell ? `streak-${cell.position}` : '',
             cell?.breakBefore ? 'streak-break-before' : '',
             cell?.breakAfter ? 'streak-break-after' : '',

@@ -44,7 +44,16 @@ export function useAllocationWorkflow(remote: TeamWorkspace, month: string, t: T
   const [locks, setLocks] = useState<Review['locks']>([]), [approvals, setApprovals] = useState<Approval[]>([]);
   const [history, setHistory] = useState<Review[]>([]), [step, setStep] = useState(2);
   const [error, setError] = useState(''), [notice, setNotice] = useState(''), [reviewed, setReviewed] = useState(false);
-  const [closed, setClosed] = useState(false), [progress, setProgress] = useState<number | null>(null);
+  // Coverage start is per month (#112): a month never shows another month's closed window while
+  // its own context loads. Once a month's coverage starts it stays started, so it is remembered.
+  const [closedMonths, setClosedMonths] = useState<Record<string, true>>({}), closed = !!closedMonths[month];
+  const setClosed = (value: boolean) => setClosedMonths(all => {
+    if (!!all[month] === value) return all;
+    const next = {...all};
+    if (value) next[month] = true; else delete next[month];
+    return next;
+  });
+  const [progress, setProgress] = useState<number | null>(null);
   const [result, setResult] = useState<GenerationResult | null>(null);
   // The authoritative month could not be read; the primary action becomes Try again.
   const [retry, setRetry] = useState(false);

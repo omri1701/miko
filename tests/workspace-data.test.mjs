@@ -55,6 +55,19 @@ test('coverage warnings include emergency constraints and respect manager overri
     ['2026-08-04', '2026-08-05']);
 });
 
+test('#110 rule 1: each draft conflict names the person and the day, in date order, overrides excluded', () => {
+  const state = publishedMonths();
+  state.assignments = {
+    '2026-08-07': {primary: 'e2'},
+    '2026-08-03': {primary: 'e0', secondary: 'e1'},
+    '2026-08-04': {primary: 'e0', override: true},
+  };
+  state.constraints = {e0: {'2026-08-04': 'no', '2026-08-03': 'prefer'}, e1: {'2026-08-03': 'no'}, e2: {'2026-08-08': 'no', '2026-08-07': 'no'}};
+  const metrics = workspaceMetrics(state, '2026-08', blocks('2026-08', []));
+  assert.deepEqual(metrics.conflictDays.map(({person, date, duty}) => [person, date, duty.id]),
+    [['e1', '2026-08-03', '2026-08-03'], ['e2', '2026-08-07', '2026-08-07'], ['e2', '2026-08-08', '2026-08-07']]);
+});
+
 test('editing a boundary weekend reopens only its owning month', () => {
   const state = publishedMonths();
   state.assignments['2026-07-31'] = {primary: 'e0'};

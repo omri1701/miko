@@ -38,9 +38,10 @@ function arrive(node: HTMLElement, height: number) {
  * The month name is not linked (owner round 4): it updates when the calendar lands. The stage's
  * height eases to the taller of the two months while the neighbour shows, so a six-week month is
  * seen whole and nothing below jumps when it lands. Axis-locked (vertical scroll stays native); a
- * duty hold-drag never starts it. `onChange`'s `swiped` is true for a calendar drag. */
-export const MonthStage = forwardRef<MonthStageHandle, {month: string; rtl: boolean; onChange: (offset: number, swiped: boolean) => void; preview: (month: string) => ReactNode; children: ReactNode}>(
-  function MonthStage({month, rtl, onChange, preview, children}, ref) {
+ * duty hold-drag never starts it. `onChange`'s `swiped` is true for a calendar drag. `canGo` stops it at a
+ * last month (#111): a drag past it only stretches, and the chevrons stay put. */
+export const MonthStage = forwardRef<MonthStageHandle, {month: string; rtl: boolean; onChange: (offset: number, swiped: boolean) => void; preview: (month: string) => ReactNode; children: ReactNode; canGo?: (offset: number) => boolean}>(
+  function MonthStage({month, rtl, onChange, preview, children, canGo = () => true}, ref) {
     const stage = useRef<HTMLDivElement>(null), current = useRef<HTMLDivElement>(null), next = useRef<HTMLDivElement>(null);
     // The neighbour showing (an offset), kept per month so a new month starts without one.
     const [shown, setShown] = useState({month, offset: 0}), peek = shown.month === month ? shown.offset : 0;
@@ -100,7 +101,7 @@ export const MonthStage = forwardRef<MonthStageHandle, {month: string; rtl: bool
     useImperativeHandle(ref, () => ({
       arrive: () => {arrival.current = stage.current?.offsetHeight ?? null;},
       go: offset => {
-        if (busy.current) return;
+        if (busy.current || !canGo(offset)) return;
         if (reduced() || Math.abs(offset) !== 1) {onChange(offset, false); return;}
         setPeek(offset);
         // Start from just outside, blurred, then play the commit on the next frame.
@@ -113,10 +114,16 @@ export const MonthStage = forwardRef<MonthStageHandle, {month: string; rtl: bool
       window.setTimeout(() => {if (busy.current) return; setPeek(0); const s = stage.current; if (s && !g.current) {s.style.transition = ''; s.style.height = '';}}, reduced() ? 0 : DURATION);
     };
     // Dragging toward the reading start brings the next month.
-    const follow = (dx: number) => {const offset = dx * dirSign < 0 ? 1 : -1; if (offset !== peek) setPeek(offset); paint(dx, offset, false);};
+    const follow = (dx: number) => {
+      const offset = dx * dirSign < 0 ? 1 : -1;
+      // No month that way: the page only stretches a little, with nothing beside it.
+      if (!canGo(offset)) {if (peek) setPeek(0); paint(dx * .15, 0, false); return;}
+      if (offset !== peek) setPeek(offset); paint(dx, offset, false);
+    };
     const release = (dx: number, speed: number) => {
       suppress.current = performance.now() + 350;
-      if (Math.abs(dx) > width() * COMMIT || (speed > FLICK && Math.abs(dx) > 40)) finish(dx * dirSign < 0 ? 1 : -1, true); else springBack();
+      const offset = dx * dirSign < 0 ? 1 : -1;
+      if (canGo(offset) && (Math.abs(dx) > width() * COMMIT || (speed > FLICK && Math.abs(dx) > 40))) finish(offset, true); else springBack();
     };
     return <div ref={stage} className="month-stage"
       onPointerDown={e => {
