@@ -66,8 +66,25 @@ begin
    if not a.manager_override and exists(select 1 from public.duty_constraints c where c.member_id in (a.primary_id,a.secondary_id) and c.day=d and c.kind='no'
     and not (c.member_id=a.primary_id and exists(select 1 from public.duty_allocations meta,jsonb_array_elements(meta.approvals) approved
      where meta.month=p_publish and meta.publication_id is null and approved->>'rule'='availability' and approved->>'dutyId'=a.day::text and approved->>'engineer'=a.primary_id::text
-     and (approved->'dates') ? d::text))) then raise exception 'Availability conflict on %',d; end if;
+     and (approved->'dates') ? d::text))) then
+    -- Who and when, every one of them (#103): the app names each as a person (never a note here).
+    raise exception 'Availability conflict: %',(select jsonb_agg(jsonb_build_object('member',c.member_id,'day',c.day) order by c.day,c.member_id)
+     from public.duty_assignments a2 join public.duty_constraints c on c.kind='no' and c.day>=greatest(a2.day,first_day) and c.day<a2.end_day and c.day<=last_day
+      and c.member_id in (a2.primary_id,a2.secondary_id)
+     where a2.publication_id is null and not a2.manager_override and duty_private.duty_owner(a2.day)=p_publish
+      and not (c.member_id=a2.primary_id and exists(select 1 from public.duty_allocations meta,jsonb_array_elements(meta.approvals) approved
+       where meta.month=p_publish and meta.publication_id is null and approved->>'rule'='availability' and approved->>'dutyId'=a2.day::text and approved->>'engineer'=a2.primary_id::text
+       and (approved->'dates') ? c.day::text)));
+   end if;
   end loop;
+  -- An availability approval holds for exactly its person and dates (#103): one whose duty now
+  -- has someone else, or whose dates no longer match that person's constraints, is dropped, so
+  -- the normal check applies again.
+  update public.duty_allocations meta set approvals=coalesce((select jsonb_agg(v) from jsonb_array_elements(meta.approvals) v where v->>'rule'<>'availability'
+   or (select jsonb_agg(q order by q) from jsonb_array_elements(v->'dates') q)=(select jsonb_agg(to_jsonb(c.day::text) order by c.day) from public.duty_assignments a2
+    join public.duty_constraints c on c.member_id=a2.primary_id and c.kind='no' and c.day>=a2.day and c.day<a2.end_day
+    where a2.publication_id is null and a2.day::text=v->>'dutyId' and a2.primary_id::text=v->>'engineer')),'[]')
+  where meta.month=p_publish and meta.publication_id is null;
   select * into allocation from public.duty_allocations where month=p_publish and publication_id is null;
   if allocation.month is not null then
    f:=duty_private.generation_facts(p_publish);

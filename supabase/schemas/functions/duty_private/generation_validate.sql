@@ -67,7 +67,14 @@ begin
   if engineer is null then continue; end if;
   if not ids ? engineer or engineer=d->>'secondary' then raise exception 'ineligible-primary'; end if;
   if exists(select 1 from generate_series((d->>'startDate')::date,(d->>'endDate')::date-1,interval '1 day') day where f->'constraints'->engineer->>day::date::text='no')
-   and not exists(select 1 from jsonb_array_elements(f->'approvals') v where v->>'rule'='availability' and v->>'dutyId'=d->>'id' and v->>'engineer'=engineer) then raise exception 'unavailable-primary'; end if;
+   and not exists(select 1 from jsonb_array_elements(f->'approvals') v where v->>'rule'='availability' and v->>'dutyId'=d->>'id' and v->>'engineer'=engineer) then
+   -- Who and when, every one (#103): the app names each as a person; notes never travel here.
+   raise exception 'unavailable-primary: %',(select jsonb_agg(jsonb_build_object('member',p.who,'day',g.day::date::text) order by g.day,p.who)
+    from jsonb_array_elements(f->'duties') o cross join lateral (select assignments->(o->>'id')->>'primary' who) p
+    cross join lateral generate_series((o->>'startDate')::date,(o->>'endDate')::date-1,interval '1 day') g(day)
+    where p.who is not null and f->'constraints'->p.who->>g.day::date::text='no'
+     and not exists(select 1 from jsonb_array_elements(f->'approvals') v where v->>'rule'='availability' and v->>'dutyId'=o->>'id' and v->>'engineer'=p.who));
+  end if;
   amount:=(totals->>engineer)::bigint+(d->>'units')::bigint;
   if amount>(targets->>engineer)::bigint then raise exception 'target-exceeded'; end if;
   totals:=jsonb_set(totals,array[engineer],to_jsonb(amount)); assigned:=assigned+(d->>'units')::bigint;

@@ -44,6 +44,7 @@ import {toast} from 'sonner';
 import {addDays, monthNext, blocks, ownerMonth, type Duty} from '@/lib/rota/engine';
 import {calendarDates, workspaceMetrics, visibleCalendarBlocks} from '@/lib/rota/workspace-data';
 import {userMessage} from '@/lib/messages';
+import {explainedMessage, conflictContext} from '@/lib/conflict-message';
 
 export function RotaWorkspace({remote, lang, setLang}: {remote: TeamWorkspace; lang: 'en' | 'he'; setLang: (lang: 'en' | 'he') => void}) {
   const mobile = useMobileLayout();
@@ -313,7 +314,7 @@ export function RotaWorkspace({remote, lang, setLang}: {remote: TeamWorkspace; l
       status={remote.saving ? <span className="side-status" role="status">{t('Saving…', 'שומר…')}</span> : undefined}>
       <InspectionWarning environment={remote.environment} lang={lang}/>
       {remote?.error && <div className="note-card" role="alert" data-tone="danger">
-        <span>{userMessage(remote.error, t)}</span>
+        <span className="message-lines">{explainedMessage(remote.error, t, conflictContext(remote, state, t))}</span>
         <Button variant="ghost" size="sm" onClick={() => remote.refresh().then(() => remote.clearError()).catch((e) => toast.error(userMessage(e.message, t)))}><RefreshCw/>{t('Refresh', 'רענון')}</Button>
       </div>}
       <fieldset disabled={!!remote?.saving} className="workspace-controls">
@@ -361,7 +362,7 @@ export function RotaWorkspace({remote, lang, setLang}: {remote: TeamWorkspace; l
     {isManager && allocation.open && <AllocationDialog flow={allocation} state={state} month={month} monthLabel={monthLabel} lang={lang} t={t}
       onShowSplits={fridays => {allocation.close(); setTab('schedule'); if (mobile) setSelectedDay(fridays[0]); setFlashDays(fridays.flatMap(f => [f, addDays(f, 1)]));}}/>}
     {isManager && <PublicationHistory key={`history-${month}`} remote={remote} month={month} open={historyOpen} onOpenChange={setHistoryOpen} lang={lang}/>}
-    {selected && <DutyEditor key={selected.id} state={state} duty={selected} month={month} lang={lang} onClose={() => setSelected(null)} saving={remote.saving}
+    {selected && <DutyEditor key={selected.id} state={state} duty={selected} month={month} lang={lang} me={remote.memberId} onClose={() => setSelected(null)} saving={remote.saving}
       onMonth={(m) => {goToMonth(m); setSelected(null);}} onSave={draft.editor.save} onRemoveSpecial={draft.editor.removeSpecial}/>}
     {/* A weekend that hasn't started opens the "One weekend | Two days" editor (decision 2026-11-07). */}
     {publishedEditRow && (publishedEditWeekend
@@ -369,7 +370,7 @@ export function RotaWorkspace({remote, lang, setLang}: {remote: TeamWorkspace; l
         onSwap={interactions.swapSourceDays.has(publishedEditRow.day) ? () => {setPublishedEdit(null); interactions.setKeyboardSource(publishedEditRow.day);} : undefined}/>
       : <PublishedDutyEditor key={publishedEditRow.day} remote={remote} row={publishedEditRow} lang={lang} onClose={() => setPublishedEdit(null)}
         onSwap={interactions.swapSourceDays.has(publishedEditRow.day) ? () => {setPublishedEdit(null); interactions.setKeyboardSource(publishedEditRow.day);} : undefined}/>)}
-    <DraftSwapDialog controller={draft.swap} state={state} duties={duties} lang={lang} t={t} fmt={fmt} nickname={nickname} personName={personName}/>
+    <DraftSwapDialog controller={draft.swap} state={state} duties={duties} lang={lang} t={t} fmt={fmt} nickname={nickname} personName={personName} me={remote.memberId}/>
     <CancelDraftDialog open={cancelDraftMonth !== null} onOpenChange={open => {if (!open) setCancelDraftMonth(null);}} saving={remote.saving} lang={lang} t={t} monthLabel={monthLabel} onConfirm={async () => {
       if (!cancelDraftMonth) return;
       try {

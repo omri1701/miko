@@ -4,13 +4,14 @@ import {LockKeyhole,LockKeyholeOpen,Trash2} from 'lucide-react';
 import {Button} from '@/components/ui/button';
 import {Checkbox} from '@/components/ui/checkbox';
 import {EditorDialog} from '@/components/rota/editor-dialog';
+import {constraintLine} from '@/lib/supabase/swaps';
 import {DayCard,DayCards,DayHeading,KeepChoice,SplitJoinRow,WeekendLayoutSwitch,useWeekendLayout,type Half} from '@/components/rota/weekend-cards';
 import {Select,SelectTrigger,SelectValue,SelectContent,SelectItem} from '@/components/ui/select';
 import {addDays,blocks,noWeekendPlacements,ownerMonth,unavailable,weekendAssignments,setWeekendAssignments,weekendCounts,type State,type Duty,type Assignment} from '@/lib/rota/engine';
 
 /** Edits one duty. A weekend opens as one card with a "One weekend | Two days" switch; two days
  * edits each date like a regular day. Saving identical halves joins them (normalizeWeekends). */
-export function DutyEditor({state,duty,month,lang,onClose,onMonth,onSave,onRemoveSpecial,saving=false}:{state:State;duty:Duty;month:string;lang:'en'|'he';onClose:()=>void;onMonth:(month:string)=>void;onSave:(change:(s:State)=>State,reviewedLocks?:string[])=>void|Promise<void>;onRemoveSpecial:()=>void|Promise<void>;saving?:boolean}){
+export function DutyEditor({state,duty,month,lang,onClose,onMonth,onSave,onRemoveSpecial,saving=false,me=''}:{state:State;duty:Duty;month:string;lang:'en'|'he';me?:string;onClose:()=>void;onMonth:(month:string)=>void;onSave:(change:(s:State)=>State,reviewedLocks?:string[])=>void|Promise<void>;onRemoveSpecial:()=>void|Promise<void>;saving?:boolean}){
  const t=(en:string,he:string)=>lang==='en'?en:he;
  const lock=useRef(false),[pending,setPending]=useState(false),busy=saving||pending;
  const close=()=>{if(!lock.current&&!saving)onClose()};
@@ -31,7 +32,7 @@ export function DutyEditor({state,duty,month,lang,onClose,onMonth,onSave,onRemov
  const fmt=(d:string)=>new Date(d+'T12:00:00Z').toLocaleDateString(lang==='en'?'en-GB':'he-IL',{day:'numeric',month:'short',timeZone:'UTC'});
  const range=lang==='en'&&friday.slice(0,7)===saturday.slice(0,7)?`${dateLabel(friday).replace(/ \S+$/,'')} – ${dateLabel(saturday)}`:`${dateLabel(friday)} – ${dateLabel(saturday)}`;
  const pts=(n:number)=>`${n} ${t('pt','נק׳')}`;
- const conflicts=edits.flatMap(({block,assignment})=>[assignment.primary,assignment.secondary].filter((id):id is string=>!!id).flatMap(id=>unavailable(block,id,state.constraints).map(date=>`${name(id)} · ${fmt(date)}${state.constraintNotes?.[id]?.[date]?' · '+state.constraintNotes[id][date]:''}`)));
+ const conflicts=edits.flatMap(({block,assignment})=>[assignment.primary,assignment.secondary].filter((id):id is string=>!!id).flatMap(id=>unavailable(block,id,state.constraints).map(date=>constraintLine({member:id,day:date,note:state.constraintNotes?.[id]?.[date]},{me,name,day:fmt,lang}))));
  // A No weekends member newly placed on either day needs approval, like unavailability.
  const skipped=weekend?noWeekendPlacements(state,[{duty:day(friday),assignment:fri,before:initialFri},{duty:day(saturday),assignment:sat,before:initialSat}]).map(c=>t(`${name(c.person)} doesn’t take weekends · ${fmt(c.date)}`,`${name(c.person)} לא עושה סופי שבוע · ${fmt(c.date)}`)):[];
  const skips=(id:string)=>weekend&&!!state.team.find(p=>p.id===id)?.noWeekends;

@@ -67,7 +67,7 @@ const ordered=v=>{v=structuredClone(v);for(const k of ['members','lots','contrib
 function run(body,cover=false) {
  const out=sql(setup(cover)+body+'rollback;').filter(r=>r.label);
  // The SQL ledger replays exactly in the TypeScript core after every step.
- for(const r of out)assert.deepEqual(ordered(r.view),ordered(replay(r.view.events)));
+ for(const r of out.filter(r=>r.view))assert.deepEqual(ordered(r.view),ordered(replay(r.view.events)));
  return Object.fromEntries(out.map(r=>[r.label,r]));
 }
 // Net units at the end of time, only for members who owe or are owed.
@@ -166,6 +166,28 @@ assert.equal(r.swapped.swap,'approved');assert.deepEqual(nets(r.swapped),debt(a,
 r=run(edit(x.id,a,{extra:1})+swap+approve+report('swapped')+restore+publish(month)+report('republished'));
 assert.equal(r.swapped.swap,'approved');assert.deepEqual(nets(r.swapped),debt(a,ay,2));
 assert.deepEqual(nets(r.republished),debt(a,ay,2));assert.equal(r.republished.status,'published');
+// #103 (user-approved fix 2026-11-21): publish → approve a swap over a constraint → reopen →
+// publish. The swapped duty keeps its approval: locked to the new holder with Plan the month's
+// availability approval for exactly that person and date. It expires when either changes.
+const unavailable=(member,day)=>`reset role;insert into public.duty_constraints values('${member}','${day}','no','Doctor');set local role authenticated;`;
+const approvals=label=>`reset role;select jsonb_build_object('label','${label}','approvals',(select approvals from public.duty_allocations where publication_id=${current(month)}),
+ 'locked',(select jsonb_object_agg(day,primary_id) from public.duty_assignments where publication_id=${current(month)} and locked and day in ('${x.id}','${y.id}')));set local role authenticated;`;
+r=run(unavailable(ay,x.id)+swap+approve+approvals('swapped')+restore+publish(month)+report('republished')+approvals('again'));
+assert.equal(r.republished.status,'published','Reopen + Publish after a swap over a constraint');
+assert.deepEqual(r.swapped.locked,{[x.id]:ay},'the swapped duty is locked to its new holder');
+for(const label of ['swapped','again'])assert.deepEqual(r[label].approvals.filter(v=>v.rule==='availability'),
+ [{rule:'availability',reason:'Swap approved by an admin',dutyId:x.id,engineer:ay,dates:[x.id]}],`${label}: exactly that person and date`);
+// The constraint is gone before republishing: the approval is dropped and nothing blocks.
+r=run(unavailable(ay,x.id)+swap+approve+restore+`reset role;delete from public.duty_constraints where member_id='${ay}';set local role authenticated;`+publish(month)+report('republished')+approvals('after'));
+assert.equal(r.republished.status,'published');
+assert.deepEqual(r.after.approvals.filter(v=>v.rule==='availability'),[],'a stale approval expires');
+// The duty goes to someone else who is unavailable too: the approval does not follow them, and the
+// refusal names who and when (never the note).
+r=run(unavailable(ay,x.id)+swap+approve+restore+unavailable(c,x.id)
+ +`reset role;update public.duty_assignments set primary_id='${c}' where publication_id is null and day='${x.id}';set local role authenticated;`
+ +failure(publish(month).replace(/;$/,''),`unavailable-primary: \\[\\{"day": "${x.id}", "member": "${c}"\\}\\]`)+report('refused'));
+assert.equal(r.refused.status,'draft');
+console.log('PASS: a swap approved over a constraint survives Reopen + Publish; the approval expires when the duty or constraint changes');
 for(const day of [x.id,y.id]) {
  const owner=day===x.id?a:ay;
  r=run(swap+edit(day,owner,{extra:2})+report('extra')+failure(approve,'no longer pending')+report('after'));

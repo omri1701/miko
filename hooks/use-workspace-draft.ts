@@ -4,7 +4,7 @@ import { toast } from 'sonner';
 import type { TeamWorkspace } from '@/hooks/use-team-workspace';
 import type { Translate, UpdateDraft } from '@/components/rota/workspace-types';
 import { prepareWorkspaceUpdate, clearableAssignments, clearBoard, restoreCleared } from '@/lib/rota/workspace-data';
-import {userMessage} from '@/lib/messages';
+import {explainedMessage, conflictContext} from '@/lib/conflict-message';
 import {
   addDays,
   dates,
@@ -58,7 +58,7 @@ export function useWorkspaceDraft({
       return true;
     } catch (e) {
       if (!notifyError) throw e;
-      toast.error(userMessage((e as Error).message, t));
+      toast.error(explainedMessage((e as Error).message, t, conflictContext(remote, state, t)));
       return false;
     }
   }

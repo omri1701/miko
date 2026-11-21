@@ -70,7 +70,10 @@ begin
    d.secondary_id,case when d.id in (a.id,b.id) then exists(
     select 1 from public.duty_constraints c where c.kind='no' and c.day>=d.day and c.day<d.end_day
     and c.member_id in (case when d.id=a.id then r.other_id else r.requester_id end,d.secondary_id)
-   ) else d.manager_override end,d.title,d.extra_points,d.saturday_extra_points,d.locked
+   ) else d.manager_override end,d.title,d.extra_points,d.saturday_extra_points,
+   -- The new holder's own constraint keeps its approval (#103): the duty is locked to them, as
+   -- Plan the month locks an approved availability exception, so reopening never loses it.
+   d.locked or (d.id in (a.id,b.id) and (select jsonb_agg(c.day::text order by c.day) from public.duty_constraints c where c.kind='no' and c.member_id=case when d.id=a.id then r.other_id else r.requester_id end and c.day>=d.day and c.day<d.end_day) is not null)
   from public.duty_assignments d where d.publication_id=current_publication;
   -- A weighted swap moves points between the two engineers: the copied plan's targets
   -- follow it, so a reopened copy of this version still matches its plan (2026-11-06).
@@ -79,11 +82,16 @@ begin
     jsonb_set(jsonb_set(allocation,array['targetsUnits',r.requester_id::text],to_jsonb(coalesce((allocation->'targetsUnits'->>r.requester_id::text)::bigint,0)-(a.points*2)::bigint+(b.points*2)::bigint)),
      array['targetsUnits',r.other_id::text],to_jsonb(coalesce((allocation->'targetsUnits'->>r.other_id::text)::bigint,0)-(b.points*2)::bigint+(a.points*2)::bigint))
    else allocation end,
-   (select coalesce(jsonb_agg(case when l->>'dutyId'=a.day::text then jsonb_set(l,'{engineer}',to_jsonb(r.other_id::text)) when l->>'dutyId'=b.day::text then jsonb_set(l,'{engineer}',to_jsonb(r.requester_id::text)) else l end),'[]') from jsonb_array_elements(locks) l),
+   (select coalesce(jsonb_agg(case when l->>'dutyId'=a.day::text then jsonb_set(l,'{engineer}',to_jsonb(r.other_id::text)) when l->>'dutyId'=b.day::text then jsonb_set(l,'{engineer}',to_jsonb(r.requester_id::text)) else l end),'[]') from jsonb_array_elements(locks) l)
+   ||(select coalesce(jsonb_agg(jsonb_build_object('dutyId',x.day::text,'engineer',x.who::text)),'[]') from (values(a.day,a.end_day,r.other_id),(b.day,b.end_day,r.requester_id)) x(day,end_day,who)
+    where (select jsonb_agg(c.day::text order by c.day) from public.duty_constraints c where c.kind='no' and c.member_id=x.who and c.day>=x.day and c.day<x.end_day) is not null and not exists(select 1 from jsonb_array_elements(locks) l where l->>'dutyId'=x.day::text)),
    (select coalesce(jsonb_agg(v),'[]') from jsonb_array_elements(approvals) v where
     not (v->>'rule' in ('availability','boundary') and v->>'dutyId' in (a.day::text,b.day::text))
     and not (v->>'rule'='consecutive' and ((v->'duties') ? a.day::text or (v->'duties') ? b.day::text))
-    and not (v->>'rule'='weekends' and v->>'engineer' in (r.requester_id::text,r.other_id::text))),accounting_fingerprint,calendar_fingerprint,current_publication,generation,'swap' from public.duty_allocations where publication_id=current_publication;
+    and not (v->>'rule'='weekends' and v->>'engineer' in (r.requester_id::text,r.other_id::text)))
+   -- The admin's approval, for exactly that person and those dates (#103).
+   ||(select coalesce(jsonb_agg(jsonb_build_object('rule','availability','reason',coalesce(nullif(reason,''),'Swap approved by an admin'),'dutyId',x.day::text,'engineer',x.who::text,'dates',x.dates)),'[]')
+    from (select y.day,y.who,(select jsonb_agg(c.day::text order by c.day) from public.duty_constraints c where c.kind='no' and c.member_id=y.who and c.day>=y.day and c.day<y.end_day) dates from (values(a.day,a.end_day,r.other_id),(b.day,b.end_day,r.requester_id)) y(day,end_day,who)) x where x.dates is not null),accounting_fingerprint,calendar_fingerprint,current_publication,generation,'swap' from public.duty_allocations where publication_id=current_publication;
   -- Both halves of a weekend on one person are one weekend again (decision 2026-11-07).
   joined:=duty_private.join_weekend_halves(publication,a.day);
   joined:=duty_private.join_weekend_halves(publication,b.day) or joined;

@@ -6,6 +6,7 @@ import {Avatar} from '@/components/ui/avatar';
 import {Chip} from '@/components/ui/chip';
 import {addDays, monthNext, type State, type Duty} from '@/lib/rota/engine';
 import type {WorkspaceDraft} from '@/hooks/use-workspace-draft';
+import {constraintLine} from '@/lib/supabase/swaps';
 import type {Language, Translate, FormatDate} from './workspace-types';
 type DialogCopy = {lang: Language; t: Translate};
 
@@ -32,8 +33,8 @@ export function ClearBoardDialog({open, onOpenChange, saving, lang, t, monthLabe
   </Sheet>;
 }
 
-export function DraftSwapDialog({controller, state, duties, lang, t, fmt, nickname, personName}: DialogCopy & {
-  controller: WorkspaceDraft['swap']; state: State; duties: Duty[]; fmt: FormatDate; nickname: (id?: string) => string; personName: (id?: string) => string;
+export function DraftSwapDialog({controller, state, duties, lang, t, fmt, nickname, personName, me = ''}: DialogCopy & {
+  controller: WorkspaceDraft['swap']; state: State; duties: Duty[]; fmt: FormatDate; nickname: (id?: string) => string; personName: (id?: string) => string; me?: string;
 }) {
   const {selection: swap, setSelection: setSwap, override: swapOverride, setOverride: setSwapOverride, preview: swapPreview, reason: swapReason, confirm: confirmSwap, saving} = controller;
   const member = (id?: string) => state.team.find(p => p.id === id);
@@ -56,7 +57,7 @@ export function DraftSwapDialog({controller, state, duties, lang, t, fmt, nickna
       </div>
       {swapPreview && !swapPreview.ok && !conflicts && <p className="note-line" data-tone="danger">{swapReason(swapPreview.reason)}</p>}
       {conflicts && <div className="note-line" style={{display: 'block'}}>
-        {!!swapPreview?.conflicts?.length && <p>{t('Availability conflicts: ', 'התנגשות עם אילוצים: ')}{swapPreview.conflicts.map((c) => `${personName(c.person)} · ${fmt(c.date)}${state.constraintNotes?.[c.person]?.[c.date] ? ' · ' + state.constraintNotes[c.person][c.date] : ''}`).join(' / ')}</p>}
+        {!!swapPreview?.conflicts?.length && <p>{t('Availability conflicts: ', 'התנגשות עם אילוצים: ')}{swapPreview.conflicts.map((c) => constraintLine({member: c.person, day: c.date, note: state.constraintNotes?.[c.person]?.[c.date]}, {me, name: personName, day: fmt, lang})).join(' / ')}</p>}
         {swapPreview?.weekendConflicts?.map(c => {
           const monthLabel = new Intl.DateTimeFormat(lang === 'he' ? 'he-IL' : 'en-GB', {month: 'long', timeZone: 'UTC'}).format(new Date(c.month + '-01T12:00:00Z'));
           return <p key={c.person}>{t(`This swap gives ${personName(c.person)} ${c.count} weekends in ${monthLabel}. Approve exception?`, `ההחלפה נותנת ל${personName(c.person)} ${c.count} סופי שבוע בחודש ${monthLabel}. לאשר חריגה?`)}</p>;

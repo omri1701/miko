@@ -748,7 +748,14 @@ refuses a request; emergency cover's still does. Since
 the availability override: no typed reason (`override_reason` stays empty unless a client
 sends one), the published duties are marked `manager_override`, and constraints are never
 deleted. That migration also drops the short-lived `requester_waived_days`/`other_waived_days`
-columns. Published duty edits still require an override reason. Published swap requests retain their
+columns. Published duty edits still require an override reason. Since
+`20261121190805_swap_approval_survives_republish.sql` (#103) the approval survives Reopen +
+Publish: each swapped duty whose new holder marked one of its dates unavailable is locked to
+them with the same `availability` approval Plan the month records (that person, those dates,
+reason "Swap approved by an admin" unless one was sent). Publishing drops an availability
+approval whose duty now has someone else or whose dates no longer match the constraints, so the
+normal check applies again; a refusal (`unavailable-primary: [...]`, `Availability conflict: [...]`)
+lists every conflict as `{member,day}` (never notes) and the app names each person. Published swap requests retain their
 weekend cap: a swap cannot increase an engineer's weekend count above one. Draft
 swaps can instead explicitly approve weekend exceptions in the manager dialog. Secondary
 cover, special date points/spans, draft rows/status and historical versions remain
