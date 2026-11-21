@@ -48,7 +48,7 @@ export function PublishedDutyEditor({remote,row:opened,lang,onClose,onSwap}:{rem
  const permanent=changed&&kind==='permanent',known=Array.isArray(returns),returning=permanent&&known&&returns.includes(primary);
  const ready=!stale&&validExtras&&!unchanged&&(!conflicts.length||(override&&!!reason.trim()))&&(!skipped||approveWeekend)&&(!permanent||known);
  const fmt=(day:string)=>shortDate(day,lang),last=addDays(row.end_day,-1);
- const members=raw.members.filter(m=>m.status==='approved'&&(m.active||m.id===row.primary_id)&&m.id!==row.secondary_id);
+ const members=raw.members.filter(m=>m.status==='approved'&&((m.active&&!m.viewer)||m.id===row.primary_id)&&m.id!==row.secondary_id);
  const summary=ready?editSummary(row,edit,name,lang,returning):'';
  async function save(){
   const publication=row.publication_id;

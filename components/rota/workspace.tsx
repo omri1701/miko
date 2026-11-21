@@ -65,7 +65,8 @@ export function RotaWorkspace({remote, lang, setLang}: {remote: TeamWorkspace; l
       document.documentElement.classList.remove('keyboard-open');
     };
   }, [mobile]);
-  const isManager = remote.isAdmin, meId = remote.memberId;
+  // A Viewer-admin (#90) keeps the admin views (drafts, everyone's constraints), read-only.
+  const isManager = remote.isAdmin, viewer = remote.viewer, meId = remote.memberId;
   // A notification opens the screen it links to (`/?tab=…&month=…`, decision 2026-11-06).
   const [link] = useState(() => typeof window === 'undefined' ? {} : deepLink(window.location.search));
   const [month, setMonth] = useState(() => link.month ?? initialCalendarMonth()), [tab, setTab] = useState<string>(link.tab ?? 'home');
@@ -87,7 +88,7 @@ export function RotaWorkspace({remote, lang, setLang}: {remote: TeamWorkspace; l
     // The offline shell (public/sw.js); push subscribes through the same registration.
     navigator.serviceWorker?.register('/sw.js', {scope: '/'}).catch(() => {});
     // A device that already receives notifications belongs to whoever is signed in now.
-    if (!remote.readOnly && typeof Notification !== 'undefined' && Notification.permission === 'granted')
+    if (!remote.settingsReadOnly && typeof Notification !== 'undefined' && Notification.permission === 'granted')
       void currentSubscription().then(subscription => subscription && remote.personal.saveDevice(describe(subscription))).catch(() => {});
     return () => navigator.serviceWorker?.removeEventListener('message', open);
     // eslint-disable-next-line react-hooks/exhaustive-deps -- once per signed-in workspace
@@ -232,7 +233,8 @@ export function RotaWorkspace({remote, lang, setLang}: {remote: TeamWorkspace; l
     setSheetDuty(b);
   }
   const sheetActions = (b: Duty | null): DutySheetActions => {
-    if (!b) return {};
+    // A Viewer (#90) has no swap or edit at all: hidden, not disabled.
+    if (!b || viewer) return {};
     const a = calendarState.assignments[b.id];
     const actions: DutySheetActions = {};
     if (requesting) {
@@ -251,7 +253,9 @@ export function RotaWorkspace({remote, lang, setLang}: {remote: TeamWorkspace; l
   const publishable = !allocationMismatch && metrics.assigned === metrics.owned.length && !metrics.conflicts.length && !!metrics.owned.length && !publishBlockers.length;
   const planLabel = t('Plan the month', 'תכנון החודש'), closedReason = t('Coverage has started: manual edits and swaps only', 'הכיסוי החודשי התחיל: רק עריכה ידנית והחלפות');
   let primary: PrimaryAction | undefined, menu: MenuItem[] = [];
-  if (isManager) {
+  // A Viewer-admin browses versions only: no plan, publish, reopen or draft tools.
+  if (isManager && viewer) menu = [{key: 'versions', label: t('Versions', 'גרסאות'), icon: <History/>, onSelect: () => setHistoryOpen(true)}];
+  else if (isManager) {
     const generating = t('Generating…', 'משבץ…');
     const plan: PrimaryAction = {label: planLabel, busyLabel: generating, icon: allocation.busy ? <LoaderCircle className="spin"/> : <Sparkles/>, onClick: allocation.show, busy: allocation.busy,
       disabled: remote.readOnly || (generationClosed && !monthDetails.generated) || !metrics.active.length, reason: generationClosed && !monthDetails.generated ? closedReason : !metrics.active.length ? t('Add active members first', 'יש להוסיף חברי צוות פעילים קודם') : undefined};
@@ -343,7 +347,7 @@ export function RotaWorkspace({remote, lang, setLang}: {remote: TeamWorkspace; l
               interactive={!remote.readOnly} onOpen={b => setSheetDuty(b)}/>}
           </TabsContent>
           <TabsContent value="availability">
-            <WorkspaceAvailability state={state} month={month} monthLabel={monthLabel} onMonth={changeMonth} person={person} setPerson={setPerson} dateCells={dateCells} lang={lang} isManager={isManager} meId={meId}
+            <WorkspaceAvailability state={state} month={month} monthLabel={monthLabel} onMonth={changeMonth} person={person} setPerson={setPerson} dateCells={dateCells} lang={lang} isManager={isManager} viewer={viewer} meId={meId}
               constraintsClosed={constraintsClosed || remote.readOnly} deadline={monthDetails.deadline} t={t} saveConstraints={saveConstraints}/>
           </TabsContent>
           <TabsContent value="team">

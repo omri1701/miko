@@ -61,8 +61,8 @@ begin
   if extract(dow from last_day)=5 then last_day:=last_day+1; end if;
   for d in select generate_series(first_day,last_day,interval '1 day')::date loop
    select * into a from public.duty_assignments where publication_id is null and day<=d and end_day>d;
-   if a.primary_id is null or not exists(select 1 from public.duty_members where id=a.primary_id and status='approved' and active) then raise exception 'An active engineer is required on %',d; end if;
-   if a.secondary_id is not null and not exists(select 1 from public.duty_members where id=a.secondary_id and status='approved' and active) then raise exception 'Emergency engineer is inactive on %',d; end if;
+   if a.primary_id is null or not exists(select 1 from public.duty_members where id=a.primary_id and status='approved' and active and not viewer) then raise exception 'An active engineer is required on %',d; end if;
+   if a.secondary_id is not null and not exists(select 1 from public.duty_members where id=a.secondary_id and status='approved' and active and not viewer) then raise exception 'Emergency engineer is inactive on %',d; end if;
    if not a.manager_override and exists(select 1 from public.duty_constraints c where c.member_id in (a.primary_id,a.secondary_id) and c.day=d and c.kind='no'
     and not (c.member_id=a.primary_id and exists(select 1 from public.duty_allocations meta,jsonb_array_elements(meta.approvals) approved
      where meta.month=p_publish and meta.publication_id is null and approved->>'rule'='availability' and approved->>'dutyId'=a.day::text and approved->>'engineer'=a.primary_id::text

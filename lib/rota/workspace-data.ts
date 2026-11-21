@@ -5,6 +5,7 @@ import {
   unavailable,
   ownerMonth,
   normalizeWeekends,
+  takesDuties,
   type State,
   type Duty,
 } from './engine.ts';
@@ -13,7 +14,7 @@ import {calendarDates} from './calendar-dates.ts';
 // Workspace projections: scheduling rules remain in the React-free engine.
 export function workspaceMetrics(state: State, month: string, duties: Duty[]) {
   const owned = duties.filter((b) => ownerMonth(b) === month),
-    active = state.team.filter((p) => p.active),
+    active = state.team.filter(takesDuties),
     monthTotals = totals(state, owned),
     historyTotals = totals(state, allKnownBlocks(state));
   const assigned = owned.filter((b) => state.assignments[b.id]?.primary).length;

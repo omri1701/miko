@@ -1,6 +1,6 @@
 import {addDays,dayOf,blocks,ownerMonth,specialAt,type State,type Special} from '../rota/engine.ts';
 import type {PublishedMonth} from '../scheduling/rotation.ts';
-export type Member={id:string;email:string|null;is_temporary?:boolean;/** The sign-in that owns the row: its own id, or the linked sign-up of a former temporary member; null while temporary. Absent before the temporary-member migration. */auth_user_id?:string|null;/** Absent before the non-weekend migration. */no_weekends?:boolean;/** The member's own app language; null until chosen, absent before the push migration. */language?:'en'|'he'|null;name:string;role:string;status:string;active:boolean;seniority:number;color:string};
+export type Member={id:string;email:string|null;is_temporary?:boolean;/** The sign-in that owns the row: its own id, or the linked sign-up of a former temporary member; null while temporary. Absent before the temporary-member migration. */auth_user_id?:string|null;/** Absent before the non-weekend migration. */no_weekends?:boolean;/** A Viewer (#90): sees the schedule, never takes part; a Viewer-admin is a read-only admin. Absent before the viewer migration. */viewer?:boolean;/** The member's own app language; null until chosen, absent before the push migration. */language?:'en'|'he'|null;name:string;role:string;status:string;active:boolean;seniority:number;color:string};
 export type Lookup={code:string;label:string};
 export type Role=Lookup&{can_manage:boolean};
 export type DutyRow={id:string;publication_id:string|null;day:string;end_day:string;primary_id:string|null;secondary_id:string|null;locked?:boolean;manager_override:boolean;title:string;extra_points:number;/** Combined weekends only: the Saturday date's own extra; absent in rows saved before it existed. */saturday_extra_points?:number;points:number};
@@ -19,7 +19,7 @@ const rows = (shape: Record<string, Check>): Check => value => Array.isArray(val
 const lookup = {code: text, label: text};
 const snapshotChecks = {
  revision,
- members: rows({id:text,email:nullableText,is_temporary:value=>value===undefined||boolean(value),auth_user_id:value=>value===undefined||nullableText(value),no_weekends:value=>value===undefined||boolean(value),language:value=>value===undefined||value===null||oneOf('en','he')(value),name:text,role:text,status:text,active:boolean,seniority:number,color:text}),
+ members: rows({id:text,email:nullableText,is_temporary:value=>value===undefined||boolean(value),auth_user_id:value=>value===undefined||nullableText(value),no_weekends:value=>value===undefined||boolean(value),viewer:value=>value===undefined||boolean(value),language:value=>value===undefined||value===null||oneOf('en','he')(value),name:text,role:text,status:text,active:boolean,seniority:number,color:text}),
  months: rows({month:text,deadline:text,status:oneOf('draft','published'),generated:boolean,current_publication_id:nullableText,publication_sequence:number}),
  constraints: rows({member_id:text,day:text,kind:oneOf('no','prefer'),note:text}),
  assignments: rows({id:text,publication_id:nullableText,day:text,end_day:text,primary_id:nullableText,secondary_id:nullableText,locked:value=>value===undefined||boolean(value),manager_override:boolean,title:text,extra_points:number,saturday_extra_points:value=>value===undefined||number(value),points:number}),
@@ -40,7 +40,10 @@ export function findMe(raw:Snapshot,userId:string|undefined):Member|undefined{
  if(!userId)return undefined;
  return raw.members.find(m=>m.auth_user_id===userId)??raw.members.find(m=>m.id===userId&&m.auth_user_id===undefined);
 }
+/** Admin views (drafts, everyone's constraints, approvals). A Viewer-admin (#90) has them too, read-only: check isViewer before offering any edit. */
 export function canManage(raw:Snapshot,userId:string|undefined){const me=findMe(raw,userId);return !!raw.roles.find(r=>r.code===me?.role)?.can_manage}
+/** A Viewer (#90) never edits: the database refuses every schedule write, so the app hides them. */
+export function isViewer(raw:Snapshot,userId:string|undefined){return !!findMe(raw,userId)?.viewer}
 function rowOwner(row:DutyRow){return (dayOf(row.day)===6?addDays(row.day,-1):row.day).slice(0,7)}
 function applyRows(state:State,rows:DutyRow[]){
  const specials:Special[]=[],splits=new Set<string>();
@@ -59,7 +62,7 @@ function applyRows(state:State,rows:DutyRow[]){
 }
 export function fromSnapshot(raw:Snapshot,userId:string,previewPublication?:string,published=false):State{
  const admin=canManage(raw,userId);
- const state:State={version:3,team:raw.members.filter(m=>m.status==='approved').map(m=>({id:m.id,name:m.name,color:m.color,active:m.active,role:m.role,...(m.no_weekends?{noWeekends:true}:{})})),constraints:{},constraintNotes:{},assignments:{},specials:[],splitWeekends:[],months:{}};
+ const state:State={version:3,team:raw.members.filter(m=>m.status==='approved').map(m=>({id:m.id,name:m.name,color:m.color,active:m.active,role:m.role,...(m.no_weekends?{noWeekends:true}:{}),...(m.viewer?{viewer:true}:{})})),constraints:{},constraintNotes:{},assignments:{},specials:[],splitWeekends:[],months:{}};
  for(const m of raw.months)state.months[m.month]={deadline:m.deadline,status:admin&&!previewPublication&&!published?m.status:m.current_publication_id?'published':'draft',generated:m.generated};
  for(const c of raw.constraints){(state.constraints[c.member_id]??={})[c.day]=c.kind;if(c.note)(state.constraintNotes![c.member_id]??={})[c.day]=c.note}
  if(previewPublication)return applyRows(state,raw.assignments.filter(r=>r.publication_id===previewPublication));

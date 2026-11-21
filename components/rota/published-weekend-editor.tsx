@@ -73,7 +73,7 @@ export function PublishedWeekendEditor({remote,weekend:opened,focusDay,lang,onCl
  const days=(h:Half|'both')=>h==='both'?[w.fri.day,w.sat.day]:[h==='fri'?w.fri.day:w.sat.day];
  function picker(h:Half|'both',aria:string){
   const current=get(h==='sat'?'sat':'fri').primary,holders=[w.fri.primary,w.sat.primary];
-  const members=raw.members.filter(m=>m.status==='approved'&&(m.active||holders.includes(m.id))&&!covers(h).includes(m.id));
+  const members=raw.members.filter(m=>m.status==='approved'&&((m.active&&!m.viewer)||holders.includes(m.id))&&!covers(h).includes(m.id));
   return <label className="field-label">{t('Primary engineer','מהנדס ראשי')}<Select disabled={busy} value={current} onValueChange={v=>update(h,p=>({...p,primary:v}))}>
    <SelectTrigger className="picker" aria-label={aria}><SelectValue/></SelectTrigger>
    <SelectContent>{members.map(m=><SelectItem key={m.id} value={m.id}>{m.name}{raw.constraints.some(c=>c.member_id===m.id&&c.kind==='no'&&days(h).includes(c.day))&&!holders.includes(m.id)?t(' · unavailable',' · לא זמין'):''}{m.no_weekends&&!holders.includes(m.id)?t(' · no weekends',' · ללא סופי שבוע'):''}</SelectItem>)}</SelectContent>

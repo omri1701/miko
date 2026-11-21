@@ -27,7 +27,7 @@ begin
  if d.id is null or duty_private.duty_owner(d.day)<>m.month then raise exception 'Choose a duty in this published month'; end if;
  if d.day<(now() at time zone 'Asia/Jerusalem')::date then raise exception 'Choose duties starting today or later'; end if;
  if d.primary_id is null then raise exception 'This duty has no primary engineer'; end if;
- if p_primary is null or not exists(select 1 from public.duty_members where id=p_primary and active and status='approved') then raise exception 'Choose an active approved engineer'; end if;
+ if p_primary is null or not exists(select 1 from public.duty_members where id=p_primary and active and status='approved' and not viewer) then raise exception 'Choose an active approved engineer'; end if;
  if p_primary=d.secondary_id then raise exception 'A primary engineer cannot also be emergency cover'; end if;
  -- Half points stay exact; the table's own bounds apply to both dates.
  if p_extra_points is null or p_extra_points<0 or p_extra_points>20 or p_extra_points*2<>trunc(p_extra_points*2)
