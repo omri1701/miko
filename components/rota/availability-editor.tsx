@@ -99,8 +99,7 @@ export function AvailabilityEditor({state,month,person,cells,lang,disabled,onSav
  return <div className="constraint-editor">
  {onMonth?<MonthStage ref={stage} month={month} rtl={lang==='he'} onChange={onMonth} preview={m=><AvailabilityGrid preview state={state} month={m} person={person} cells={calendarDates(m)} lang={lang} disabled={disabled} mobile={mobile} schedule={schedule?.(m)}/>}>{grid}</MonthStage>:grid}
  <div className="availability-tools" dir={lang==='he'?'rtl':'ltr'}>{footer}<p className="gesture-hint" role="status" aria-atomic="true">{count?selectionCount:' '}</p></div>
- <EditorDialog open={open} onClose={close} saving={saving} lang={lang} title={<bdi>{rangeTitle}</bdi>} description={<span className="constraint-range-help">{selection.length>1?t('Applies to all selected dates','חל על כל התאריכים שנבחרו'):t('Choose availability for this date.','בחרו זמינות לתאריך זה.')}</span>} className="availability-dialog" onCloseAutoFocus={restoreFocus}>
-  {conflicts(kind)&&<p className="constraint-notes-help" role="status">{warning(kind)} {t('You will be asked to confirm before saving.','לפני השמירה יידרש אישור.')}</p>}
+ <EditorDialog open={open} onClose={close} saving={saving} lang={lang} title={<bdi>{rangeTitle}</bdi>} className="availability-dialog" onCloseAutoFocus={restoreFocus}>
   <div className="constraint-choices">
    <button disabled={saving} aria-pressed={kind==='no'} className={kind==='no'?'chosen no':''} onClick={()=>setKind('no')}>{t('Unavailable','לא זמין')}</button>
    <button disabled={saving} aria-pressed={kind==='prefer'} className={kind==='prefer'?'chosen prefer':''} onClick={()=>setKind('prefer')}>{t('Prefer duty','מעדיף כוננות')}</button>
@@ -118,7 +117,7 @@ export function AvailabilityEditor({state,month,person,cells,lang,disabled,onSav
    </div>
   </EditorDialog>
  </EditorDialog>
- <EditorDialog open={!!reading} onClose={closeReading} lang={lang} title={<bdi>{reading?title(reading):''}</bdi>} description={<span className="constraint-range-help">{t('Unavailable','לא זמין')}</span>} className="constraint-note-sheet" onCloseAutoFocus={restoreFocus}>
+ <EditorDialog open={!!reading} onClose={closeReading} lang={lang} title={<bdi>{reading?title(reading):''}</bdi>} className="constraint-note-sheet" onCloseAutoFocus={restoreFocus}>
   <p className="constraint-note-full" dir="auto">{reading?state.constraintNotes?.[person]?.[reading]:''}</p>
   <div className="editor-actions"><Button onClick={()=>{const d=reading;if(!d)return;setReading(null);select([d]);edit([d])}}><Pencil size={16}/>{t('Edit','עריכה')}</Button></div>
  </EditorDialog>
