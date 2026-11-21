@@ -57,9 +57,10 @@ begin
   select current_publication_id into current_publication from public.duty_months where month=r.month;
   select * into a from public.duty_assignments where publication_id=current_publication and day=r.from_day and end_day=r.from_end_day;
   select * into b from public.duty_assignments where publication_id=current_publication and day=r.to_day and end_day=r.to_end_day;
-  -- Consent may precede an audited availability override, but never bypasses
-  -- active membership, emergency duplication, overlap, weekends or future dates.
-  perform duty_private.validate_swap(a.id,b.id,current_publication,p_action='accept' or length(reason)>0);
+  -- Availability never refuses a consented swap (#92, owner 2026-11-21): the admin's approval
+  -- is the override, no reason needed; the published duty is marked manager_override. Never
+  -- bypasses active membership, emergency duplication, overlap, weekends or future dates.
+  perform duty_private.validate_swap(a.id,b.id,current_publication,true);
  end if;
  if p_action='approve' then
   update public.duty_months set publication_sequence=publication_sequence+1 where month=r.month returning publication_sequence into next_version;

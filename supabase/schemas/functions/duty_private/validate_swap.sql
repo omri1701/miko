@@ -16,9 +16,11 @@ begin
  if a.secondary_id=b.primary_id or b.secondary_id=a.primary_id then raise exception 'A primary engineer cannot also be emergency cover'; end if;
  if exists(select 1 from duty_private.current_duties() x join duty_private.current_duties() y on x.id<>y.id and x.day<y.end_day and y.day<x.end_day
   where x.id in (a.id,b.id)) then raise exception 'Published duty dates overlap'; end if;
+ -- Emergency cover's unavailability refuses a request. A primary's own constraint never
+ -- does (#92): they consent by sending or accepting; the admin's approval overrides both.
  select exists(select 1 from public.duty_constraints c where c.kind='no' and
-  ((c.member_id in (b.primary_id,a.secondary_id) and c.day>=a.day and c.day<a.end_day)
-   or (c.member_id in (a.primary_id,b.secondary_id) and c.day>=b.day and c.day<b.end_day))) into conflicts;
+  ((c.member_id=a.secondary_id and c.day>=a.day and c.day<a.end_day)
+   or (c.member_id=b.secondary_id and c.day>=b.day and c.day<b.end_day))) into conflicts;
  if conflicts and not p_override then raise exception 'Availability conflict. An admin must explicitly override with a reason.'; end if;
  -- Either half and emergency cover count as one weekend; preserve existing exceptions,
  -- but swaps cannot increase anyone's count above one (same rule as swapDraft).

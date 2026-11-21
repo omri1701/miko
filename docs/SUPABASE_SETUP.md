@@ -741,9 +741,14 @@ adds proposer visibility. Read-only `duty_swap_availability(p_from,p_to)` return
 same conflicts `validate_swap` refuses as `[{member,day}]`, never notes, and only to
 an approved admin or one of the two primaries. Members get emergency cover's conflicts
 with `member` NULL and only for a pair starting today or later. Only final
-approval copies the current publication into a new immutable version. Availability
-conflicts added after creation can be acknowledged at consent but require an
-explicit admin override reason at approval. Published swap requests retain their
+approval copies the current publication into a new immutable version. Since migration
+`20261120094825_swap_over_constraint.sql` (#92) a primary's own unavailability no longer
+refuses a request; emergency cover's still does. Since
+`20261121170542_swap_approve_without_reason.sql` (owner 2026-11-21) the admin's approval is
+the availability override: no typed reason (`override_reason` stays empty unless a client
+sends one), the published duties are marked `manager_override`, and constraints are never
+deleted. That migration also drops the short-lived `requester_waived_days`/`other_waived_days`
+columns. Published duty edits still require an override reason. Published swap requests retain their
 weekend cap: a swap cannot increase an engineer's weekend count above one. Draft
 swaps can instead explicitly approve weekend exceptions in the manager dialog. Secondary
 cover, special date points/spans, draft rows/status and historical versions remain

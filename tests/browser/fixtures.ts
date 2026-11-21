@@ -54,6 +54,12 @@ export class Backend {
   authFailure = false;
   invalidated = false;
   failNextSave = false;
+  /** validate_swap's blocking conflicts: emergency cover's unavailability (a primary's own never blocks, #92). */
+  coverConflict(from: DutyRow, to: DutyRow) {
+    const inside = (d: DutyRow, day: string) => day >= d.day && day < d.end_day;
+    return this.raw.constraints.some(c => c.kind === 'no' &&
+      ((c.member_id === from.secondary_id && inside(from, c.day)) || (c.member_id === to.secondary_id && inside(to, c.day))));
+  }
   /** Display-only projection served by duty_balance; null serves zero for everyone. */
   balance: Balance | null = null;
   /** Versions a re-plan reversed, served by duty_replanned_versions. */
@@ -313,6 +319,8 @@ export class Backend {
       // Admins may propose for others; an admin party becomes the requester.
       if (from.primary_id !== user) {expect(admin).toBe(true); if (to.primary_id === user) [from, to] = [to, from];}
       expect(to.primary_id).not.toBe(from.primary_id);
+      // Mirrors request_swap (#92): emergency cover's unavailability refuses; a primary's own never does.
+      if (this.coverConflict(from, to)) throw Error('Availability conflict. An admin must explicitly override with a reason.');
       this.raw.swapRequests!.unshift({id: `request-${this.raw.revision}`, month: MONTH, source_publication_id: from.publication_id, requester_id: from.primary_id!, other_id: to.primary_id!, from_day: from.day, from_end_day: from.end_day, to_day: to.day, to_end_day: to.end_day, explanation: p.p_explanation as string, status: 'awaiting_engineer', accepted_by: null, accepted_at: null, created_at: NOW, resolved_at: null, resolved_by: null, result_publication_id: null, override_reason: '', proposed_by: from.primary_id === user ? null : user, requester_accepted_at: null});
     } else if (name === 'duty_delete_publication') {
       expect(admin).toBe(true);
@@ -346,6 +354,8 @@ export class Backend {
         const current = this.raw.months[0].current_publication_id;
         const rows = this.raw.assignments.filter(d => d.publication_id === current).map(d => ({...d}));
         const from = rows.find(d => d.day === r.from_day)!, to = rows.find(d => d.day === r.to_day)!;
+        // Mirrors resolve_swap: approving is the availability override, never a typed reason (owner 2026-11-21).
+        expect(p.p_override_reason).toBe('');
         [from.primary_id, to.primary_id] = [to.primary_id, from.primary_id];
         r.result_publication_id = this.publish(MONTH, rows);
       }
@@ -511,7 +521,7 @@ export {expect};
 export const duty = (page: Page, day: string) => page.locator(`button[data-date="${day}"]`).filter({has: page.locator('.date-line')});
 /** A published swap target is neither green nor greyed until its availability is known. */
 export async function targetReady(page: Page, day: string) {
-  await expect(duty(page, day)).toHaveAttribute('data-swap-state', /^(ok|blocked)$/);
+  await expect(duty(page, day)).toHaveAttribute('data-swap-state', /^(ok|blocked|constrained)$/);
 }
 /** Opens the duty sheet for a day on the Schedule tab: Enter opens it on PC; phones show the day's details first. */
 export async function openDutySheet(page: Page, day: string) {
