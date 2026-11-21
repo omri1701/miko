@@ -107,7 +107,8 @@ for (const lang of ['en', 'he'] as const) test(`admin swap proposal, cards and a
   backend.raw.revision!++;
   await page.reload();
   if (lang === 'he') await switchLanguage(page, 'he');
-  await page.locator('[data-swap-card]').getByRole('button', {name: t('Approve', 'אישור'), exact: true}).click();
+  // The card shows Blair's conflict line, so its label warns (owner 2026-11-21).
+  await page.locator('[data-swap-card]').getByRole('button', {name: t('Approve anyway', 'לאשר בכל זאת'), exact: true}).click();
   await expect(page.getByRole('dialog').getByRole('alert')).toBeVisible();
   await snapshot(page, `admin-swap-approval-${lang}`);
 });
