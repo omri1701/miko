@@ -255,7 +255,9 @@ for(const lang of ['en','he'] as const)test(`draft duty editor names constraints
   ['Avery Admin',he?'סימנת את 4 בנוב׳ כלא זמין · Own errand':'You marked 4 Nov as unavailable · Own errand']] as const){
   await dialog.getByRole('combobox',{name:he?'מהנדס ראשי':'Primary engineer',exact:true}).click();
   await page.getByRole('option',{name:new RegExp(`^${who}`)}).click();
-  await expect(warning.locator('p').first()).toHaveText(line);
+  // One conflict per line, never joined by " / " (owner 2026-11-21).
+  await expect(warning.getByRole('listitem')).toHaveText([line]);
+  await expect(warning).not.toContainText(/\s\/\s/);
  }
  await expect(dialog.getByRole('checkbox',{name:he?'אישור החריגות כמנהל':'Approve these exceptions as manager'})).toBeVisible();
 });

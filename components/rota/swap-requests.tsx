@@ -140,8 +140,11 @@ export function SwapCard({r,swaps,remote,lang}:{r:SwapRequest;swaps:SwapActions;
  <article className={'swap-card '+(incoming?'incoming':admin?'admin-review':'outgoing')} data-swap-card={r.id}>
   <div className="swap-card-head">
    <span className="swap-card-icon" data-tone={incoming?'info':admin?'warn':'neutral'}><ArrowLeftRight/></span>
-   <div className="swap-card-text">
-    <strong>{incoming?answerFor===me?t(`${name(r.requester_id===me?r.other_id:r.requester_id)} asks to swap`,`${name(r.requester_id===me?r.other_id:r.requester_id)} מבקש/ת להחליף`):t(`Answer for ${name(answerFor!)} (temporary)`,`מענה עבור ${name(answerFor!)} (זמני)`):admin?t('Swap to approve','החלפה לאישור'):r.proposed_by===me?t('Your proposal','ההצעה שלך'):t('Your request','הבקשה שלך')}</strong>
+   <strong className="swap-card-title">{incoming?answerFor===me?t(`${name(r.requester_id===me?r.other_id:r.requester_id)} asks to swap`,`${name(r.requester_id===me?r.other_id:r.requester_id)} מבקש/ת להחליף`):t(`Answer for ${name(answerFor!)} (temporary)`,`מענה עבור ${name(answerFor!)} (זמני)`):admin?t('Swap to approve','החלפה לאישור'):r.proposed_by===me?t('Your proposal','ההצעה שלך'):t('Your request','הבקשה שלך')}</strong>
+   <Chip tone={status[1]} size="sm" className="swap-status">{status[0]}</Chip>
+  </div>
+  {/* Below the first row, everything spans the card (owner 2026-11-21). */}
+  <div className="swap-card-text">
     <span className="swap-card-pair">
      <span className="swap-party"><Avatar name={name(r.requester_id)} color={member(r.requester_id)?.color} size={22}/>{you(r.requester_id)} · {spanOf(r.from_day,r.from_end_day,lang)}</span>
      <span className="swap-party"><span className="swap-arrow">↔</span><Avatar name={name(r.other_id)} color={member(r.other_id)?.color} size={22}/>{you(r.other_id)} · {spanOf(r.to_day,r.to_end_day,lang)}</span>
@@ -151,8 +154,6 @@ export function SwapCard({r,swaps,remote,lang}:{r:SwapRequest;swaps:SwapActions;
     {r.explanation&&<p className="swap-explanation">{r.explanation}</p>}{r.override_reason&&<small>{t('Admin override','חריגת מנהל')}: {r.override_reason}</small>}
     {pending&&<ConstraintNotes raw={raw} r={r} name={name} lang={lang} me={me} admin={remote.isAdmin}/>}
     {refused&&<small className="swap-refused" role="note">{swaps.explain(refused,'accept')}</small>}
-   </div>
-   <Chip tone={status[1]} size="sm" className="swap-status">{status[0]}</Chip>
   </div>
   {pending&&<div className="swap-card-actions">
    {incoming&&<><Button size="sm" disabled={!!refused||remote.readOnly} onClick={()=>swaps.startAccept(r)}>{t('Accept','קבלה')}</Button><Button size="sm" variant="secondary" disabled={remote.readOnly} onClick={()=>swaps.decline(r)}>{t('Decline','סירוב')}</Button></>}

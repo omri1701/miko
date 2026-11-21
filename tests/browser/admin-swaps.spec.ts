@@ -162,6 +162,15 @@ for (const lang of ['en', 'he'] as const) test(`a member accepts a date they mar
     const card = b.locator('[data-swap-card]');
     // The owner reads their own constraint, note included.
     await expect(card.getByRole('note')).toHaveText(t('You marked 2 Nov as unavailable · Late private note', 'סימנת את 2 בנוב׳ כלא זמין · Late private note'));
+    // Owner 2026-11-21: below the title row, the people row and conflict lines span the card
+    // (not a column beside the icon), and the people row stays on one line.
+    const [cardBox, pairBox, noteBox, iconBox] = await Promise.all([card, card.locator('.swap-card-pair'), card.getByRole('note'), card.locator('.swap-card-icon')]
+      .map(l => l.boundingBox()));
+    for (const box of [pairBox!, noteBox!]) {
+      expect(box.y).toBeGreaterThanOrEqual(iconBox!.y + iconBox!.height - 1);
+      expect(box.width).toBeGreaterThan(cardBox!.width - 40);
+    }
+    expect(await card.locator('.swap-party').evaluateAll(parts => new Set(parts.map(p => Math.round(p.getBoundingClientRect().top))).size)).toBe(1);
     await card.getByRole('button', {name: t('Accept', 'קבלה'), exact: true}).click();
     await expect(b.getByRole('dialog')).toHaveCount(0);
     await expect.poll(() => backend.raw.swapRequests![0].accepted_by).toBe(ids.b);
