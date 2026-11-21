@@ -331,7 +331,7 @@ distinct callbacks and separate clients; keep localhost confined to Development.
 | `duty_members` | Profile, role FK, approval-status FK, active flag, seniority order and color (each member's own, through `duty_set_color`; admins through the team rows of `duty_save_schedule`). Deactivation retains history. |
 | `duty_workspace` | One revision counter for atomic saves and stale-edit detection. |
 | `duty_months` | Deadline, status FK, generated flag, current publication FK and monotonic version sequence. |
-| `duty_constraints` | Engineer/date, constraint-type FK and a private note. |
+| `duty_constraints` | Engineer/date, constraint-type FK, a private note and `duty_approved` (an admin approved that person on that date while on duty, #103). |
 | `duty_assignments` | Duty dates, primary/emergency member FKs, title, extra points, computed total points and publication FK. NULL publication means draft. |
 | `duty_publications` | Version ID, month FK, sequence number, publisher FK and timestamp. |
 | `duty_swap_requests` | Requester/consent/admin-visible requests, original slot snapshots/FKs, current counterpart, persisted consent (and the requester's own consent when an admin proposed the swap), proposing admin, resolution and override audit reason. |
@@ -750,12 +750,22 @@ sends one), the published duties are marked `manager_override`, and constraints 
 deleted. That migration also drops the short-lived `requester_waived_days`/`other_waived_days`
 columns. Published duty edits still require an override reason. Since
 `20261121190805_swap_approval_survives_republish.sql` (#103) the approval survives Reopen +
-Publish: each swapped duty whose new holder marked one of its dates unavailable is locked to
-them with the same `availability` approval Plan the month records (that person, those dates,
-reason "Swap approved by an admin" unless one was sent). Publishing drops an availability
-approval whose duty now has someone else or whose dates no longer match the constraints, so the
-normal check applies again; a refusal (`unavailable-primary: [...]`, `Availability conflict: [...]`)
-lists every conflict as `{member,day}` (never notes) and the app names each person. Published swap requests retain their
+Publish; `20261121215805_one_availability_approval.sql` (owner 2026-11-21) replaced its locks
+with one availability approval, `duty_constraints.duty_approved`: an admin approved that person
+on that unavailable date while they are on the duty covering it (open draft or current
+publication). The duty editor's box and a draft swap's approval (`save_schedule`'s
+`approve_unavailable`, kept only for someone on that date in the saved draft), an approved swap,
+a published edit with a reason and Publish anyway each set it; nothing creates a lock. Every
+check honors it: Publish (primaries and emergency cover; `manager_override` no longer counts),
+`generation_facts` (an approved date of the person on that duty is not a refusal, so Plan the
+month and its validators never ask again), `validate_swap` and `duty_swap_availability` (an
+approved cover date). It lapses when nobody keeps that person on that date
+(`prune_duty_approvals`, after saves, publishes, swaps and published edits); a newly marked
+unavailable date never has it, a note edit keeps it, and a weekend split or join keeps it.
+Publish refuses unapproved conflicts as `Availability conflict: [{member,day}]` (never notes);
+`publish_anyway` approves exactly that list, and a conflict missing from it is refused and listed
+again (no retryable SQLSTATE). Existing manager exceptions and Plan the month availability
+approvals were converted. Members read only their own constraints' flag. Published swap requests retain their
 weekend cap: a swap cannot increase an engineer's weekend count above one. Draft
 swaps can instead explicitly approve weekend exceptions in the manager dialog. Secondary
 cover, special date points/spans, draft rows/status and historical versions remain

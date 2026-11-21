@@ -39,12 +39,12 @@ import {AllocationDialog} from './allocation-dialog';
 import {allocationTotals, repaymentsTaken} from '@/lib/allocation/review';
 import {useIsraelToday} from '@/hooks/use-israel-today';
 import {useCalendarInteractions} from '@/hooks/use-calendar-interactions';
-import {fromSnapshot} from '@/lib/supabase/snapshot';
+import {fromSnapshot, type DayConflict} from '@/lib/supabase/snapshot';
 import {toast} from 'sonner';
 import {addDays, monthNext, blocks, ownerMonth, type Duty} from '@/lib/rota/engine';
 import {calendarDates, workspaceMetrics, visibleCalendarBlocks} from '@/lib/rota/workspace-data';
-import {userMessage} from '@/lib/messages';
-import {explainedMessage, conflictContext} from '@/lib/conflict-message';
+import {userMessage, availabilityConflicts} from '@/lib/messages';
+import {explainedMessage, conflictContext, conflictLine} from '@/lib/conflict-message';
 
 export function RotaWorkspace({remote, lang, setLang}: {remote: TeamWorkspace; lang: 'en' | 'he'; setLang: (lang: 'en' | 'he') => void}) {
   const mobile = useMobileLayout();
@@ -96,7 +96,9 @@ export function RotaWorkspace({remote, lang, setLang}: {remote: TeamWorkspace; l
   const state = remote.state!;
   const today = useIsraelToday();
   const [settingsOpen, setSettingsOpen] = useState(false), [historyOpen, setHistoryOpen] = useState(false);
-  const [settings, setSettings] = useState(false), [publishOpen, setPublishOpen] = useState(false);
+  const [settings, setSettings] = useState(false), [publishOpen, openPublish] = useState(false);
+  const [publishConflicts, setPublishConflicts] = useState<DayConflict[] | null>(null);
+  const setPublishOpen = (open: boolean) => {setPublishConflicts(null); openPublish(open);};
   const [person, setPerson] = useState(meId), [calendarChoice, setCalendarChoice] = useState({month: '', status: '', version: 'draft'});
   const [cancelDraftMonth, setCancelDraftMonth] = useState<string | null>(null);
   const [publishedEdit, setPublishedEdit] = useState<string | null>(null);
@@ -189,8 +191,17 @@ export function RotaWorkspace({remote, lang, setLang}: {remote: TeamWorkspace; l
       return true;
     } catch (e) {toast.error(userMessage((e as Error).message, t)); return false;}
   }
-  async function publish() {
-    if (!(await update((s) => ({...s, months: {...s.months, [month]: {...monthDetails, status: 'published', generated: true}}}), false))) return;
+  async function publish(anyway?: DayConflict[]) {
+    try {
+      if (!(await draft.update((s) => ({...s, months: {...s.months, [month]: {...monthDetails, status: 'published', generated: true}}}), false, false, undefined, anyway))) return;
+    } catch (e) {
+      // Who is on a date they marked unavailable: the popup lists the database's own list (a newer
+      // conflict included) and asks again, instead of an error.
+      const listed = availabilityConflicts((e as Error).message);
+      if (listed) {remote.clearError(); setPublishConflicts(listed); return;}
+      toast.error(explainedMessage((e as Error).message, t, conflictContext(remote, state, t)));
+      return;
+    }
     setPublishOpen(false);
     setCalendarChoice({month, status: 'published', version: 'draft'});
     interactions.resetSelection();
@@ -249,7 +260,8 @@ export function RotaWorkspace({remote, lang, setLang}: {remote: TeamWorkspace; l
   };
 
   // One state-driven primary action and a ⋯ menu for the rare ones (decision 2026-11-06).
-  const publishable = !allocationMismatch && metrics.assigned === metrics.owned.length && !metrics.conflicts.length && !!metrics.owned.length && !publishBlockers.length;
+  // Availability conflicts never block Publish: its popup lists them (owner 2026-11-21).
+  const publishable = !allocationMismatch && metrics.assigned === metrics.owned.length && !!metrics.owned.length && !publishBlockers.length;
   const planLabel = t('Plan the month', 'תכנון החודש'), closedReason = t('Coverage has started: manual edits and swaps only', 'הכיסוי החודשי התחיל: רק עריכה ידנית והחלפות');
   let primary: PrimaryAction | undefined, menu: MenuItem[] = [];
   if (isManager) {
@@ -384,7 +396,8 @@ export function RotaWorkspace({remote, lang, setLang}: {remote: TeamWorkspace; l
     <SpecialDutyDialog form={draft.special} month={month} lang={lang} t={t} fmt={fmt}/>
     <MonthSettingsDialog settings={settings} setSettings={setSettings} monthLabel={monthLabel} monthDetails={monthDetails} lang={lang} t={t}
       onDeadline={(deadline) => {update((s) => ({...s, months: {...s.months, [month]: {...monthDetails, deadline}}}), false);}}/>
-    <PublishDialog publishOpen={publishOpen} setPublishOpen={setPublishOpen} monthLabel={monthLabel} assigned={metrics.assigned} saving={!!remote?.saving} lang={lang} t={t} onPublish={publish}/>
+    <PublishDialog publishOpen={publishOpen} setPublishOpen={setPublishOpen} monthLabel={monthLabel} assigned={metrics.assigned} saving={!!remote?.saving} lang={lang} t={t} onPublish={publish}
+      conflicts={publishConflicts ?? metrics.unavailableDays} line={c => conflictLine(c, conflictContext(remote, state, t))}/>
   </>;
 }
 

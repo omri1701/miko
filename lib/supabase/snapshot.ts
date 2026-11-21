@@ -6,7 +6,7 @@ export type Role=Lookup&{can_manage:boolean};
 export type DutyRow={id:string;publication_id:string|null;day:string;end_day:string;primary_id:string|null;secondary_id:string|null;locked?:boolean;manager_override:boolean;title:string;extra_points:number;/** Combined weekends only: the Saturday date's own extra; absent in rows saved before it existed. */saturday_extra_points?:number;points:number};
 export type Publication={id:string;month:string;version:number;published_at:string;published_by:string};
 export type SwapRequest={id:string;month:string;source_publication_id:string|null;requester_id:string;other_id:string;from_day:string;from_end_day:string;to_day:string;to_end_day:string;explanation:string;status:'awaiting_engineer'|'awaiting_admin'|'approved'|'declined'|'rejected'|'cancelled'|'invalidated';accepted_by:string|null;accepted_at:string|null;created_at:string;resolved_at:string|null;resolved_by:string|null;result_publication_id:string|null;override_reason:string;/** The admin who proposed the swap for both members; absent or null when the requester asked. */proposed_by?:string|null;/** The requester's own consent to an admin's proposal. */requester_accepted_at?:string|null};
-export type Snapshot={swapRequests?:SwapRequest[];revision:number|null;members:Member[];months:{month:string;deadline:string;status:'draft'|'published';generated:boolean;current_publication_id:string|null;publication_sequence:number}[];constraints:{member_id:string;day:string;kind:'no'|'prefer';note:string}[];assignments:DutyRow[];publications:Publication[];roles:Role[];memberStatuses:Lookup[];monthStatuses:Lookup[];constraintTypes:Lookup[]};
+export type Snapshot={swapRequests?:SwapRequest[];revision:number|null;members:Member[];months:{month:string;deadline:string;status:'draft'|'published';generated:boolean;current_publication_id:string|null;publication_sequence:number}[];constraints:{member_id:string;day:string;kind:'no'|'prefer';note:string;duty_approved?:boolean}[];assignments:DutyRow[];publications:Publication[];roles:Role[];memberStatuses:Lookup[];monthStatuses:Lookup[];constraintTypes:Lookup[]};
 type Check = (value: unknown) => boolean;
 const text: Check = value => typeof value === 'string';
 const number: Check = value => typeof value === 'number' && Number.isFinite(value);
@@ -21,7 +21,7 @@ const snapshotChecks = {
  revision,
  members: rows({id:text,email:nullableText,is_temporary:value=>value===undefined||boolean(value),auth_user_id:value=>value===undefined||nullableText(value),no_weekends:value=>value===undefined||boolean(value),language:value=>value===undefined||value===null||oneOf('en','he')(value),name:text,role:text,status:text,active:boolean,seniority:number,color:text}),
  months: rows({month:text,deadline:text,status:oneOf('draft','published'),generated:boolean,current_publication_id:nullableText,publication_sequence:number}),
- constraints: rows({member_id:text,day:text,kind:oneOf('no','prefer'),note:text}),
+ constraints: rows({member_id:text,day:text,kind:oneOf('no','prefer'),note:text,duty_approved:value=>value===undefined||boolean(value)}),
  assignments: rows({id:text,publication_id:nullableText,day:text,end_day:text,primary_id:nullableText,secondary_id:nullableText,locked:value=>value===undefined||boolean(value),manager_override:boolean,title:text,extra_points:number,saturday_extra_points:value=>value===undefined||number(value),points:number}),
  publications: rows({id:text,month:text,version:number,published_at:text,published_by:text}),
  roles: rows({...lookup,can_manage:boolean}),
@@ -61,7 +61,8 @@ export function fromSnapshot(raw:Snapshot,userId:string,previewPublication?:stri
  const admin=canManage(raw,userId);
  const state:State={version:3,team:raw.members.filter(m=>m.status==='approved').map(m=>({id:m.id,name:m.name,color:m.color,active:m.active,role:m.role,...(m.no_weekends?{noWeekends:true}:{})})),constraints:{},constraintNotes:{},assignments:{},specials:[],splitWeekends:[],months:{}};
  for(const m of raw.months)state.months[m.month]={deadline:m.deadline,status:admin&&!previewPublication&&!published?m.status:m.current_publication_id?'published':'draft',generated:m.generated};
- for(const c of raw.constraints){(state.constraints[c.member_id]??={})[c.day]=c.kind;if(c.note)(state.constraintNotes![c.member_id]??={})[c.day]=c.note}
+ for(const c of raw.constraints){(state.constraints[c.member_id]??={})[c.day]=c.kind;if(c.note)(state.constraintNotes![c.member_id]??={})[c.day]=c.note;
+  if(c.kind==='no'&&c.duty_approved)((state.dutyApproved??={})[c.member_id]??={})[c.day]=true}
  if(previewPublication)return applyRows(state,raw.assignments.filter(r=>r.publication_id===previewPublication));
   const current=new Set(raw.months.map(m=>m.current_publication_id)),publicationMonths=new Map(raw.publications.map(p=>[p.id,p.month]));
  // The owning Friday's publication wins over a copied weekend in the next month.
@@ -76,7 +77,8 @@ export function publishedHistory(raw:Snapshot,exceptMonth?:string):PublishedMont
  return raw.months.filter(m=>m.current_publication_id&&m.month!==exceptMonth).map(m=>({month:m.month,
   duties:raw.assignments.filter(r=>r.publication_id===m.current_publication_id&&rowOwner(r)===m.month).map(r=>({startDate:r.day,primary:r.primary_id}))}));
 }
-export function schedulePayload(s:State,month?:string,publish=false,reviewedLocks?:string[]){
+export type DayConflict={member:string;day:string};
+export function schedulePayload(s:State,month?:string,publish=false,reviewedLocks?:string[],publishAnyway?:DayConflict[]){
   const months=new Set(month?[month]:Object.keys(s.months));
  const duties=new Map<string,ReturnType<typeof blocks>[number]>();
  for(const month of months)for(const duty of blocks(month,s.specials,s.splitWeekends)){
@@ -85,6 +87,9 @@ export function schedulePayload(s:State,month?:string,publish=false,reviewedLock
  }
   // Each row stores its own date's extra; a combined weekend also stores Saturday's.
   const extraAt=(date:string)=>specialAt(s.specials,date)?.extra??0;
-  return {...(reviewedLocks?{lock_edits:reviewedLocks}:{}),team:s.team.map(({id,color,active})=>({id,color,active})),months:Object.fromEntries([...months].filter(m=>s.months[m]).map(m=>[m,s.months[m]])),duties:[...duties.values()].map(d=>({day:d.start,end_day:d.end,primary_id:s.assignments[d.id]?.primary||null,secondary_id:s.assignments[d.id]?.secondary||null,manager_override:!!s.assignments[d.id]?.override,locked:!!s.assignments[d.id]?.locked,title:d.title??'',extra_points:extraAt(d.start),saturday_extra_points:d.end===addDays(d.start,2)?extraAt(addDays(d.start,1)):0}))};
+  // Admin approvals of people on dates they marked unavailable (owner 2026-11-21); the database
+  // keeps only those of someone on that date in this draft. Publish anyway lists what it approves.
+  const approved=Object.entries(s.dutyApproved??{}).flatMap(([member,days])=>Object.keys(days).sort().map(day=>({member,day})));
+  return {...(reviewedLocks?{lock_edits:reviewedLocks}:{}),...(approved.length?{approve_unavailable:approved}:{}),...(publishAnyway?{publish_anyway:publishAnyway}:{}),team:s.team.map(({id,color,active})=>({id,color,active})),months:Object.fromEntries([...months].filter(m=>s.months[m]).map(m=>[m,s.months[m]])),duties:[...duties.values()].map(d=>({day:d.start,end_day:d.end,primary_id:s.assignments[d.id]?.primary||null,secondary_id:s.assignments[d.id]?.secondary||null,manager_override:!!s.assignments[d.id]?.override,locked:!!s.assignments[d.id]?.locked,title:d.title??'',extra_points:extraAt(d.start),saturday_extra_points:d.end===addDays(d.start,2)?extraAt(addDays(d.start,1)):0}))};
 }
 export {todayIsrael} from '../rota/calendar-dates.ts';

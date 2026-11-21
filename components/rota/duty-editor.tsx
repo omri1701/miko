@@ -7,7 +7,7 @@ import {EditorDialog} from '@/components/rota/editor-dialog';
 import {constraintLine} from '@/lib/supabase/swaps';
 import {DayCard,DayCards,DayHeading,KeepChoice,SplitJoinRow,WeekendLayoutSwitch,useWeekendLayout,type Half} from '@/components/rota/weekend-cards';
 import {Select,SelectTrigger,SelectValue,SelectContent,SelectItem} from '@/components/ui/select';
-import {addDays,blocks,noWeekendPlacements,ownerMonth,unavailable,weekendAssignments,setWeekendAssignments,weekendCounts,type State,type Duty,type Assignment} from '@/lib/rota/engine';
+import {addDays,blocks,noWeekendPlacements,ownerMonth,unavailable,unapproved,approveDates,weekendAssignments,setWeekendAssignments,weekendCounts,type State,type Duty,type Assignment} from '@/lib/rota/engine';
 
 /** Edits one duty. A weekend opens as one card with a "One weekend | Two days" switch; two days
  * edits each date like a regular day. Saving identical halves joins them (normalizeWeekends). */
@@ -32,12 +32,14 @@ export function DutyEditor({state,duty,month,lang,onClose,onMonth,onSave,onRemov
  const fmt=(d:string)=>new Date(d+'T12:00:00Z').toLocaleDateString(lang==='en'?'en-GB':'he-IL',{day:'numeric',month:'short',timeZone:'UTC'});
  const range=lang==='en'&&friday.slice(0,7)===saturday.slice(0,7)?`${dateLabel(friday).replace(/ \S+$/,'')} – ${dateLabel(saturday)}`:`${dateLabel(friday)} – ${dateLabel(saturday)}`;
  const pts=(n:number)=>`${n} ${t('pt','נק׳')}`;
- const conflicts=edits.flatMap(({block,assignment})=>[assignment.primary,assignment.secondary].filter((id):id is string=>!!id).flatMap(id=>unavailable(block,id,state.constraints).map(date=>constraintLine({member:id,day:date,note:state.constraintNotes?.[id]?.[date]},{me,name,day:fmt,lang}))));
+ // Dates already approved for that person are never asked again (owner 2026-11-21).
+ const unapprovedDays=edits.flatMap(({block,assignment})=>[assignment.primary,assignment.secondary].filter((id):id is string=>!!id).flatMap(id=>unapproved(block,id,state).map(day=>({member:id,day}))));
+ const conflicts=unapprovedDays.map(({member:id,day:date})=>constraintLine({member:id,day:date,note:state.constraintNotes?.[id]?.[date]},{me,name,day:fmt,lang}));
  // A No weekends member newly placed on either day needs approval, like unavailability.
  const skipped=weekend?noWeekendPlacements(state,[{duty:day(friday),assignment:fri,before:initialFri},{duty:day(saturday),assignment:sat,before:initialSat}]).map(c=>t(`${name(c.person)} doesn’t take weekends · ${fmt(c.date)}`,`${name(c.person)} לא עושה סופי שבוע · ${fmt(c.date)}`)):[];
  const skips=(id:string)=>weekend&&!!state.team.find(p=>p.id===id)?.noWeekends;
  const duplicate=edits.some(({assignment:a})=>a.primary&&a.primary===a.secondary);
- function change(s:State,approved=false){const clean=(a:Assignment,initial:Assignment):Assignment=>({primary:a.primary,secondary:a.secondary,locked:a.primary?a.locked:undefined,override:approved||(a.primary===initial.primary&&a.secondary===initial.secondary&&initial.override)||undefined});return weekend?setWeekendAssignments(s,friday,clean(fri,initialFri),clean(sat,initialSat)):{...s,assignments:{...s.assignments,[duty.id]:clean(fri,initialFri)}}}
+ function change(s:State,approved=false){if(approved)s=approveDates(s,unapprovedDays);const clean=(a:Assignment,initial:Assignment):Assignment=>({primary:a.primary,secondary:a.secondary,locked:a.primary?a.locked:undefined,override:approved||(a.primary===initial.primary&&a.secondary===initial.secondary&&initial.override)||undefined});return weekend?setWeekendAssignments(s,friday,clean(fri,initialFri),clean(sat,initialSat)):{...s,assignments:{...s.assignments,[duty.id]:clean(fri,initialFri)}}}
  const before=weekendCounts(state,month),after=weekendCounts(change(state),month);
  const extraWeekends=Object.keys(after).filter(id=>after[id]>1&&after[id]>(before[id]??0));
  const needsOverride=!!(conflicts.length||extraWeekends.length||skipped.length);

@@ -18,7 +18,8 @@ begin
   where x.id in (a.id,b.id)) then raise exception 'Published duty dates overlap'; end if;
  -- Emergency cover's unavailability refuses a request. A primary's own constraint never
  -- does (#92): they consent by sending or accepting; the admin's approval overrides both.
- select exists(select 1 from public.duty_constraints c where c.kind='no' and
+ -- An admin-approved date of that cover (owner 2026-11-21) is never asked again.
+ select exists(select 1 from public.duty_constraints c where c.kind='no' and not c.duty_approved and
   ((c.member_id=a.secondary_id and c.day>=a.day and c.day<a.end_day)
    or (c.member_id=b.secondary_id and c.day>=b.day and c.day<b.end_day))) into conflicts;
  if conflicts and not p_override then raise exception 'Availability conflict. An admin must explicitly override with a reason.'; end if;

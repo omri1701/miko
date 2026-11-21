@@ -33,8 +33,8 @@ const sql=query=>{const r=spawnSync('docker',['exec','-i',container,'psql','-XqA
 const rev='(select revision from public.duty_workspace where id)';
 const current=m=>`(select current_publication_id from public.duty_months where month='${m}')`;
 const as=id=>`set local request.jwt.claim.sub='${id}';`;
-const publish=(m,deadline='2027-11-24')=>`select public.duty_save_schedule(jsonb_build_object('team','[]'::jsonb,'months',jsonb_build_object('${m}',jsonb_build_object('status','draft','deadline','${deadline}','generated',true)),
- 'duties',(select jsonb_agg(to_jsonb(a)) from public.duty_assignments a where publication_id is null and day>='${m}-01' and day<'${{[month]:next,[next]:'2028-02','2028-02':'2028-03'}[m]}-01')),${rev},'${m}');`;
+const publish=(m,deadline='2027-11-24',extra={},publishing=true)=>`select public.duty_save_schedule(${quote(extra)}||jsonb_build_object('team','[]'::jsonb,'months',jsonb_build_object('${m}',jsonb_build_object('status','draft','deadline','${deadline}','generated',true)),
+ 'duties',(select jsonb_agg(to_jsonb(a)) from public.duty_assignments a where publication_id is null and day>='${m}-01' and day<'${{[month]:next,[next]:'2028-02','2028-02':'2028-03'}[m]}-01')),${rev},${publishing?`'${m}'`:'null'});`;
 function setup(cover=false) {
  const {draft,placed}=plan(cover);
  return `begin;
@@ -54,8 +54,8 @@ update context set v=public.duty_save_generation('${month}',${quote(placed)},(v-
 `+publish(month);
 }
 const failure=(command,pattern)=>`select pg_temp.must_fail($command$${command}$command$,'${pattern}');`;
-const edit=(day,primary,{extra=0,kind='temporary',publication=current(month),revision=rev}={})=>
- `select public.duty_edit_published_duty(${publication},'${day}','${primary}',${extra},0,'${kind}',${revision},'');`;
+const edit=(day,primary,{extra=0,kind='temporary',publication=current(month),revision=rev,reason=''}={})=>
+ `select public.duty_edit_published_duty(${publication},'${day}','${primary}',${extra},0,'${kind}',${revision},'${reason}');`;
 const restore=`select public.duty_restore_publication(${current(month)},${rev});`;
 // Every step reports the actual ledger, the end-of-time Team balance and the month's versions.
 const report=label=>`reset role;select jsonb_build_object('label','${label}','view',duty_private.compensation_view(duty_private.compensation_state()),
@@ -166,28 +166,65 @@ assert.equal(r.swapped.swap,'approved');assert.deepEqual(nets(r.swapped),debt(a,
 r=run(edit(x.id,a,{extra:1})+swap+approve+report('swapped')+restore+publish(month)+report('republished'));
 assert.equal(r.swapped.swap,'approved');assert.deepEqual(nets(r.swapped),debt(a,ay,2));
 assert.deepEqual(nets(r.republished),debt(a,ay,2));assert.equal(r.republished.status,'published');
-// #103 (user-approved fix 2026-11-21): publish → approve a swap over a constraint → reopen →
-// publish. The swapped duty keeps its approval: locked to the new holder with Plan the month's
-// availability approval for exactly that person and date. It expires when either changes.
+// #103 (owner 2026-11-21): one availability approval, no locks. The duty editor's box, an
+// approved swap, a published edit with a reason and "Publish anyway" each approve that person on
+// that unavailable date; every later check honors it. It lapses for someone else on the duty or a
+// newly marked date; a weekend split or join keeps it.
 const unavailable=(member,day)=>`reset role;insert into public.duty_constraints values('${member}','${day}','no','Doctor');set local role authenticated;`;
-const approvals=label=>`reset role;select jsonb_build_object('label','${label}','approvals',(select approvals from public.duty_allocations where publication_id=${current(month)}),
- 'locked',(select jsonb_object_agg(day,primary_id) from public.duty_assignments where publication_id=${current(month)} and locked and day in ('${x.id}','${y.id}')));set local role authenticated;`;
-r=run(unavailable(ay,x.id)+swap+approve+approvals('swapped')+restore+publish(month)+report('republished')+approvals('again'));
+const approvedNow=label=>`reset role;select jsonb_build_object('label','${label}','approved',(select coalesce(jsonb_agg(jsonb_build_object('member',member_id,'day',day) order by day,member_id),'[]') from public.duty_constraints where duty_approved),
+ 'locks',(select count(*) from public.duty_assignments where locked),'planLocks',(select coalesce(sum(jsonb_array_length(locks)),0) from public.duty_allocations));set local role authenticated;`;
+// The refusal's [{day,member}] list as a regular expression.
+const refusal=list=>('Availability conflict: '+JSON.stringify(list.map(({member,day})=>({day,member}))).replaceAll('":"','": "').replaceAll('","','", "').replaceAll('},{','}, {')).replace(/[[\]{}]/g,ch=>'\\'+ch);
+const asPostgres=command=>`reset role;${command};set local role authenticated;`;
+// 1. The duty editor's box: x goes to ay (unavailable), y to a, approved and saved; Publish passes.
+const trade=(onX,onY)=>asPostgres(`update public.duty_assignments set primary_id=case day when '${x.id}' then '${onX}'::uuid else '${onY}'::uuid end where publication_id is null and day in ('${x.id}','${y.id}')`);
+r=run(restore+unavailable(ay,x.id)+trade(ay,a)+failure(publish(month).replace(/;$/,''),refusal([{member:ay,day:x.id}]))
+ +publish(month,undefined,{approve_unavailable:[{member:ay,day:x.id}]},false)+publish(month)+report('boxed')+approvedNow('boxApproved'));
+assert.equal(r.boxed.status,'published','the box approves it for Publish');
+assert.deepEqual(r.boxApproved.approved,[{member:ay,day:x.id}]);assert.equal(r.boxApproved.locks+r.boxApproved.planLocks,0,'no lock');
+// 2. A swap approved after Publish → Reopen → Publish: never asked again, and no lock.
+r=run(unavailable(ay,x.id)+swap+approve+approvedNow('swapped')+restore+publish(month)+report('republished')+approvedNow('again'));
 assert.equal(r.republished.status,'published','Reopen + Publish after a swap over a constraint');
-assert.deepEqual(r.swapped.locked,{[x.id]:ay},'the swapped duty is locked to its new holder');
-for(const label of ['swapped','again'])assert.deepEqual(r[label].approvals.filter(v=>v.rule==='availability'),
- [{rule:'availability',reason:'Swap approved by an admin',dutyId:x.id,engineer:ay,dates:[x.id]}],`${label}: exactly that person and date`);
-// The constraint is gone before republishing: the approval is dropped and nothing blocks.
-r=run(unavailable(ay,x.id)+swap+approve+restore+`reset role;delete from public.duty_constraints where member_id='${ay}';set local role authenticated;`+publish(month)+report('republished')+approvals('after'));
-assert.equal(r.republished.status,'published');
-assert.deepEqual(r.after.approvals.filter(v=>v.rule==='availability'),[],'a stale approval expires');
-// The duty goes to someone else who is unavailable too: the approval does not follow them, and the
-// refusal names who and when (never the note).
-r=run(unavailable(ay,x.id)+swap+approve+restore+unavailable(c,x.id)
- +`reset role;update public.duty_assignments set primary_id='${c}' where publication_id is null and day='${x.id}';set local role authenticated;`
- +failure(publish(month).replace(/;$/,''),`unavailable-primary: \\[\\{"day": "${x.id}", "member": "${c}"\\}\\]`)+report('refused'));
-assert.equal(r.refused.status,'draft');
-console.log('PASS: a swap approved over a constraint survives Reopen + Publish; the approval expires when the duty or constraint changes');
+for(const label of ['swapped','again']){assert.deepEqual(r[label].approved,[{member:ay,day:x.id}],label);assert.equal(r[label].locks+r[label].planLocks,0,`${label}: no lock`);}
+// 3. A published edit with a reason → Reopen → Publish.
+r=run(unavailable(b,x.id)+failure(edit(x.id,b).replace(/;$/,''),'with a reason')+edit(x.id,b,{reason:'Covering'})+approvedNow('edited')+restore+publish(month)+report('republished'));
+assert.deepEqual(r.edited.approved,[{member:b,day:x.id}]);assert.equal(r.republished.status,'published','Reopen + Publish after an edit with a reason');
+// Someone else on the duty: the approval lapses, so it is never reused when they come back.
+r=run(unavailable(ay,x.id)+swap+approve+restore+trade(a,ay)+publish(month)+approvedNow('moved'));
+assert.deepEqual(r.moved.approved,[],'another person on the duty ends the approval');
+console.log('PASS: the box, an approved swap and an edit with a reason each approve for good; no locks; a new holder lapses it');
+// A month without a plan: Publish lists every unapproved conflict; "Publish anyway" approves exactly
+// those; a conflict newer than the list is refused and listed again; split and join keep it.
+{
+ const feb='2028-02',days=canonicalDuties(feb,{}),wk=days.find(d=>d.weekendId),h=ids[1],[fri,sat]=wk.dates;
+ const rows=days.map((d,i)=>`('${d.startDate}','${d.endDate}','${d===wk?h:ids[5+i%7]}')`).join(',');
+ const month2=asPostgres(`insert into public.duty_months(month,deadline) values('${feb}','2028-01-24');insert into public.duty_assignments(day,end_day,primary_id) values ${rows}`);
+ const pub=(extra={})=>publish(feb,'2028-01-24',extra);
+ const reopen=`select public.duty_restore_publication(${current(feb)},${rev});`;
+ const febStatus=label=>`reset role;select jsonb_build_object('label','${label}','status',(select status from public.duty_months where month='${feb}'),
+  'approved',(select coalesce(jsonb_agg(jsonb_build_object('member',member_id,'day',day) order by day,member_id),'[]') from public.duty_constraints where duty_approved));set local role authenticated;`;
+ // 5. Publish anyway publishes and records the approval; 4. a newly marked date is listed alone.
+ r=run(month2+unavailable(h,sat)+failure(pub().replace(/;$/,''),refusal([{member:h,day:sat}]))+pub({publish_anyway:[{member:h,day:sat}]})+febStatus('anyway')
+  +reopen+unavailable(h,fri)+failure(pub().replace(/;$/,''),refusal([{member:h,day:fri}]))+febStatus('new'));
+ assert.equal(r.anyway.status,'published');assert.deepEqual(r.anyway.approved,[{member:h,day:sat}]);
+ assert.equal(r.new.status,'draft','a new unavailable date asks again');
+ // 6. A conflict that appeared after the list was shown: refused, and the whole list comes back.
+ r=run(month2+unavailable(h,sat)+unavailable(h,fri)+failure(pub({publish_anyway:[{member:h,day:sat}]}).replace(/;$/,''),refusal([{member:h,day:fri},{member:h,day:sat}]))+febStatus('stale'));
+ assert.equal(r.stale.status,'draft');assert.deepEqual(r.stale.approved,[],'nothing approved by a stale list');
+ // 7. Split the approved weekend in the draft (same person on both halves), publish, join, publish.
+ const split=asPostgres(`update public.duty_assignments set end_day='${sat}' where publication_id is null and day='${fri}';insert into public.duty_assignments(day,end_day,primary_id) values('${sat}','${wk.endDate}','${h}')`);
+ const join=asPostgres(`delete from public.duty_assignments where publication_id is null and day='${sat}';update public.duty_assignments set end_day='${wk.endDate}' where publication_id is null and day='${fri}'`);
+ r=run(month2+unavailable(h,sat)+unavailable(h,fri)+pub({publish_anyway:[{member:h,day:fri},{member:h,day:sat}]})+reopen+split+pub()+febStatus('split')+reopen+join+pub()+febStatus('joined'));
+ for(const label of ['split','joined']){assert.equal(r[label].status,'published',label);assert.deepEqual(r[label].approved,[{member:h,day:fri},{member:h,day:sat}],label);}
+ // Cancel draft takes a draft-only approval with it: putting that person back asks again.
+ const other=ids[2],weekday=days.find(d=>!d.weekendId&&d.startDate>sat);
+ const onWeekday=who=>asPostgres(`update public.duty_assignments set primary_id='${who}' where publication_id is null and day='${weekday.startDate}'`);
+ r=run(month2+pub()+reopen+unavailable(other,weekday.startDate)+onWeekday(other)+publish(feb,'2028-01-24',{approve_unavailable:[{member:other,day:weekday.startDate}]},false)+febStatus('approved')
+  +`select public.duty_cancel_draft('${feb}',${rev});`+febStatus('cancelled')+reopen+onWeekday(other)+failure(pub().replace(/;$/,''),refusal([{member:other,day:weekday.startDate}]))+febStatus('again'));
+ assert.deepEqual(r.approved.approved,[{member:other,day:weekday.startDate}]);
+ assert.deepEqual(r.cancelled.approved,[],'Cancel draft ends a draft-only approval');assert.equal(r.again.status,'draft','putting them back asks again');
+ console.log('PASS: Publish lists conflicts; Publish anyway approves exactly them; a newer one is refused and listed; split/join keep approvals');
+}
 for(const day of [x.id,y.id]) {
  const owner=day===x.id?a:ay;
  r=run(swap+edit(day,owner,{extra:2})+report('extra')+failure(approve,'no longer pending')+report('after'));

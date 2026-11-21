@@ -12,5 +12,7 @@ begin
  delete from public.duty_assignments where publication_id is null and duty_private.duty_owner(day)=p_month;
  delete from public.duty_allocations where month=p_month and publication_id is null;
  update public.duty_months set status='published',generated=true where month=p_month;
+ -- Whoever this left off a date loses its availability approval (#103).
+ perform duty_private.prune_duty_approvals();
  update public.duty_workspace set revision=revision+1 where id;
 end $$;

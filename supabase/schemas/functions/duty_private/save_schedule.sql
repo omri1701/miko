@@ -3,7 +3,7 @@ CREATE FUNCTION duty_private.save_schedule(p_state jsonb, p_revision bigint, p_p
     SET search_path TO ''
     AS $$
 #variable_conflict use_column
-declare x record; item jsonb; d date; a public.duty_assignments; m public.duty_months; first_day date; last_day date; publication uuid; next_version integer; locks_before jsonb; changed_locks jsonb; f jsonb; result jsonb; allocation public.duty_allocations;
+declare x record; item jsonb; d date; a public.duty_assignments; m public.duty_months; first_day date; last_day date; publication uuid; next_version integer; locks_before jsonb; changed_locks jsonb; f jsonb; result jsonb; allocation public.duty_allocations; conflicts jsonb;
 begin
  if not duty_private.is_manager() then raise exception 'Admin access required' using errcode='42501'; end if;
  perform duty_private.check_revision(p_revision);
@@ -11,6 +11,8 @@ begin
  if jsonb_typeof(p_state->'duties') is distinct from 'array' or jsonb_typeof(p_state->'months') is distinct from 'object' or jsonb_typeof(p_state->'team') is distinct from 'array' or length(p_state::text)>2000000 then raise exception 'Invalid schedule'; end if;
  select coalesce(jsonb_agg(jsonb_build_object('day',a.day,'end_day',a.end_day,'primary_id',a.primary_id,'points',a.points)),'[]') into locks_before
  from public.duty_assignments a where a.publication_id is null and a.locked;
+ if (p_state ? 'approve_unavailable' and (jsonb_typeof(p_state->'approve_unavailable') is distinct from 'array' or jsonb_array_length(p_state->'approve_unavailable')>5000))
+  or (p_state ? 'publish_anyway' and (jsonb_typeof(p_state->'publish_anyway') is distinct from 'array' or jsonb_array_length(p_state->'publish_anyway')>5000)) then raise exception 'Invalid schedule'; end if;
  if p_state ? 'lock_edits' and (jsonb_typeof(p_state->'lock_edits') is distinct from 'array' or exists(select 1 from jsonb_array_elements_text(p_state->'lock_edits') d where not (p_state->'months' ? duty_private.duty_owner(d::date)))) then raise exception 'Invalid lock review'; end if;
  for x in select value,ordinality from jsonb_array_elements(p_state->'team') with ordinality loop
   -- Profile names and roles have separate checked operations.
@@ -38,6 +40,14 @@ begin
   on conflict(publication_id,day) do update set end_day=excluded.end_day,primary_id=excluded.primary_id,secondary_id=excluded.secondary_id,manager_override=excluded.manager_override,title=excluded.title,extra_points=excluded.extra_points,saturday_extra_points=excluded.saturday_extra_points,locked=case when item ? 'locked' then excluded.locked else duty_assignments.locked end;
  end loop;
  if exists(select 1 from public.duty_assignments first_duty join public.duty_assignments other_duty on first_duty.day<other_duty.day and first_duty.end_day>other_duty.day where first_duty.publication_id is null and other_duty.publication_id is null) then raise exception 'Duty dates overlap'; end if;
+ -- One availability approval (owner 2026-11-21): the admin approved that person on that
+ -- unavailable date (the duty editor's box, a draft swap) while they are on it in this draft.
+ -- No lock; a weekend split or join keeps it, since it belongs to the person and date.
+ update public.duty_constraints c set duty_approved=true from jsonb_array_elements(coalesce(p_state->'approve_unavailable','[]')) x
+ where c.kind='no' and not c.duty_approved and c.member_id::text=x->>'member' and c.day::text=x->>'day'
+  and exists(select 1 from public.duty_assignments a where a.publication_id is null and c.day>=a.day and c.day<a.end_day
+   and c.member_id in (a.primary_id,a.secondary_id) and p_state->'months' ? duty_private.duty_owner(a.day));
+ perform duty_private.prune_duty_approvals();
  if exists(select 1 from jsonb_array_elements(locks_before) l where not exists(select 1 from public.duty_assignments a where a.publication_id is null
   and a.day=(l->>'day')::date and a.end_day=(l->>'end_day')::date and a.primary_id=(l->>'primary_id')::uuid and a.points=(l->>'points')::numeric and a.locked) and not coalesce(p_state->'lock_edits','[]') ? (l->>'day')) then raise exception 'Explicitly review locks before changing locked work'; end if;
  -- Lock edits are atomic with the primary save. Unrelated locks and approvals survive.
@@ -63,28 +73,23 @@ begin
    select * into a from public.duty_assignments where publication_id is null and day<=d and end_day>d;
    if a.primary_id is null or not exists(select 1 from public.duty_members where id=a.primary_id and status='approved' and active) then raise exception 'An active engineer is required on %',d; end if;
    if a.secondary_id is not null and not exists(select 1 from public.duty_members where id=a.secondary_id and status='approved' and active) then raise exception 'Emergency engineer is inactive on %',d; end if;
-   if not a.manager_override and exists(select 1 from public.duty_constraints c where c.member_id in (a.primary_id,a.secondary_id) and c.day=d and c.kind='no'
-    and not (c.member_id=a.primary_id and exists(select 1 from public.duty_allocations meta,jsonb_array_elements(meta.approvals) approved
-     where meta.month=p_publish and meta.publication_id is null and approved->>'rule'='availability' and approved->>'dutyId'=a.day::text and approved->>'engineer'=a.primary_id::text
-     and (approved->'dates') ? d::text))) then
-    -- Who and when, every one of them (#103): the app names each as a person (never a note here).
-    raise exception 'Availability conflict: %',(select jsonb_agg(jsonb_build_object('member',c.member_id,'day',c.day) order by c.day,c.member_id)
-     from public.duty_assignments a2 join public.duty_constraints c on c.kind='no' and c.day>=greatest(a2.day,first_day) and c.day<a2.end_day and c.day<=last_day
-      and c.member_id in (a2.primary_id,a2.secondary_id)
-     where a2.publication_id is null and not a2.manager_override and duty_private.duty_owner(a2.day)=p_publish
-      and not (c.member_id=a2.primary_id and exists(select 1 from public.duty_allocations meta,jsonb_array_elements(meta.approvals) approved
-       where meta.month=p_publish and meta.publication_id is null and approved->>'rule'='availability' and approved->>'dutyId'=a2.day::text and approved->>'engineer'=a2.primary_id::text
-       and (approved->'dates') ? c.day::text)));
-   end if;
   end loop;
-  -- An availability approval holds for exactly its person and dates (#103): one whose duty now
-  -- has someone else, or whose dates no longer match that person's constraints, is dropped, so
-  -- the normal check applies again.
-  update public.duty_allocations meta set approvals=coalesce((select jsonb_agg(v) from jsonb_array_elements(meta.approvals) v where v->>'rule'<>'availability'
-   or (select jsonb_agg(q order by q) from jsonb_array_elements(v->'dates') q)=(select jsonb_agg(to_jsonb(c.day::text) order by c.day) from public.duty_assignments a2
-    join public.duty_constraints c on c.member_id=a2.primary_id and c.kind='no' and c.day>=a2.day and c.day<a2.end_day
-    where a2.publication_id is null and a2.day::text=v->>'dutyId' and a2.primary_id::text=v->>'engineer')),'[]')
-  where meta.month=p_publish and meta.publication_id is null;
+  -- Every primary's and emergency cover's unavailable date on this month's duties is approved,
+  -- or listed here as who and when (never a note). "Publish anyway" approves exactly the listed
+  -- conflicts; one that appeared since is refused and listed again (owner 2026-11-21).
+  select coalesce(jsonb_agg(jsonb_build_object('member',c.member_id,'day',c.day) order by c.day,c.member_id),'[]') into conflicts
+  from public.duty_assignments a2 join public.duty_constraints c on c.kind='no' and not c.duty_approved and c.day>=greatest(a2.day,first_day) and c.day<a2.end_day and c.day<=last_day
+   and c.member_id in (a2.primary_id,a2.secondary_id)
+  where a2.publication_id is null and duty_private.duty_owner(a2.day)=p_publish
+   and not (c.member_id=a2.primary_id and exists(select 1 from public.duty_allocations meta,jsonb_array_elements(meta.approvals) approved
+    where meta.month=p_publish and meta.publication_id is null and approved->>'rule'='availability' and approved->>'dutyId'=a2.day::text and approved->>'engineer'=a2.primary_id::text
+    and (approved->'dates') ? c.day::text));
+  if conflicts<>'[]' then
+   if not (p_state ? 'publish_anyway') or exists(select 1 from jsonb_array_elements(conflicts) x where not (p_state->'publish_anyway') @> jsonb_build_array(x)) then
+    raise exception 'Availability conflict: %',conflicts;
+   end if;
+   update public.duty_constraints c set duty_approved=true from jsonb_array_elements(conflicts) x where c.member_id::text=x->>'member' and c.day::text=x->>'day' and c.kind='no';
+  end if;
   select * into allocation from public.duty_allocations where month=p_publish and publication_id is null;
   if allocation.month is not null then
    f:=duty_private.generation_facts(p_publish);
@@ -102,6 +107,8 @@ begin
   delete from public.duty_assignments where publication_id is null and duty_private.duty_owner(day)=p_publish;
   delete from public.duty_allocations where month=p_publish and publication_id is null;
   update public.duty_months set current_publication_id=publication,status='published',generated=true where month=p_publish;
+  -- Whoever left a date in this version loses its approval.
+  perform duty_private.prune_duty_approvals();
  end if;
  update public.duty_workspace set revision=revision+1 where id;
 end $$;

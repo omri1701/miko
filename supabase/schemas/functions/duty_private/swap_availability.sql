@@ -28,5 +28,7 @@ begin
  return coalesce((select jsonb_agg(jsonb_build_object('member',case when admin or c.member_id in (a.primary_id,b.primary_id) then c.member_id end,'day',c.day) order by c.day,c.member_id)
   from public.duty_constraints c where c.kind='no' and
   ((c.member_id in (b.primary_id,a.secondary_id) and c.day>=a.day and c.day<a.end_day)
-   or (c.member_id in (a.primary_id,b.secondary_id) and c.day>=b.day and c.day<b.end_day))),'[]'::jsonb);
+   or (c.member_id in (a.primary_id,b.secondary_id) and c.day>=b.day and c.day<b.end_day))
+  -- An admin-approved date of the cover staying on that duty is never asked again (owner 2026-11-21).
+  and not (c.duty_approved and ((c.member_id=a.secondary_id and c.day>=a.day and c.day<a.end_day) or (c.member_id=b.secondary_id and c.day>=b.day and c.day<b.end_day)))),'[]'::jsonb);
 end $$;

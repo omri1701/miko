@@ -14,9 +14,11 @@ import {
   dayOf,
   removeSpecialDates,
   swapDraft,
+  approveDates,
   type State,
   type Duty,
 } from '@/lib/rota/engine';
+import type {DayConflict} from '@/lib/supabase/snapshot';
 
 // Owns draft mutations and their editor state. Remote persistence stays in TeamWorkspace.
 export function useWorkspaceDraft({
@@ -46,7 +48,7 @@ export function useWorkspaceDraft({
     setSwapOverride(false);
     setSwap(selection);
   }
-  async function update(fn: (s: State) => State, draft = true, notifyError = true, reviewedLocks?: string[]) {
+  async function update(fn: (s: State) => State, draft = true, notifyError = true, reviewedLocks?: string[], publishAnyway?: DayConflict[]) {
     if (!isManager) return false;
     const s = state,
       n = prepareWorkspaceUpdate(s, fn(s), month, monthDetails, draft);
@@ -54,7 +56,7 @@ export function useWorkspaceDraft({
       const published = Object.keys(n.months).find(
         (m) => n.months[m].status === 'published' && s.months[m]?.status !== 'published',
       );
-      await remote.save(n, published, month, reviewedLocks);
+      await remote.save(n, published, month, reviewedLocks, publishAnyway);
       return true;
     } catch (e) {
       if (!notifyError) throw e;
@@ -202,7 +204,9 @@ export function useWorkspaceDraft({
     }
     setSwapSaving(true);
     try {
-      if (!(await update((s) => ({ ...s, assignments: result.assignments })))) return;
+      // "Approve these exceptions as manager" approves those people on those dates for good.
+      const approved = swapOverride ? result.conflicts.map((c) => ({member: c.person, day: c.date})) : [];
+      if (!(await update((s) => approveDates({ ...s, assignments: result.assignments }, approved)))) return;
       selectSwap(null);
       toast.success(t('Duties swapped.', 'הכוננויות הוחלפו.'));
     } finally {

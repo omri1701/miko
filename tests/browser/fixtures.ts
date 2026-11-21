@@ -46,6 +46,8 @@ export class Backend {
   runtimeOrigin?: string;
   raw = seed();
   calls: Call[] = [];
+  expectedRefusal?: RegExp;
+  refusals: string[] = [];
   authGate?: Promise<void>;
   configGate?: Promise<void>;
   loadGate?: Promise<void>;
@@ -245,7 +247,21 @@ export class Backend {
     } else if (name === 'duty_save_schedule') {
       expect(admin).toBe(true);
       if (this.failNextSave) {this.failNextSave = false; throw Error('Synthetic stale revision. Refresh and try again.');}
-      const state = p.p_state as {team:{id:string;color:string;active:boolean}[];duties: Omit<DutyRow, 'id' | 'publication_id' | 'points'>[]; months: Record<string, {deadline: string; status: 'draft' | 'published'; generated: boolean}>};
+      const state = p.p_state as {team:{id:string;color:string;active:boolean}[];duties: Omit<DutyRow, 'id' | 'publication_id' | 'points'>[]; months: Record<string, {deadline: string; status: 'draft' | 'published'; generated: boolean}>;
+        approve_unavailable?: {member: string; day: string}[]; publish_anyway?: {member: string; day: string}[]};
+      // Like save_schedule (owner 2026-11-21): an approval holds for someone on that date in this
+      // draft; Publish refuses unapproved conflicts as [{day,member}] unless publish_anyway lists them all.
+      const on = (member: string, day: string) => state.duties.find(d => d.day <= day && day < d.end_day && (d.primary_id === member || d.secondary_id === member));
+      const listed = (list: {member: string; day: string}[] | undefined, c: {member_id: string; day: string}) => !!list?.some(a => a.member === c.member_id && a.day === c.day);
+      const approving = this.raw.constraints.filter(c => c.kind === 'no' && on(c.member_id, c.day) && (c.duty_approved || listed(state.approve_unavailable, c)));
+      if (p.p_publish) {
+        const ownerOf = (day: string) => (dayOf(day) === 6 ? addDays(day, -1) : day).slice(0, 7);
+        const conflicts = this.raw.constraints.filter(c => c.kind === 'no' && !approving.includes(c) && on(c.member_id, c.day) && ownerOf(on(c.member_id, c.day)!.day) === p.p_publish)
+          .sort((a, b) => a.day.localeCompare(b.day) || a.member_id.localeCompare(b.member_id));
+        if (conflicts.some(c => !listed(state.publish_anyway, c))) throw Error(`Availability conflict: ${JSON.stringify(conflicts.map(c => ({day: c.day, member: c.member_id})))}`);
+        approving.push(...conflicts);
+      }
+      for (const c of approving) c.duty_approved = true;
       state.team.forEach((member, seniority) => Object.assign(this.raw.members.find(m => m.id === member.id)!, member, {seniority}));
       this.raw.members.sort((a,b) => a.seniority - b.seniority);
       const draftIds = new Map(this.raw.assignments.filter(d => d.publication_id === null).map(d => [d.day, d.id]));
@@ -494,6 +510,8 @@ export const test = base.extend<Fixtures>({
             try {return await route.fulfill({json: backend.rpc(url.pathname.split('/').at(-1)!, route.request().postDataJSON() ?? {}, user.id)});}
             catch (error) {
               const message = (error as Error).message;
+              // A refusal the test expects (a checked rule, not a bug) is a plain P0001 like PostgreSQL's.
+              if (backend.expectedRefusal?.test(message)) {backend.refusals.push(message); return route.fulfill({status: 400, json: {message, code: 'P0001'}});}
               if (!message.startsWith('Synthetic stale')) errors.push(message);
               return route.fulfill({status: 409, json: {message, code: 'PT409'}});
             }

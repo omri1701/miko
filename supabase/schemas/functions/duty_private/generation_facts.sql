@@ -1,7 +1,14 @@
 CREATE FUNCTION duty_private.generation_facts(p_month text) RETURNS jsonb
  LANGUAGE plpgsql STABLE SECURITY DEFINER SET search_path TO '' AS $$
-declare duties jsonb:=duty_private.generation_duties(p_month); meta public.duty_allocations; neighbors jsonb;
+declare duties jsonb:=duty_private.generation_duties(p_month); meta public.duty_allocations; neighbors jsonb; approved text[];
 begin
+ -- An admin-approved unavailable date of the person on that duty (owner 2026-11-21) is not a
+ -- refusal for generation or its validation: never asked again, and no lock needed.
+ select coalesce(array_agg(c.member_id::text||'/'||c.day::text),'{}') into approved
+ from public.duty_constraints c join public.duty_months m on m.month=p_month join public.duty_assignments a on c.day>=a.day and c.day<a.end_day
+  and c.member_id in (a.primary_id,a.secondary_id) and duty_private.duty_owner(a.day)=p_month
+  and a.publication_id is not distinct from (case when m.status='published' then m.current_publication_id end)
+ where c.duty_approved and c.kind='no';
  select x.* into meta from public.duty_allocations x join public.duty_months m using(month)
  where x.month=p_month and x.publication_id is not distinct from (case when m.status='published' then m.current_publication_id end);
  select coalesce(jsonb_agg(jsonb_build_object('id',a.id,'ownerMonth',m.month,'start',a.day,'end',a.end_day,'engineer',a.primary_id,
@@ -16,7 +23,9 @@ begin
    ||case when weekends_from is not null then jsonb_build_object('weekendsFrom',weekends_from) else '{}'::jsonb end order by id) from public.duty_members),'[]'),
   'seniority',coalesce((select jsonb_agg(id order by seniority,joined_at,id) from public.duty_members where status='approved' and active),'[]'),
   'constraints',coalesce((select jsonb_object_agg(member_id,days) from (select member_id,jsonb_object_agg(day,kind order by day) days from public.duty_constraints
-    where day>=(duties->0->>'startDate')::date and day<(duties->-1->>'endDate')::date group by member_id) c),'{}'),
-  'allocation',meta.allocation,'allocationId',meta.allocation_id,'locks',coalesce((select jsonb_agg(jsonb_build_object('dutyId',a.day,'engineer',a.primary_id) order by a.day) from public.duty_assignments a join public.duty_months m on m.month=p_month where duty_private.duty_owner(a.day)=p_month and a.locked and a.publication_id is not distinct from (case when m.status='published' then m.current_publication_id end)),'[]'),'approvals',coalesce(meta.approvals,'[]'),
+    where day>=(duties->0->>'startDate')::date and day<(duties->-1->>'endDate')::date and not (member_id::text||'/'||day::text)=any(approved) group by member_id) c),'{}'),
+  'allocation',meta.allocation,'allocationId',meta.allocation_id,'locks',coalesce((select jsonb_agg(jsonb_build_object('dutyId',a.day,'engineer',a.primary_id) order by a.day) from public.duty_assignments a join public.duty_months m on m.month=p_month where duty_private.duty_owner(a.day)=p_month and a.locked and a.publication_id is not distinct from (case when m.status='published' then m.current_publication_id end)),'[]'),'approvals',coalesce((select jsonb_agg(case when v->>'rule'='availability' then jsonb_set(v,'{dates}',(select jsonb_agg(q order by q) from jsonb_array_elements_text(v->'dates') q
+    where not ((v->>'engineer')||'/'||q)=any(approved))) else v end order by n) from jsonb_array_elements(meta.approvals) with ordinality x(v,n)
+   where v->>'rule'<>'availability' or exists(select 1 from jsonb_array_elements_text(v->'dates') q where not ((v->>'engineer')||'/'||q)=any(approved))),'[]'),
   'sourcePublicationId',meta.source_publication_id,'generation',meta.generation);
 end $$;
