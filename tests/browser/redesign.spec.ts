@@ -310,9 +310,14 @@ for (const lang of ['en', 'he'] as const) {
     await page.locator('[data-swap-card]').getByRole('button', {name: t('Accept', 'קבלה'), exact: true}).click();
     await expect.poll(() => backend.raw.swapRequests![0].accepted_by).toBe(ids.a);
     await expect(page.getByRole('dialog')).toHaveCount(0);
+    // Leave Alex's workspace before the backend declines Alex: its refreshes would otherwise still
+    // be in flight and meet the new refusal (a race, not an app error). A static file on the app's
+    // own origin runs no app code.
+    await page.goto(`${backend.runtimeOrigin ?? ''}/favicon.svg`);
     await openApp('rejected');
     if (lang === 'he') await page.getByRole('button', {name: 'עברית', exact: true}).click();
     await both(page, `access-declined-${lang}`);
+    await page.goto(`${backend.runtimeOrigin ?? ''}/favicon.svg`);
     await openApp('inactive');
     if (lang === 'he') await page.getByRole('button', {name: 'עברית', exact: true}).click();
     await both(page, `access-inactive-${lang}`);
