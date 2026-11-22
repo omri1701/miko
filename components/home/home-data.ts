@@ -1,4 +1,5 @@
 import type {DutyRow, Snapshot} from '@/lib/supabase/snapshot';
+import {weekdayDate} from '@/lib/date-format';
 import {addDays, dayOf} from '@/lib/rota/calendar-dates';
 
 export type MyDuty = {row: DutyRow; month: string; role: 'primary' | 'cover'; kind: 'weekday' | 'weekend' | 'holiday'};
@@ -20,8 +21,8 @@ export const daysBetween = (from: string, to: string) => Math.round((Date.parse(
 /** "Today", "Tomorrow" or "In 4 days" (never "in 1 day"), plus the date. */
 export function dutyWhen(day: string, today: string, lang: 'en' | 'he') {
   const diff = daysBetween(today, day);
-  const date = new Date(day + 'T12:00:00Z').toLocaleDateString(lang === 'en' ? 'en-GB' : 'he-IL', {weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC'});
-  const long = new Date(day + 'T12:00:00Z').toLocaleDateString(lang === 'en' ? 'en-GB' : 'he-IL', {weekday: 'long', day: 'numeric', month: 'long', timeZone: 'UTC'});
+  const date = weekdayDate(day, lang);
+  const long = weekdayDate(day, lang, 'long');
   const label = diff <= 0 ? (lang === 'en' ? 'Today' : 'היום') : diff === 1 ? (lang === 'en' ? 'Tomorrow' : 'מחר')
     : lang === 'en' ? `In ${diff} days` : diff === 2 ? 'בעוד יומיים' : `בעוד ${diff} ימים`;
   return {label, date, long, diff};

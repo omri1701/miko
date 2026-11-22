@@ -38,3 +38,11 @@ test('rule 2: English dates are day first, never en-US', () => {
   assert.deepEqual(hits, []);
 });
 
+
+// WebKit's en-GB writes "Sat, 1 Jan" (iPhone, found on #105): English weekday dates go through
+// weekdayDate (lib/date-format.ts), which joins the parts without a comma on every engine.
+test('rule 2b: English weekday dates are built by weekdayDate, never Intl en-GB directly', () => {
+  const hits = lines().filter(({file, line}) => !file.endsWith('date-format.ts') && /\bweekday:/.test(line) && /\bday:/.test(line))
+    .map(({file, n, line}) => `${file}:${n}: ${line.trim().slice(0, 100)}`);
+  assert.deepEqual(hits, []);
+});
