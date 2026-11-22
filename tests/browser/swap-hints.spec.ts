@@ -65,7 +65,7 @@ for (const lang of ['en', 'he'] as const) {
     await expectRed(page, '2026-11-03', t('Blair Birch marked 2 Nov as unavailable', 'Blair Birch סימן/ה את 2 בנוב׳ כלא זמין'));
     await expectGreen(page, '2026-11-10');
     await expectGreen(page, '2026-11-12');
-    await expect(page.locator('#published-swap-help')).toHaveText(t('Choose the duty to swap with. Greyed days say why. Escape cancels.', 'בחרו את הכוננות להחלפה. ימים אפורים מסבירים למה. Escape לביטול.'));
+    await expect(page.locator('#published-swap-help')).toHaveText(t('Choose the duty to swap with. Grayed days say why. Escape cancels.', 'בחרו את הכוננות להחלפה. ימים אפורים מסבירים למה. Escape לביטול.'));
     // Keyboard: Space on a red day opens the request, which names the dates and can be sent.
     await duty(page, '2026-11-05').focus(); await page.keyboard.press('Space');
     const dialog = page.getByRole('dialog', {name: t('Ask to swap', 'בקשת החלפה')});

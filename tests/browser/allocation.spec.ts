@@ -554,7 +554,7 @@ test('cancelling synchronous WASM retains accepted assignments and a fresh Worke
   await stopped;
   expect(backend.raw.assignments).toEqual(before);
   expect(backend.calls.filter(c => c.name === 'duty_save_generation')).toHaveLength(0);
-  await expect(page.getByText('Cancelled. Your saved draft is unchanged.', {exact: true})).toBeVisible();
+  await expect(page.getByText('Canceled. Your saved draft is unchanged.', {exact: true})).toBeVisible();
   await page.unroute('**/api/scheduling/asset/highs.mjs');
   const restarted = page.waitForEvent('worker');
   await page.getByRole('button', {name: 'Confirm & generate', exact: true}).click();

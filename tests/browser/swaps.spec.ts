@@ -22,7 +22,7 @@ test('published drag and keyboard request cancellation do not edit duties', asyn
   await tab(page, 'Home');
   await expect(page.locator('[data-swap-card]').getByText('Waiting for an answer', {exact: true})).toBeVisible();
   await page.getByRole('button', {name: 'Cancel request'}).click();
-  await expect(page.getByText('Request cancelled', {exact: true})).toBeVisible();
+  await expect(page.getByText('Request canceled', {exact: true})).toBeVisible();
   expect(status(backend)).toBe('cancelled');
   expect(backend.raw.assignments.find(d => d.day === '2026-11-02' && d.publication_id)!.primary_id).toBe(ids.a);
 });

@@ -1,5 +1,6 @@
 'use client';
 import {useRef,useState} from 'react';
+import {weekdayDate} from '@/lib/date-format';
 import {LockKeyhole,LockKeyholeOpen,Trash2} from 'lucide-react';
 import {Button} from '@/components/ui/button';
 import {Checkbox} from '@/components/ui/checkbox';
@@ -27,7 +28,7 @@ export function DutyEditor({state,duty,month,lang,onClose,onMonth,onSave,onRemov
  const day=(start:string):Duty=>({...duty,id:start,start,end:addDays(start,1)});
  const edits=weekend?[{block:day(friday),assignment:fri},{block:day(saturday),assignment:sat}]:[{block:duty,assignment:fri}];
  const name=(id:string)=>state.team.find(p=>p.id===id)?.name??id;
- const dateLabel=(d:string)=>new Date(d+'T12:00:00Z').toLocaleDateString(lang==='en'?'en-GB':'he-IL',{weekday:'short',day:'numeric',month:'short',timeZone:'UTC'});
+ const dateLabel=(d:string)=>weekdayDate(d,lang);
  const fmt=(d:string)=>new Date(d+'T12:00:00Z').toLocaleDateString(lang==='en'?'en-GB':'he-IL',{day:'numeric',month:'short',timeZone:'UTC'});
  const range=lang==='en'&&friday.slice(0,7)===saturday.slice(0,7)?`${dateLabel(friday).replace(/ \S+$/,'')} – ${dateLabel(saturday)}`:`${dateLabel(friday)} – ${dateLabel(saturday)}`;
  const pts=(n:number)=>`${n} ${t('pt','נק׳')}`;

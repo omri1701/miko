@@ -418,7 +418,7 @@ export function useAllocationWorkflow(remote: TeamWorkspace, month: string, t: T
   }
   function cancel() {
     if (rpc.current) return;
-    stop(); setPhase('idle'); setNotice(t('Cancelled. Your saved draft is unchanged.', 'הפעולה בוטלה. הטיוטה השמורה לא השתנתה.')); setError('');
+    stop(); setPhase('idle'); setNotice(t('Canceled. Your saved draft is unchanged.', 'הפעולה בוטלה. הטיוטה השמורה לא השתנתה.')); setError('');
   }
   useEffect(() => {draftRef.current = draft;});
   return {open, show, close: () => {if (!rpc.current) {cancel(); setOpen(false);}}, phase, captured, input, draft, ceilings, spaced, outcome, options, divisible, replanBlocked,
