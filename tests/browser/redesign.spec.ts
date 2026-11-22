@@ -97,6 +97,11 @@ for (const lang of ['en', 'he'] as const) {
     const sheet = page.getByRole('dialog');
     await expect(sheet.getByRole('button', {name: t('Enable', 'הפעלה'), exact: true})).toBeEnabled();
     await both(page, `settings-${lang}`);
+    // The reminder-time wheels sit an even gap inside their card, with concentric corners.
+    const evening = sheet.getByRole('button', {name: new RegExp(`^${t('Evening before', 'ערב לפני')} · `)});
+    await evening.click();
+    await expect(sheet.getByRole('group', {name: new RegExp(`^${t('Evening before', 'ערב לפני')}`)})).toBeVisible();
+    await snapshot(page, `settings-time-wheels-${lang}`);
   });
 }
 
