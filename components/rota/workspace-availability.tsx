@@ -2,7 +2,6 @@ import {useRef, useState, type ReactNode} from 'react';
 import {Lock} from 'lucide-react';
 import {MonthTitle} from './month-title';
 import {useMonthArrival, type MonthStageHandle} from './month-stage';
-import {Select, SelectTrigger, SelectValue, SelectContent, SelectItem} from '@/components/ui/select';
 import {Chip} from '@/components/ui/chip';
 import {AvailabilityEditor} from '@/components/rota/availability-editor';
 import {takesDuties, type State} from '@/lib/rota/engine';
@@ -39,10 +38,9 @@ export function WorkspaceAvailability({state, month, monthLabel, onMonth, person
       <MonthTitle month={month} label={monthLabel} t={t} onChange={navigate} canGo={canGo} arrival={nameArrival} onSwipe={n => {markArrival(); onMonth(n);}}
         status={constraintsClosed || locked ? <Chip tone="neutral" size="sm" className="month-status"><Lock/>{t('Closed', 'סגור')}</Chip> : <Chip tone="brand" size="sm" className="month-status">{t(`Due ${shortDate(deadline, lang)}`, `עד ${shortDate(deadline, lang)}`)}</Chip>}/>
       {isManager && <div className="month-actions">
-        <Select value={who} onValueChange={setPerson}>
-          <SelectTrigger aria-label={t('Engineer', 'מהנדס')} className="picker"><SelectValue/></SelectTrigger>
-          <SelectContent>{active.map(p => <SelectItem value={p.id} key={p.id}>{p.name}{p.id === meId ? t(' (you)', ' (אני)') : ''}</SelectItem>)}</SelectContent>
-        </Select>
+        <select className="picker" aria-label={t('Engineer', 'מהנדס')} value={who} onChange={e => setPerson(e.target.value)}>
+          {active.map(p => <option value={p.id} key={p.id}>{p.name}{p.id === meId ? t(' (you)', ' (אני)') : ''}</option>)}
+        </select>
       </div>}
     </div>
     {viewer && !isManager ? <p className="muted-copy" role="note">{t('Viewers don’t add constraints.', 'צופים לא מוסיפים אילוצים.')}</p>

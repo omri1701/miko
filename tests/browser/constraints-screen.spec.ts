@@ -1,5 +1,5 @@
 import type {Page} from '@playwright/test';
-import {test, expect, ids, switchLanguage, press} from './fixtures';
+import {test, expect, ids, switchLanguage, press, choose} from './fixtures';
 
 // #94 (swipe between months) and #95 (bigger on PC, read a day's note on a phone) on Constraints.
 const heading = (page: Page) => page.locator('.availability-screen .month-name');
@@ -145,8 +145,7 @@ test('#95 rule 3: another engineer never sees someone else’s note', async ({pa
 
 test('#95 rule 3: an admin still reads an engineer’s note, as today', async ({page, openApp}, info) => {
   await openConstraints(page, openApp, false, 'admin');
-  await page.getByLabel('Engineer').click();
-  await page.getByRole('option', {name: 'Alex Atlas', exact: true}).click();
+  await choose(page.getByLabel('Engineer'), 'Alex Atlas');
   await expect(day(page, '2026-11-04')).toHaveClass(/\bno\b/);
   await day(page, '2026-11-04').click();
   if (info.project.name === 'mobile') await expect(page.getByRole('dialog').locator('.constraint-note-full')).toHaveText('Synthetic vacation');

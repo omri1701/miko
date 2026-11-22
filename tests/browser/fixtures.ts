@@ -1,4 +1,4 @@
-import {test as base, expect, type Page} from '@playwright/test';
+import {test as base, expect, type Locator, type Page} from '@playwright/test';
 import {addDays, blocks, dayOf, specialAt} from '../../lib/rota/engine';
 import {canManage, findMe, fromSnapshot, type Snapshot, type DutyRow, type SwapRequest} from '../../lib/supabase/snapshot';
 import {canonicalDuties, coverageStart} from '../../lib/scheduling/calendar';
@@ -647,4 +647,12 @@ export async function monthAction(page: Page, name: string) {
   } else {
     await page.getByRole('button', {name, exact: true}).click();
   }
+}
+
+/** Picks a native <select>'s option by its text (exact, or a pattern), as a person would. */
+export async function choose(select: Locator, name: string | RegExp) {
+  const labels = (await select.locator('option').allTextContents()).map(label => label.trim());
+  const label = labels.find(text => typeof name === 'string' ? text === name : name.test(text));
+  expect(label, `option ${name} among: ${labels.join(' | ')}`).toBeTruthy();
+  await select.selectOption({label: label!});
 }

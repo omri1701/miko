@@ -160,7 +160,7 @@ textarea{resize:vertical;min-height:76px}
    sets --outer-r (its radius) and, when its items sit on its padding, --outer-gap (that padding).
    A new nested box gets class .nested or joins this list. Round shapes (pills, avatars, switches)
    and controls (buttons, fields, icon tiles) keep their own corners. */
-:where(.nested,.note-line,.conflict-lines,.conflict-line,.time-wheels,.menu [role=menuitem],[data-slot=select-item],.seg-thumb,.seg-item,.segmented button,.plan-kind button,.allocation-details li,.split-row,.keep-option,.emergency-editor){
+:where(.nested,.note-line,.conflict-lines,.conflict-line,.time-wheels,.menu [role=menuitem],.seg-thumb,.seg-item,.segmented button,.plan-kind button,.allocation-details li,.split-row,.keep-option,.emergency-editor){
  --nested-r:max(var(--nest-min-r),calc(var(--outer-r) - var(--outer-gap)));border-radius:var(--nested-r)}
 .card[data-tone=brand]{background:linear-gradient(135deg,var(--brand) 0%,var(--brand-strong) 100%);color:#fff}
 :root[data-theme=dark] .card[data-tone=brand]{box-shadow:var(--brand-edge)}
@@ -260,13 +260,13 @@ textarea{resize:vertical;min-height:76px}
 [data-sonner-toast]{border-radius:14px!important;font-size:14px!important}
 /* #103: an availability refusal names each conflict on its own line. */
 [data-sonner-toast] [data-title],.message-lines{white-space:pre-line}
-[data-slot=select-content]{--outer-r:14px;--outer-gap:4px;z-index:70;border-radius:14px;box-shadow:var(--shadow-pop),0 0 0 1px var(--line);border:0}
-[data-slot=select-item]{min-height:40px;font-size:15px;color:var(--ink);transition:background 120ms var(--ease)}
-[data-slot=select-item][data-highlighted],[data-slot=select-item]:focus{background:var(--hover)!important;color:var(--ink)!important}
-[data-slot=select-item][data-state=checked]{font-weight:650;color:var(--brand-ink)}
-:root[data-theme=dark] [data-slot=select-item][data-state=checked]{color:var(--brand-strong)}
-[data-slot=select-item] [data-slot=select-item-indicator] svg{color:var(--brand-fg)!important}
-[data-slot=select-trigger]{min-height:44px;border-radius:12px;border-color:var(--line-strong);background:var(--surface);font-size:15px}
+/* Pickers are native <select>s: iPhone shows its own menu, Windows its own list, and the list follows
+   the theme through color-scheme. Only the closed field is styled, like the text fields; options keep
+   the system's colours. */
+select.picker{appearance:none;-webkit-appearance:none;width:auto;border:1px solid var(--line-strong);border-radius:12px;background:var(--surface) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%238e8e93' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E") no-repeat right 12px center;padding:0 38px 0 12px;color:var(--ink);font:inherit;font-weight:400;text-overflow:ellipsis;white-space:nowrap;overflow:hidden;cursor:pointer;color-scheme:inherit}
+[dir=rtl] select.picker{background-position:left 12px center;padding:0 12px 0 38px}
+select.picker:focus-visible{outline:3px solid color-mix(in srgb,var(--brand-fg) 45%,transparent);outline-offset:0;border-color:var(--brand-fg)}
+select.picker:disabled{opacity:.5;cursor:default}
 .picker{min-width:160px!important;height:44px!important;font-size:15px!important;max-width:260px}
 [data-slot=checkbox]{width:22px;height:22px;border-radius:7px;border-color:var(--line-strong)}
 
@@ -591,7 +591,7 @@ textarea{resize:vertical;min-height:76px}
 .editor-actions{display:flex;gap:10px}
 .editor-actions>button{flex:1;min-height:46px;white-space:normal;height:auto}
 .field-label{display:flex;flex-direction:column;gap:6px;font-size:13px;font-weight:600;color:var(--ink-3)}
-.field-label input,.field-label textarea,.field-label [data-slot=select-trigger]{font-weight:400;color:var(--ink)}
+.field-label input,.field-label textarea,.field-label select{font-weight:400;color:var(--ink)}
 .check-label{display:flex;align-items:center;gap:10px;font-size:15px;min-height:44px;cursor:pointer}
 .form-pair{display:grid;grid-template-columns:1fr 1fr;gap:12px}
 .form-pair>*{min-width:0}
@@ -884,7 +884,7 @@ textarea{resize:vertical;min-height:76px}
 /* ---------- motion ---------- */
 @media(prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important;scroll-behavior:auto!important}.hero-track{scroll-snap-type:none}}
 /* Keep editable text legible through inherited font shorthands, portals and phone landscape. */
-@media(max-width:600px),(pointer:coarse){input,textarea,select,[contenteditable]:not([contenteditable=false]),[data-slot=select-trigger]{font-size:max(16px,1rem)!important}}
+@media(max-width:600px),(pointer:coarse){input,textarea,select,[contenteditable]:not([contenteditable=false]){font-size:max(16px,1rem)!important}}
 
 /* ---------- owner review 2026-11-07: refresh, sidebar, month heading, motion ---------- */
 /* The logo is the refresh button (same box as the plain logo, so nothing moves). */

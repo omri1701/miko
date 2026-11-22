@@ -1,4 +1,4 @@
-import {test, expect, monthAction, duty, ids, targetReady, switchLanguage} from './fixtures';
+import {test, expect, monthAction, duty, ids, targetReady, switchLanguage, choose} from './fixtures';
 import type {Page} from '@playwright/test';
 import {PROJECTS} from '../../lib/supabase/environment';
 import {existsSync} from 'node:fs';
@@ -154,8 +154,7 @@ for (const lang of ['en', 'he'] as const) test(`published duty edit and summary 
   const t = (en: string, he: string) => lang === 'en' ? en : he;
   await openDuty(page, '2026-11-04');
   await page.getByRole('dialog').getByRole('button', {name: t('Edit', 'עריכה'), exact: true}).click();
-  await page.getByRole('combobox', {name: t('Engineer', 'מהנדס'), exact: true}).click();
-  await page.getByRole('option', {name: t('Alex Atlas · unavailable', 'Alex Atlas · לא זמין'), exact: true}).click();
+  await choose(page.getByRole('combobox', {name: t('Engineer', 'מהנדס'), exact: true}), t('Alex Atlas · unavailable', 'Alex Atlas · לא זמין'));
   await page.getByRole('checkbox', {name: t('Override availability as admin', 'חריגה מאילוץ כמנהל')}).check();
   await page.getByLabel(t('Required audit reason', 'נימוק חובה לתיעוד')).fill('Covering a family event');
   await snapshot(page, `published-edit-${lang}`);

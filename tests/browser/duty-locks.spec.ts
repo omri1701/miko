@@ -1,5 +1,5 @@
 import type {Page} from '@playwright/test';
-import {test, expect, duty, ids, MONTH, switchLanguage, openDutySheet, monthAction} from './fixtures';
+import {test, expect, duty, ids, MONTH, switchLanguage, openDutySheet, monthAction, choose} from './fixtures';
 
 // Cell → duty sheet → Edit opens the draft editor (decision 2026-11-06).
 const edit = async (page: Page, day: string) => (await openDutySheet(page, day)).getByRole('button', {name: /^(Edit|עריכה)$/}).click();
@@ -23,8 +23,7 @@ test('lock edits save atomically with a new primary; dismissals discard both loc
   }
   expect(backend.calls.filter(c => c.name === 'duty_save_schedule')).toHaveLength(0);
   await edit(page, '2026-11-02');
-  await dialog.getByRole('combobox', {name: 'Primary engineer', exact: true}).click();
-  await page.getByRole('option', {name: 'Drew Dale', exact: true}).click();
+  await choose(dialog.getByRole('combobox', {name: 'Primary engineer', exact: true}), 'Drew Dale');
   await dialog.getByRole('button', {name: 'Lock duty', exact: true}).click();
   await dialog.getByRole('button', {name: 'Save assignment', exact: true}).click();
   await expect(dialog).toBeHidden();
@@ -85,8 +84,7 @@ test('weekend lock covers both saved primaries and preserves emergency cover in 
   // Two days: both halves start with the weekend's person and lock.
   await dialog.getByRole('radio', {name: 'שני ימים', exact: true}).click();
   await expect(dialog.getByRole('button', {name: 'ביטול נעילת יום שבת', exact: true})).toHaveAttribute('aria-pressed', 'true');
-  await dialog.getByRole('combobox', {name: 'מהנדס ראשי ביום שבת', exact: true}).click();
-  await page.getByRole('option', {name: 'Drew Dale', exact: true}).click();
+  await choose(dialog.getByRole('combobox', {name: 'מהנדס ראשי ביום שבת', exact: true}), 'Drew Dale');
   if (await dialog.getByRole('checkbox').isVisible()) await dialog.getByRole('checkbox').check();
   await dialog.getByRole('button', {name: 'שמירת השיבוץ', exact: true}).click();
   await expect(dialog).toBeHidden();

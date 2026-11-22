@@ -1,4 +1,4 @@
-import {test, expect, ids, switchLanguage} from './fixtures';
+import {test, expect, ids, switchLanguage, choose} from './fixtures';
 import {shortDate} from '../../lib/date-format';
 
 // #103 (owner 2026-11-21): one availability approval, no locks. Publish never shows the red
@@ -55,8 +55,7 @@ test('an approval from the duty editor is never asked again at Publish', async (
   if (await details.isVisible()) await details.click();
   await page.getByRole('dialog').getByRole('button', {name: 'Edit', exact: true}).click();
   const dialog = page.getByRole('dialog');
-  await dialog.getByRole('combobox', {name: 'Primary engineer', exact: true}).click();
-  await page.getByRole('option', {name: new RegExp(`^${member.name}`)}).click();
+  await choose(dialog.getByRole('combobox', {name: 'Primary engineer', exact: true}), new RegExp(`^${member.name}`));
   await dialog.getByRole('checkbox', {name: 'Approve these exceptions as manager'}).click();
   await dialog.getByRole('button', {name: 'Save assignment', exact: true}).click();
   await expect(dialog).toBeHidden();

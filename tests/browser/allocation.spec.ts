@@ -1,4 +1,4 @@
-import {test, expect, ids, MONTH, type Backend, switchLanguage, monthAction, duty, openDutySheet} from './fixtures';
+import {test, expect, ids, MONTH, type Backend, switchLanguage, monthAction, duty, openDutySheet, choose} from './fixtures';
 import {coverageStart} from '../../lib/scheduling/calendar';
 import {validateGeneration} from '../../lib/scheduling/validate';
 import {record} from '../../lib/compensation';
@@ -821,8 +821,7 @@ test('a hand split never changes the plan: half-point changes save exactly as ty
   // Split by hand: A keeps Friday, B takes Saturday.
   await (await openDutySheet(page, '2026-11-06')).getByRole('button', {name: 'Edit', exact: true}).click();
   await page.getByRole('radio', {name: 'Two days', exact: true}).click();
-  await page.getByRole('combobox', {name: 'Saturday primary engineer', exact: true}).click();
-  await page.getByRole('option', {name: b.name, exact: true}).click();
+  await choose(page.getByRole('combobox', {name: 'Saturday primary engineer', exact: true}), b.name);
   const override = page.getByRole('checkbox', {name: 'Approve these exceptions as manager'});
   if (await override.isVisible()) await override.check();
   await page.getByRole('button', {name: 'Save assignment'}).click();
