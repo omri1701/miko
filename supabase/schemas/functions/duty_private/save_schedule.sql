@@ -71,8 +71,8 @@ begin
   if extract(dow from last_day)=5 then last_day:=last_day+1; end if;
   for d in select generate_series(first_day,last_day,interval '1 day')::date loop
    select * into a from public.duty_assignments where publication_id is null and day<=d and end_day>d;
-   if a.primary_id is null or not exists(select 1 from public.duty_members where id=a.primary_id and status='approved' and active) then raise exception 'An active engineer is required on %',d; end if;
-   if a.secondary_id is not null and not exists(select 1 from public.duty_members where id=a.secondary_id and status='approved' and active) then raise exception 'Emergency engineer is inactive on %',d; end if;
+   if a.primary_id is null or not exists(select 1 from public.duty_members where id=a.primary_id and status='approved' and active and not viewer) then raise exception 'An active engineer is required on %',d; end if;
+   if a.secondary_id is not null and not exists(select 1 from public.duty_members where id=a.secondary_id and status='approved' and active and not viewer) then raise exception 'Emergency engineer is inactive on %',d; end if;
   end loop;
   -- Every primary's and emergency cover's unavailable date on this month's duties is approved,
   -- or listed here as who and when (never a note). "Publish anyway" approves exactly the listed

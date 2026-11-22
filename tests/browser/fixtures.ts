@@ -213,7 +213,8 @@ export class Backend {
       return {token: this.calendarResets.toString(16).padStart(64, 'c'), createdAt, language};
     }
     expect(p.p_revision).toBe(this.raw.revision);
-    const admin = canManage(this.raw, signIn);
+    // As duty_private.is_manager(): a Viewer-admin (#90) reads like an admin but never writes.
+    const admin = canManage(this.raw, signIn) && !findMe(this.raw, signIn)?.viewer;
     if (name === 'duty_generation_context') {
       expect(admin).toBe(true); return this.generationEnvelope(String(p.p_month));
     } else if (name === 'duty_confirm_allocation') {
@@ -293,6 +294,11 @@ export class Backend {
       expect(admin).toBe(true); expect(typeof p.p_no_weekends).toBe('boolean');
       const member = this.raw.members.find(m => m.id === p.p_member && m.status === 'approved')!;
       expect(member).toBeTruthy(); member.no_weekends = p.p_no_weekends as boolean;
+    } else if (name === 'duty_set_viewer') {
+      // Mirrors duty_private.set_viewer: approved, non-temporary members; one admin who manages stays.
+      expect(admin).toBe(true); expect(typeof p.p_viewer).toBe('boolean');
+      const member = this.raw.members.find(m => m.id === p.p_member && m.status === 'approved' && !m.is_temporary)!;
+      expect(member).toBeTruthy(); member.viewer = p.p_viewer as boolean;
     } else if (name === 'duty_rename_self') {
       this.raw.members.find(m => m.id === user)!.name = p.p_name as string;
     } else if (name === 'duty_set_color') {

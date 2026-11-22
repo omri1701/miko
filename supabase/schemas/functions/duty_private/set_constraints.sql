@@ -7,6 +7,8 @@ begin
  perform duty_private.check_revision(p_revision);
  manager:=duty_private.is_manager();
  if (not manager and p_member is distinct from duty_private.current_member_id()) or not exists(select 1 from public.duty_members where id=p_member and status='approved') then raise exception 'Not allowed' using errcode='42501'; end if;
+ -- A Viewer (#90) is never scheduled, so nobody adds constraints for them.
+ if exists(select 1 from public.duty_members where id=p_member and viewer) then raise exception 'Viewers have no constraints' using errcode='42501'; end if;
  if p_kind not in ('no','prefer','clear') or p_kind is null or coalesce(cardinality(p_days),0) not between 1 and 62 or length(coalesce(p_note,''))>300 then raise exception 'Invalid constraints'; end if;
  foreach d in array p_days loop
   if d is null then raise exception 'Invalid date'; end if;

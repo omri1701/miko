@@ -22,6 +22,18 @@ export function CancelDraftDialog({open, onOpenChange, saving, lang, t, monthLab
   </Sheet>;
 }
 
+/** Making a member a Viewer (#90): the one place its meaning is explained. */
+export function ViewerDialog({name, onOpenChange, saving, lang, t, onConfirm}: DialogCopy & {
+  name: string | null; onOpenChange: (open: boolean) => void; saving: boolean; onConfirm: () => void;
+}) {
+  return <Sheet open={name !== null} onOpenChange={value => {if (!saving) onOpenChange(value);}} lang={lang} kind="alert" role="alertdialog" closeDisabled={saving} busy={saving}
+    title={t(`Make ${name ?? ''} a Viewer?`, `להפוך את ${name ?? ''} לצופה?`)} description={t('Never scheduled, no constraints or points; current duties stay.', 'לא משובץ, בלי אילוצים ונקודות; הכוננויות הנוכחיות נשארות.')}
+    onOpenAutoFocus={event => {event.preventDefault(); document.getElementById('keep-member')?.focus();}}
+    footer={<div className="sheet-actions"><Button id="keep-member" variant="secondary" disabled={saving} onClick={() => onOpenChange(false)}>{t('Cancel', 'ביטול')}</Button><Button disabled={saving} onClick={onConfirm}>{t('Make viewer', 'הפיכה לצופה')}</Button></div>}>
+    <span className="sr-only">{name}</span>
+  </Sheet>;
+}
+
 export function ClearBoardDialog({open, onOpenChange, saving, lang, t, monthLabel, count, onConfirm}: DialogCopy & {
   open: boolean; onOpenChange: (open: boolean) => void; saving: boolean; monthLabel: string; count: number; onConfirm: () => Promise<void>;
 }) {

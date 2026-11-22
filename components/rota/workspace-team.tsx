@@ -5,6 +5,7 @@ import {TemporaryMemberDialog} from './temporary-member-dialog';
 import {LinkTemporarySheet} from './link-temporary-sheet';
 import {MonthTitle} from './month-title';
 import {MemberSheet} from './member-sheet';
+import {ViewerDialog} from './workspace-dialogs';
 import type {Member} from '@/lib/supabase/snapshot';
 import {Button} from '@/components/ui/button';
 import {Card, SectionTitle} from '@/components/ui/card';
@@ -26,6 +27,7 @@ export function WorkspaceTeam({remote, state, metrics, month, monthLabel, onMont
 }) {
   const {active, monthTotals, historyTotals, owned, assigned} = metrics;
   const [editing, setEditing] = useState<Member | null | undefined>(undefined), [selected, setSelected] = useState<string | null>(null), [linking, setLinking] = useState<Member | null>(null);
+  const [viewerConfirm, setViewerConfirm] = useState<string | null>(null);
   const temporaryMembers = remote.snapshot?.members.filter(m => m.is_temporary) ?? [];
   // The last known nets stay on screen while a newer revision loads (hooks/use-balance.ts).
   const balance = useBalance(remote) ?? null;
@@ -76,7 +78,7 @@ export function WorkspaceTeam({remote, state, metrics, month, monthLabel, onMont
         <SectionTitle className="join-requests">{t('Join requests', 'בקשות הצטרפות')}</SectionTitle>
         <Card inset>
           {pending.length ? pending.map((m) => <ListRow key={m.id} className={temporaryMembers.length > 0 ? 'membership-request can-link' : 'membership-request'} title={m.name} subtitle={m.email}
-            trail={<span className="row-buttons">
+            trail={!remote.viewer && <span className="row-buttons">
               <Button size="sm" disabled={remote.readOnly} onClick={() => remote.review(m.id, 'approved').then(() => toast.success(t('Approved', 'אושר'))).catch(fail)}>{t('Approve', 'אישור')}</Button>
               {temporaryMembers.length > 0 && <Button size="sm" variant="secondary" disabled={remote.readOnly} aria-haspopup="dialog" onClick={() => setLinking(m)}><Link2/>{t('Link to a temporary member…', 'קישור לחבר צוות זמני…')}</Button>}
               <Button size="sm" variant="ghost" disabled={remote.readOnly} onClick={() => remote.review(m.id, 'rejected').catch(fail)}>{t('Decline', 'דחייה')}</Button>
@@ -99,10 +101,18 @@ export function WorkspaceTeam({remote, state, metrics, month, monthLabel, onMont
           if (value && locked) toast.warning(t('A locked weekend is kept. Unlock it in the calendar to free it.', 'סוף שבוע נעול נשמר. אפשר לבטל את הנעילה בלוח כדי לשחרר אותו.'));
         }).catch(fail);
       }}
+      onViewer={value => {
+        if (!member) return;
+        // Turning it on asks first; the popup explains it (no text on the screen itself).
+        if (value) setViewerConfirm(member.id); else remote.setViewer(member.id, false).catch(fail);
+      }}
       onActive={value => {if (member) setActive(member.id, value);}}
       // An admin's colour override travels with the team rows of the checked schedule save.
       onColor={hex => {if (member) update((s) => ({...s, team: s.team.map((p) => (p.id === member.id ? {...p, color: hex} : p))}), false);}}
       onRename={member && temporaryMembers.some(m => m.id === member.id) ? () => setEditing(temporaryMembers.find(m => m.id === member.id)) : undefined}/>
+    {isManager && !remote.readOnly && <ViewerDialog name={viewerConfirm ? state.team.find(p => p.id === viewerConfirm)?.name ?? '' : null} saving={!!remote.saving} lang={lang} t={t}
+      onOpenChange={open => {if (!open) setViewerConfirm(null);}}
+      onConfirm={() => {if (viewerConfirm) remote.setViewer(viewerConfirm, true).then(() => setViewerConfirm(null)).catch(fail);}}/>}
     {isManager && !remote.readOnly && <LinkTemporarySheet pending={linking && pending.some(m => m.id === linking.id) ? linking : null} remote={remote} lang={lang} onClose={() => setLinking(null)}/>}
     {editing !== undefined && isManager && !remote.readOnly && <TemporaryMemberDialog member={editing} remote={remote} lang={lang} onClose={() => setEditing(undefined)}/>}
   </>;
