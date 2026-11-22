@@ -6,7 +6,7 @@ import {EditorDialog} from '@/components/rota/editor-dialog';
 import {Avatar} from '@/components/ui/avatar';
 import {useMobileLayout} from '@/hooks/use-mobile-layout';
 import {tactileTick,tactileVisual} from '@/lib/tactile';
-import {dateRange,shortDate} from '@/lib/date-format';
+import {dateRange,shortDate,weekdayDate} from '@/lib/date-format';
 import {Button} from '@/components/ui/button';
 import {useHoldDrag} from '@/hooks/use-hold-drag';
 import {dates,addDays,dayOf,takesDuties,type State} from '@/lib/rota/engine';
@@ -18,10 +18,8 @@ type Kind='no'|'prefer';
 /** The admins' "Everyone" choice in the picker (#105 rule 6). */
 export const EVERYONE='*';
 
-/** "Wed 9 Dec" / "יום ד׳, 9 בדצמ׳". */
-export function dayTitle(day:string,lang:'en'|'he'){
- return new Date(day+'T12:00:00Z').toLocaleDateString(lang==='en'?'en-GB':'he-IL',{weekday:'short',day:'numeric',month:'short',timeZone:'UTC'});
-}
+/** "Wed 9 Dec" / "יום ד׳, 9 בדצמ׳", the same in every browser engine. */
+export const dayTitle=weekdayDate;
 const firstName=(name:string)=>name.trim().split(/\s+/)[0]??name;
 
 /** Who has a constraint on each day, unavailable first (#105 rule 6). Admins only: members never

@@ -13,3 +13,12 @@ export function dateRange(days:string[],lang:'en'|'he'){
  if(first.slice(0,7)===last.slice(0,7))return `${Number(first.slice(-2))}–${format(last)}`;
  return `${format(first)}–${format(last)}`;
 }
+
+/** "Sat 1 Jan" / "יום ש׳, 1 בינו׳". English is assembled from its parts: WebKit's en-GB adds a comma
+ * after the weekday ("Sat, 1 Jan") that Chromium leaves out, and the app shows the same on both. */
+export function weekdayDate(day:string,lang:'en'|'he'){
+ const date=new Date(day+'T12:00:00Z'),options={weekday:'short',day:'numeric',month:'short',timeZone:'UTC'} as const;
+ if(lang==='he')return date.toLocaleDateString('he-IL',options);
+ const part=(type:string)=>new Intl.DateTimeFormat('en-GB',options).formatToParts(date).find(p=>p.type===type)?.value??'';
+ return `${part('weekday')} ${part('day')} ${part('month')}`;
+}
