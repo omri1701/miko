@@ -33,7 +33,7 @@ begin
  if p_friday<(now() at time zone 'Asia/Jerusalem')::date then raise exception 'Choose duties starting today or later'; end if;
  if f.primary_id is null or s.primary_id is null then raise exception 'This duty has no primary engineer'; end if;
  if p_friday_primary is null or p_saturday_primary is null or exists(select 1 from unnest(array[p_friday_primary,p_saturday_primary]) u(member)
-  where not exists(select 1 from public.duty_members dm where dm.id=u.member and dm.active and dm.status='approved')) then raise exception 'Choose an active approved engineer'; end if;
+  where not exists(select 1 from public.duty_members dm where dm.id=u.member and dm.active and dm.status='approved' and not dm.viewer)) then raise exception 'Choose an active approved engineer'; end if;
  -- Half points stay exact; the table's own bounds apply to both dates.
  if p_friday_extra is null or p_saturday_extra is null or p_friday_extra<0 or p_friday_extra>20 or p_friday_extra*2<>trunc(p_friday_extra*2)
   or p_saturday_extra<0 or p_saturday_extra>20 or p_saturday_extra*2<>trunc(p_saturday_extra*2) then raise exception 'Extra points must be 0 to 20 in half points'; end if;

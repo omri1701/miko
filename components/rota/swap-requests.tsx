@@ -158,7 +158,7 @@ export function SwapCard({r,swaps,remote,lang}:{r:SwapRequest;swaps:SwapActions;
     {pending&&<ConstraintNotes raw={raw} r={r} name={name} lang={lang} me={me} admin={remote.isAdmin}/>}
     {refused&&<small className="swap-refused" role="note">{swaps.explain(refused,'accept')}</small>}
   </div>
-  {pending&&<div className="swap-card-actions">
+  {pending&&!remote.viewer&&<div className="swap-card-actions">
    {incoming&&<><Button size="sm" disabled={!!refused||remote.readOnly} onClick={()=>swaps.startAccept(r)}>{acceptLabel}</Button><Button size="sm" variant="secondary" disabled={remote.readOnly} onClick={()=>swaps.decline(r)}>{t('Decline','סירוב')}</Button></>}
    {admin&&<><Button size="sm" disabled={remote.readOnly} onClick={()=>swaps.openApprove(r)}>{approveLabel}</Button><Button size="sm" variant="secondary" disabled={remote.readOnly} onClick={()=>swaps.reject(r)}>{t('Reject','דחייה')}</Button></>}
    {swapStarter(r)===me&&<Button size="sm" variant="ghost" disabled={remote.readOnly} onClick={()=>swaps.cancel(r)}>{t('Cancel request','ביטול הבקשה')}</Button>}

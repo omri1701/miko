@@ -18,10 +18,11 @@ begin
  where m.month in (to_char((p_month||'-01')::date-interval '1 month','YYYY-MM'),to_char((p_month||'-01')::date+interval '1 month','YYYY-MM')) and a.primary_id is not null;
  return jsonb_build_object('month',p_month,'duties',duties,'neighbors',neighbors,
   -- noWeekends and weekendsFrom appear only when set, so other members' facts (and fingerprints) are unchanged.
-  'members',coalesce((select jsonb_agg(jsonb_build_object('id',id,'active',active,'approved',status='approved','eligible',status='approved' and active)
+  'members',coalesce((select jsonb_agg(jsonb_build_object('id',id,'active',active,'approved',status='approved','eligible',status='approved' and active and not viewer)
    ||case when no_weekends then jsonb_build_object('noWeekends',true) else '{}'::jsonb end
    ||case when weekends_from is not null then jsonb_build_object('weekendsFrom',weekends_from) else '{}'::jsonb end order by id) from public.duty_members),'[]'),
-  'seniority',coalesce((select jsonb_agg(id order by seniority,joined_at,id) from public.duty_members where status='approved' and active),'[]'),
+  -- A Viewer (#90) is never eligible, so Generate and Plan the month leave them out.
+  'seniority',coalesce((select jsonb_agg(id order by seniority,joined_at,id) from public.duty_members where status='approved' and active and not viewer),'[]'),
   'constraints',coalesce((select jsonb_object_agg(member_id,days) from (select member_id,jsonb_object_agg(day,kind order by day) days from public.duty_constraints
     where day>=(duties->0->>'startDate')::date and day<(duties->-1->>'endDate')::date and not (member_id::text||'/'||day::text)=any(approved) group by member_id) c),'{}'),
   'allocation',meta.allocation,'allocationId',meta.allocation_id,'locks',coalesce((select jsonb_agg(jsonb_build_object('dutyId',a.day,'engineer',a.primary_id) order by a.day) from public.duty_assignments a join public.duty_months m on m.month=p_month where duty_private.duty_owner(a.day)=p_month and a.locked and a.publication_id is not distinct from (case when m.status='published' then m.current_publication_id end)),'[]'),'approvals',coalesce((select jsonb_agg(case when v->>'rule'='availability' then jsonb_set(v,'{dates}',(select jsonb_agg(q order by q) from jsonb_array_elements_text(v->'dates') q

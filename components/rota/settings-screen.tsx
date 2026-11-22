@@ -37,7 +37,7 @@ export function SettingsScreen({remote, open, onOpenChange, lang, setLang, onExp
   async function signOut() {
     setLeaving(true);
     // This device stops receiving the member's notifications; never blocks signing out.
-    if (!remote.readOnly) await forgetDevice(endpoint => remote.personal.removeDevice(endpoint));
+    if (!remote.settingsReadOnly) await forgetDevice(endpoint => remote.personal.removeDevice(endpoint));
     await remote.signOut();
     setLeaving(false);
   }
@@ -45,7 +45,7 @@ export function SettingsScreen({remote, open, onOpenChange, lang, setLang, onExp
   const taken = new Map((remote.snapshot?.members ?? []).filter(m => m.id !== me?.id && m.status === 'approved' && m.active).map(m => [memberColor(m.color).hex, m.name]));
   const current = memberColor(me?.color).hex;
   async function pickColor(hex: string) {
-    if (colorBusy || remote.readOnly || hex === current) return;
+    if (colorBusy || remote.settingsReadOnly || hex === current) return;
     setColorBusy(true);
     try {await remote.setColor(hex);} catch (e) {toast.error(userMessage((e as Error).message, t));}
     finally {setColorBusy(false);}
@@ -61,11 +61,11 @@ export function SettingsScreen({remote, open, onOpenChange, lang, setLang, onExp
       <Avatar name={name || me?.name || ''} color={me?.color} size={72} className="settings-avatar"/>
       <label className="settings-name">
         <span className="sr-only">{t('Display name', 'שם לתצוגה')}</span>
-        <input disabled={remote.readOnly} maxLength={80} value={name} placeholder={t('Your name', 'השם שלך')} onChange={e => {setName(e.target.value); setSaved(false);}}
-          onKeyDown={e => {if (e.key === 'Enter' && name.trim() && !unchanged && !remote.saving && !remote.readOnly) void rename();}}/>
+        <input disabled={remote.settingsReadOnly} maxLength={80} value={name} placeholder={t('Your name', 'השם שלך')} onChange={e => {setName(e.target.value); setSaved(false);}}
+          onKeyDown={e => {if (e.key === 'Enter' && name.trim() && !unchanged && !remote.saving && !remote.settingsReadOnly) void rename();}}/>
         {/* Save and Saved sit inside the field's end, so nothing below is reserved or shifts. */}
         <span className="settings-name-action" aria-live="polite">
-          {!unchanged && <Button size="icon-sm" aria-label={t('Save name', 'שמירת השם')} title={t('Save name', 'שמירת השם')} disabled={remote.readOnly || remote.saving || !name.trim()} onClick={rename}><Check/></Button>}
+          {!unchanged && <Button size="icon-sm" aria-label={t('Save name', 'שמירת השם')} title={t('Save name', 'שמירת השם')} disabled={remote.settingsReadOnly || remote.saving || !name.trim()} onClick={rename}><Check/></Button>}
           {saved && unchanged && <span className="settings-saved" role="status">{t('Saved', 'נשמר')}</span>}
         </span>
       </label>
@@ -82,7 +82,7 @@ export function SettingsScreen({remote, open, onOpenChange, lang, setLang, onExp
         <div className="color-grid" role="radiogroup" aria-label={t('My colour', 'הצבע שלי')} aria-busy={colorBusy}>
           {PALETTE.map(c => {
             const owner = taken.get(c.hex), selected = c.hex === current;
-            return <button key={c.hex} type="button" role="radio" aria-checked={selected} disabled={remote.readOnly || colorBusy || (!!owner && !selected)}
+            return <button key={c.hex} type="button" role="radio" aria-checked={selected} disabled={remote.settingsReadOnly || colorBusy || (!!owner && !selected)}
               className={'swatch member-tint' + (selected ? ' selected' : '') + (owner ? ' taken' : '')} style={memberStyle(c.hex)}
               aria-label={owner ? `${c.name[lang]} · ${owner}` : c.name[lang]} title={owner ? `${c.name[lang]} · ${owner}` : c.name[lang]} onClick={() => pickColor(c.hex)}>
               {selected && <Check aria-hidden="true"/>}
@@ -98,7 +98,8 @@ export function SettingsScreen({remote, open, onOpenChange, lang, setLang, onExp
         options={[{value: 'en', label: <span lang="en">English</span>}, {value: 'he', label: <span lang="he">עברית</span>}]}/>}/>
     </Card>
 
-    <NotificationSettingsPanel remote={remote} lang={lang} open={open}/>
+    {/* Of the Viewers, only Viewer-admins are notified (#90). */}
+    {!(remote.viewer && !remote.isAdmin) && <NotificationSettingsPanel remote={remote} lang={lang} open={open}/>}
     <CalendarSettings remote={remote} lang={lang}/>
 
     {onExport && <>

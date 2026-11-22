@@ -114,6 +114,33 @@ docker exec supabase_db_duty-scheduler psql -U postgres -q -v ON_ERROR_STOP=1 -f
 node supabase/tests/generation.mjs supabase_db_duty-scheduler
 ```
 
+## Viewer members
+
+Migration `20261121235055_viewer_members.sql` (decisions 2026-11-20, #90) adds
+`duty_members.viewer` (default false, so nobody changes) and the admin-only checked RPC
+`duty_set_viewer(p_member, p_viewer, p_revision)`: approved, non-temporary members only,
+revision-checked, no direct table writes. A Viewer is still a member (`is_member()`), so they
+read the published schedule, but is never scheduled: generation facts mark them not eligible
+and leave them out of the seniority list, publishing refuses a Viewer as primary or emergency
+cover (`An active engineer is required`), swaps and published edits refuse them,
+`set_constraints` refuses constraints for them (`Viewers have no constraints`), and the ledger
+records them as inactive (`compensation_members`, trigger now on `viewer` too) so they get no
+points or debts. Becoming a Viewer works like deactivating: duties already scheduled stay,
+open swaps are invalidated (`duty_reconcile_member_swaps` now also fires on `viewer`).
+`duty_private.is_manager()` is false for a Viewer-admin, so every checked write refuses them;
+the new `duty_private.is_overseer()` (any approved, active admin, Viewer or not) replaces it in
+the admin read policies (allocations, assignments, ledger events and snapshots, constraints,
+members, publications, swaps) and in the read-only `balance` and `replanned_versions`.
+`assert_admin_remains` counts only admins who are not Viewers. Notifications: `push_enqueue`
+skips Viewers unless they are admins, and deadline reminders skip every Viewer. Focused checks
+(empty disposable LOCAL database only):
+
+```powershell
+docker cp supabase/tests supabase_db_duty-scheduler:/tmp/duty-tests
+docker exec supabase_db_duty-scheduler psql -U postgres -q -v ON_ERROR_STOP=1 -f /tmp/duty-tests/viewer.sql
+node --test tests/viewer.test.mjs
+```
+
 ## Personal calendar feed
 
 Migration `20261106013149_calendar_feed.sql` adds `duty_calendar_feeds` (one row per member:
