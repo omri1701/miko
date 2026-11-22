@@ -185,12 +185,18 @@ export function RotaWorkspace({remote, lang, setLang}: {remote: TeamWorkspace; l
   // admins may edit any future month, as the database allows (#105).
   const constraintsMonthLockFor = (m: string) => !today ? null : m < today.slice(0, 7) ? texts.monthClosed(m, lang) : !isManager && constraintsLast && m > constraintsLast ? texts.monthNotOpen(m, lang) : null;
   const constraintsMonthLock = constraintsMonthLockFor(month);
-  const constraintsLockDay = (day: string) => constraintsMonthLockFor(day.slice(0, 7)) ?? (today && day < today ? texts.dayPassed(lang) : null);
+  // Closed by its deadline or publication (members), or by publication (admins).
   const constraintsClosedFor = (m: string) => {
     const details = state.months[m] ?? {deadline: addDays(m + '-01', -7), status: 'draft' as const};
     return !constraintsMonthLockFor(m) && (isManager
       ? details.status === 'published'
       : (remote.snapshot?.months.find((x) => x.month === m)?.status === 'published' || details.deadline < today));
+  };
+  // Every day that can't be edited is dark, and a tap says why (#105): a past, closed or
+  // not-yet-open month for all its days; in an open month, only the days that have passed.
+  const constraintsLockDay = (day: string) => {
+    const m = day.slice(0, 7);
+    return constraintsMonthLockFor(m) ?? (constraintsClosedFor(m) ? texts.monthClosed(m, lang) : today && day < today ? texts.dayPassed(lang) : null);
   };
   const constraintsClosed = constraintsClosedFor(month);
   const metrics = workspaceMetrics(state, month, duties);

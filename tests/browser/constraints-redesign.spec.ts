@@ -224,6 +224,7 @@ for (const who of ['a', 'admin'] as const) for (const lang of ['en', 'he'] as co
     // A member: closed, the existing toast, nothing to select; the database refuses too (access.sql).
     await expect(page.locator('.availability-screen .month-status')).toHaveText(he ? 'סגור' : 'Closed');
     await expect(april).toHaveAttribute('aria-disabled', 'true');
+    expect(await dark(page, '2027-04-14')).toBe(true);
     await expect(page.locator('.month-pane:not(.month-peek) .availability-day[data-gesture-key^="2027-04"]')).toHaveCount(0);
     await april.click({force: true});
     await expect(page.locator('[data-sonner-toast]').filter({hasText: he ? 'אפריל עוד לא נפתח' : "April isn't open yet"})).toBeVisible();
@@ -295,6 +296,73 @@ for (const lang of ['en', 'he'] as const) test(`#105 selection: several days are
   if (mobile) await touchEvent(page, 'touchend', to.x, to.y); else await page.mouse.up();
   await expect(page.getByRole('dialog')).toBeVisible();
   await expect(page.locator('.month-pane:not(.month-peek) .date-selected')).toHaveCount(8);
+});
+
+/** The dark look of a day that can't be edited (#105): the passed-day box colour. */
+const dark = (page: Page, date: string) => cell(page, date).evaluate(el => {
+  const probe = document.createElement('div');
+  probe.style.background = 'var(--cal-past)'; document.body.append(probe);
+  const want = getComputedStyle(probe).backgroundColor; probe.remove();
+  return el.classList.contains('locked-day') && getComputedStyle(el).backgroundColor === want;
+});
+const toast = (page: Page, text: string) => expect(page.locator('[data-sonner-toast]').filter({hasText: text})).toBeVisible();
+
+for (const lang of ['en', 'he'] as const) test(`#105 closed month: every day is dark and a tap says the month is closed; a constraint opens read-only ${lang}`, async ({page, openApp, backend}) => {
+  const he = lang === 'he';
+  backend.raw.months.find(m => m.month === '2026-11')!.deadline = '2026-10-01';
+  await open(page, openApp, he);
+  await expect(page.locator('.availability-screen .month-status')).toHaveText(he ? 'סגור' : 'Closed');
+  // A future day of the closed month: dark, the month-closed toast (not "This day has passed").
+  expect(await dark(page, '2026-11-23')).toBe(true);
+  await cell(page, '2026-11-23').click({force: true});
+  await toast(page, he ? 'נובמבר כבר נסגר' : 'November is closed');
+  await expect(page.locator('[data-sonner-toast]').filter({hasText: he ? 'היום הזה כבר עבר' : 'This day has passed'})).toHaveCount(0);
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+  for (const d of ['2026-11-01', '2026-11-15', '2026-11-30']) await expect(cell(page, d)).toHaveClass(/locked-day/);
+  // A day with a constraint keeps its colour and note, dimmed, and opens read-only.
+  await expect(cell(page, '2026-11-04').locator('.availability-note')).toHaveText('Synthetic vacation');
+  await cell(page, '2026-11-04').click({force: true});
+  await expect(page.getByRole('dialog').locator('.constraint-note-full')).toHaveText('Synthetic vacation');
+  await expect(page.getByRole('dialog').getByRole('textbox')).toHaveCount(0);
+});
+
+for (const lang of ['en', 'he'] as const) test(`#105 open month: only passed days are dark, with "This day has passed"; later days work normally ${lang}`, async ({page, openApp, backend}) => {
+  const he = lang === 'he';
+  // October (today is the 9th) with its deadline still ahead, so it's open for the member.
+  backend.raw.months.push({month: '2026-10', deadline: '2026-10-25', status: 'draft', generated: false, current_publication_id: null, publication_sequence: 0});
+  await open(page, openApp, he);
+  await previous(page, he).click();
+  await expect(page.locator('.availability-screen .month-name')).toHaveText(he ? 'אוקטובר 2026' : 'October 2026');
+  expect(await dark(page, '2026-10-05')).toBe(true);
+  await cell(page, '2026-10-05').click({force: true});
+  await toast(page, he ? 'היום הזה כבר עבר' : 'This day has passed');
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+  // Today and later: normal, and the editor opens.
+  expect(await dark(page, '2026-10-20')).toBe(false);
+  await expect(cell(page, '2026-10-20')).not.toHaveClass(/locked-day/);
+  await expect(cell(page, '2026-10-09')).not.toHaveClass(/locked-day/);
+  await cell(page, '2026-10-20').click();
+  await expect(page.getByRole('dialog').getByRole('textbox')).toBeVisible();
+});
+
+for (const lang of ['en', 'he'] as const) test(`#105 a month not open yet is dark for a member, with its toast ${lang}`, async ({page, openApp}) => {
+  const he = lang === 'he';
+  await open(page, openApp, he);
+  await next(page, he).click(); await next(page, he).click();
+  await expect(page.locator('.availability-screen .month-name')).toHaveText(he ? 'ינואר 2027' : 'January 2027');
+  expect(await dark(page, '2027-01-14')).toBe(true);
+  await cell(page, '2027-01-14').click({force: true});
+  await toast(page, he ? 'ינואר עוד לא נפתח' : "January isn't open yet");
+});
+
+for (const lang of ['en', 'he'] as const) test(`#105 an admin on a deadline-closed month: nothing is dark and days open the editor ${lang}`, async ({page, openApp, backend}) => {
+  const he = lang === 'he';
+  backend.raw.months.find(m => m.month === '2026-11')!.deadline = '2026-10-01';
+  await open(page, openApp, he, 'admin');
+  expect(await dark(page, '2026-11-23')).toBe(false);
+  await expect(page.locator('.month-pane:not(.month-peek) .availability-day.locked-day[data-date^="2026-11"]')).toHaveCount(0);
+  await cell(page, '2026-11-23').click();
+  await expect(page.getByRole('dialog').getByRole('textbox')).toBeVisible();
 });
 
 test('#105 rule 7a: hover shading only applies where a pointer hovers', async ({page, openApp}) => {

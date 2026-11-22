@@ -566,24 +566,22 @@ select.picker:disabled{opacity:.5;cursor:default}
 .availability-day{overflow:visible;touch-action:pan-y;transition:none}
 .availability-grid .availability-day.outside{opacity:1}
 .availability-grid .availability-day.outside .day-number{color:var(--ink-4);font-weight:500}
-.availability-grid .availability-day.past{background:var(--cal-past)}
-.availability-grid .availability-day.past .day-number{color:var(--ink-4);font-weight:500}
+/* A day that can't be edited (passed, or its month closed or not open yet) is dark: darker box,
+   gray number, its constraint's colour dimmed and its note still shown (#105). */
+.availability-grid .availability-day.locked-day{background:var(--cal-past)}
+.availability-grid .availability-day.locked-day .day-number{color:var(--ink-4);font-weight:500}
 .availability-grid .availability-day.no{background:var(--danger-soft);color:var(--danger)}
 .availability-grid .availability-day.prefer{background:var(--ok-soft);color:var(--ok)}
-.availability-grid .availability-day:is(.no,.prefer):not(.past):not(.outside) .day-number{color:inherit}
-.availability-grid .availability-day.past.no{background:color-mix(in srgb,var(--danger-soft) 55%,var(--cal-past));color:color-mix(in srgb,var(--danger) 72%,var(--ink-3))}
-.availability-grid .availability-day.past.prefer{background:color-mix(in srgb,var(--ok-soft) 55%,var(--cal-past));color:color-mix(in srgb,var(--ok) 72%,var(--ink-3))}
+.availability-grid .availability-day:is(.no,.prefer):not(.locked-day):not(.outside) .day-number{color:inherit}
+.availability-grid .availability-day.locked-day.no{background:color-mix(in srgb,var(--danger-soft) 55%,var(--cal-past));color:color-mix(in srgb,var(--danger) 72%,var(--ink-3))}
+.availability-grid .availability-day.locked-day.prefer{background:color-mix(in srgb,var(--ok-soft) 55%,var(--cal-past));color:color-mix(in srgb,var(--ok) 72%,var(--ink-3))}
 .availability-grid .availability-day.joins-next{border-inline-end-color:transparent}
 @media(hover:hover){
  .availability-grid .availability-day.no:not(.locked-day):not(.date-selected):hover{background:color-mix(in srgb,var(--danger) 16%,var(--surface))}
  .availability-grid .availability-day.prefer:not(.locked-day):not(.date-selected):hover{background:color-mix(in srgb,var(--ok) 16%,var(--surface))}
- .availability-grid .availability-day.locked-day:hover{background:var(--surface)}
- .availability-grid .availability-day.locked-day:is(.weekend):hover{background:var(--cal-weekend)}
- .availability-grid .availability-day.locked-day.past:hover{background:var(--cal-past)}
- .availability-grid .availability-day.locked-day.past.no:hover{background:color-mix(in srgb,var(--danger-soft) 55%,var(--cal-past))}
- .availability-grid .availability-day.locked-day.past.prefer:hover{background:color-mix(in srgb,var(--ok-soft) 55%,var(--cal-past))}
- .availability-grid .availability-day.locked-day:not(.past).no:hover{background:var(--danger-soft)}
- .availability-grid .availability-day.locked-day:not(.past).prefer:hover{background:var(--ok-soft)}
+ .availability-grid .availability-day.locked-day:hover{background:var(--cal-past)}
+ .availability-grid .availability-day.locked-day.no:hover{background:color-mix(in srgb,var(--danger-soft) 55%,var(--cal-past))}
+ .availability-grid .availability-day.locked-day.prefer:hover{background:color-mix(in srgb,var(--ok-soft) 55%,var(--cal-past))}
 }
 /* A selection: a light brand tint and one continuous 2px outline (.selection-box, drawn per cell
    toward unselected neighbours over the cell's dividers, so no gaps; the component sets the sides). */
