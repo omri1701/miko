@@ -45,6 +45,9 @@ export const MonthStage = forwardRef<MonthStageHandle, {month: string; rtl: bool
     const stage = useRef<HTMLDivElement>(null), current = useRef<HTMLDivElement>(null), next = useRef<HTMLDivElement>(null);
     // The neighbour showing (an offset), kept per month so a new month starts without one.
     const [shown, setShown] = useState({month, offset: 0}), peek = shown.month === month ? shown.offset : 0;
+    // Any month change clears it: a slide that committed left {old month, offset} behind, and coming
+    // back to that month would bring a blurred ghost of its neighbour back (#105).
+    if (shown.month !== month && shown.offset) setShown({month, offset: 0});
     const setPeek = (offset: number) => setShown({month, offset});
     const g = useRef<{id: number; x: number; y: number; t: number; live: boolean; touch: boolean; dx: number} | null>(null), busy = useRef(false), suppress = useRef(0);
     const arrival = useRef<number | null>(null);

@@ -36,6 +36,9 @@ export function MonthTitle({month, label, status, t, onChange, onSwipe, arrival 
   const [slidTo, setSlidTo] = useState<string | null>(null);
   // The neighbouring name showing (an offset), kept per month so a new month starts without one.
   const [shown, setShown] = useState({month, offset: 0}), peek = shown.month === month ? shown.offset : 0;
+  // Any month change clears it: a slide that committed left {old month, offset} behind, and coming
+  // back to that month would bring a blurred ghost of its neighbour back (#105).
+  if (shown.month !== month && shown.offset) setShown({month, offset: 0});
   const setPeek = (offset: number) => setShown({month, offset});
   const roll = useRef<HTMLSpanElement>(null), name = useRef<HTMLSpanElement>(null), next = useRef<HTMLSpanElement>(null);
   const drag = useRef<{id: number; x: number; y: number; t: number; dx: number; sliding: boolean} | null>(null), busy = useRef(false);
