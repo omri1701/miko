@@ -9,7 +9,6 @@ import {Checkbox} from '@/components/ui/checkbox';
 import {EditorDialog} from '@/components/rota/editor-dialog';
 import {KindChoice,ReviewStep} from '@/components/rota/published-duty-editor';
 import {DayCard,DayCards,DayHeading,KeepChoice,SplitJoinRow,WeekendLayoutSwitch,useWeekendLayout,type Half} from '@/components/rota/weekend-cards';
-import {Select,SelectTrigger,SelectValue,SelectContent,SelectItem} from '@/components/ui/select';
 import {editStale,halfPoints,swapPartners,validExtra,weekendChanges,weekendConflicts,weekendEditSummary,type EditKind,type PublishedWeekend,type WeekendEdit} from '@/lib/supabase/published-edit';
 import type {TeamWorkspace} from '@/hooks/use-team-workspace';
 
@@ -74,10 +73,9 @@ export function PublishedWeekendEditor({remote,weekend:opened,focusDay,lang,onCl
  function picker(h:Half|'both',aria:string){
   const current=get(h==='sat'?'sat':'fri').primary,holders=[w.fri.primary,w.sat.primary];
   const members=raw.members.filter(m=>m.status==='approved'&&((m.active&&!m.viewer)||holders.includes(m.id))&&!covers(h).includes(m.id));
-  return <label className="field-label">{t('Primary engineer','מהנדס ראשי')}<Select disabled={busy} value={current} onValueChange={v=>update(h,p=>({...p,primary:v}))}>
-   <SelectTrigger className="picker" aria-label={aria}><SelectValue/></SelectTrigger>
-   <SelectContent>{members.map(m=><SelectItem key={m.id} value={m.id}>{m.name}{raw.constraints.some(c=>c.member_id===m.id&&c.kind==='no'&&days(h).includes(c.day))&&!holders.includes(m.id)?t(' · unavailable',' · לא זמין'):''}{m.no_weekends&&!holders.includes(m.id)?t(' · no weekends',' · ללא סופי שבוע'):''}</SelectItem>)}</SelectContent>
-  </Select></label>;
+  return <label className="field-label">{t('Primary engineer','מהנדס ראשי')}<select className="picker" aria-label={aria} disabled={busy} value={current} onChange={e=>{const v=e.target.value;update(h,p=>({...p,primary:v}))}}>
+   {members.map(m=><option key={m.id} value={m.id}>{m.name}{raw.constraints.some(c=>c.member_id===m.id&&c.kind==='no'&&days(h).includes(c.day))&&!holders.includes(m.id)?t(' · unavailable',' · לא זמין'):''}{m.no_weekends&&!holders.includes(m.id)?t(' · no weekends',' · ללא סופי שבוע'):''}</option>)}
+  </select></label>;
  }
  function pointsField(h:Half,label:string){
   const p=get(h);

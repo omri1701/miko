@@ -1,4 +1,4 @@
-import {test as base, expect, type Page} from '@playwright/test';
+import {test as base, expect, type Locator, type Page} from '@playwright/test';
 import {addDays, blocks, dayOf, specialAt} from '../../lib/rota/engine';
 import {canManage, findMe, fromSnapshot, type Snapshot, type DutyRow, type SwapRequest} from '../../lib/supabase/snapshot';
 import {canonicalDuties, coverageStart} from '../../lib/scheduling/calendar';
@@ -57,11 +57,6 @@ export class Backend {
   invalidated = false;
   failNextSave = false;
   /** validate_swap's blocking conflicts: emergency cover's unavailability (a primary's own never blocks, #92). */
-  coverConflict(from: DutyRow, to: DutyRow) {
-    const inside = (d: DutyRow, day: string) => day >= d.day && day < d.end_day;
-    return this.raw.constraints.some(c => c.kind === 'no' &&
-      ((c.member_id === from.secondary_id && inside(from, c.day)) || (c.member_id === to.secondary_id && inside(to, c.day))));
-  }
   /** Display-only projection served by duty_balance; null serves zero for everyone. */
   balance: Balance | null = null;
   /** Versions a re-plan reversed, served by duty_replanned_versions. */
@@ -201,8 +196,9 @@ export class Backend {
       const manager = canManage(this.raw, signIn);
       expect(manager || [a.primary_id, b.primary_id].includes(user)).toBe(true);
       const inside = (d: DutyRow, day: string) => day >= d.day && day < d.end_day;
-      return this.raw.constraints.filter(c => c.kind === 'no' && (([b.primary_id, a.secondary_id].includes(c.member_id) && inside(a, c.day)) ||
-        ([a.primary_id, b.secondary_id].includes(c.member_id) && inside(b, c.day)))).map(c => ({member: manager || [a.primary_id, b.primary_id].includes(c.member_id) ? c.member_id : null, day: c.day}));
+      // Only the two primaries: emergency cover doesn't move (#116).
+      return this.raw.constraints.filter(c => c.kind === 'no' && ((c.member_id === b.primary_id && inside(a, c.day)) ||
+        (c.member_id === a.primary_id && inside(b, c.day)))).map(c => ({member: c.member_id, day: c.day}));
     }
     if (name === 'duty_calendar_status' || name === 'duty_calendar_reset' || name === 'duty_calendar_language') {
       // Mirrors duty_private.calendar_*: own feed only, approved active members, never the hash.
@@ -341,8 +337,7 @@ export class Backend {
       // Admins may propose for others; an admin party becomes the requester.
       if (from.primary_id !== user) {expect(admin).toBe(true); if (to.primary_id === user) [from, to] = [to, from];}
       expect(to.primary_id).not.toBe(from.primary_id);
-      // Mirrors request_swap (#92): emergency cover's unavailability refuses; a primary's own never does.
-      if (this.coverConflict(from, to)) throw Error('Availability conflict. An admin must explicitly override with a reason.');
+      // Mirrors request_swap: availability never refuses (#92 a primary's own; #116 the cover's).
       this.raw.swapRequests!.unshift({id: `request-${this.raw.revision}`, month: MONTH, source_publication_id: from.publication_id, requester_id: from.primary_id!, other_id: to.primary_id!, from_day: from.day, from_end_day: from.end_day, to_day: to.day, to_end_day: to.end_day, explanation: p.p_explanation as string, status: 'awaiting_engineer', accepted_by: null, accepted_at: null, created_at: NOW, resolved_at: null, resolved_by: null, result_publication_id: null, override_reason: '', proposed_by: from.primary_id === user ? null : user, requester_accepted_at: null});
     } else if (name === 'duty_delete_publication') {
       expect(admin).toBe(true);
@@ -592,6 +587,30 @@ export async function dragTo(page: Page, x: number, y: number, tx: number, ty: n
     await page.mouse.move(tx, ty, {steps: 8}); await page.mouse.up();
   }
 }
+export type Gesture = {move: (dx: number) => Promise<void>; end: () => Promise<void>};
+/** A horizontal drag: real touch input (CDP) on phones, a mouse drag on PC. */
+export async function press(page: Page, x: number, y: number, mobile: boolean): Promise<Gesture> {
+  if (!mobile) {
+    await page.mouse.move(x, y); await page.mouse.down();
+    return {move: async dx => page.mouse.move(x + dx, y, {steps: 6}), end: async () => page.mouse.up()};
+  }
+  const cdp = await page.context().newCDPSession(page);
+  let at = x;
+  await cdp.send('Input.dispatchTouchEvent', {type: 'touchStart', touchPoints: [{x, y}]});
+  return {
+    move: async dx => {for (let step = 1; step <= 6; step++) await cdp.send('Input.dispatchTouchEvent', {type: 'touchMove', touchPoints: [{x: at + (x + dx - at) * step / 6, y}]}); at = x + dx;},
+    end: async () => {await cdp.send('Input.dispatchTouchEvent', {type: 'touchEnd', touchPoints: []}); await cdp.detach();},
+  };
+}
+/** Opens a Constraints day's editor. On a phone an unavailable day with a note shows the note
+ * first (#95), so this goes through its Edit button. */
+/** A tap on a day opens its editor directly (#105 rule 5: one sheet). */
+export async function editConstraintDay(page: Page, day: ReturnType<Page['locator']>) {
+  await day.click();
+  await expect(page.getByRole('dialog').locator('textarea')).toBeVisible();
+}
+/** A single day's sheet title (#105): "Wed 9 Dec" / its Hebrew form. */
+export const dayTitle = (day: string, lang: 'en' | 'he') => new Date(`${day}T12:00:00Z`).toLocaleDateString(lang === 'en' ? 'en-GB' : 'he-IL', {weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC'});
 export async function touchEvent(page: Page, type: string, x: number, y: number) {
   await page.evaluate(({type, x, y}) => {
     const target = document.elementFromPoint(x, y)!;
@@ -627,4 +646,12 @@ export async function monthAction(page: Page, name: string) {
   } else {
     await page.getByRole('button', {name, exact: true}).click();
   }
+}
+
+/** Picks a native <select>'s option by its text (exact, or a pattern), as a person would. */
+export async function choose(select: Locator, name: string | RegExp) {
+  const labels = (await select.locator('option').allTextContents()).map(label => label.trim());
+  const label = labels.find(text => typeof name === 'string' ? text === name : name.test(text));
+  expect(label, `option ${name} among: ${labels.join(' | ')}`).toBeTruthy();
+  await select.selectOption({label: label!});
 }

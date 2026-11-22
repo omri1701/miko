@@ -1,0 +1,39 @@
+-- Constraints only up to 3 months ahead (#111). A member's write for a month after the current
+-- Israel month and the next two ("constraints-window-closed:<month>") or for a day that has
+-- passed ("constraints-day-passed") is refused with SQLSTATE 42501, never 40001/40P01.
+-- Admins, deadlines and published months are unchanged, as are the signature, grants and data.
+-- Re-stamped after develop's #103 migrations, which replace set_constraints too; this keeps both.
+-- Built on develop's #104 set_constraints (Viewers have no constraints).
+
+-- Source: schemas/functions/duty_private/set_constraints.sql
+CREATE OR REPLACE FUNCTION duty_private.set_constraints(p_member uuid, p_days date[], p_kind text, p_note text, p_revision bigint) RETURNS void
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO ''
+    AS $$
+declare d date; m text; manager boolean;
+begin
+ perform duty_private.check_revision(p_revision);
+ manager:=duty_private.is_manager();
+ if (not manager and p_member is distinct from duty_private.current_member_id()) or not exists(select 1 from public.duty_members where id=p_member and status='approved') then raise exception 'Not allowed' using errcode='42501'; end if;
+ -- A Viewer (#90) is never scheduled, so nobody adds constraints for them.
+ if exists(select 1 from public.duty_members where id=p_member and viewer) then raise exception 'Viewers have no constraints' using errcode='42501'; end if;
+ if p_kind not in ('no','prefer','clear') or p_kind is null or coalesce(cardinality(p_days),0) not between 1 and 62 or length(coalesce(p_note,''))>300 then raise exception 'Invalid constraints'; end if;
+ foreach d in array p_days loop
+  if d is null then raise exception 'Invalid date'; end if;
+  m:=to_char(d,'YYYY-MM');
+  insert into public.duty_months(month,deadline) values(m,date_trunc('month',d)::date-7) on conflict do nothing;
+  if not manager and exists(select 1 from public.duty_months where month=m and (status='published' or deadline < (now() at time zone 'Asia/Jerusalem')::date)) then raise exception 'Constraints are closed for this month' using errcode='42501'; end if;
+  -- Members enter constraints for this Israel month and the next two only, and never for a day
+  -- that has passed (#111); the window moves at Israel midnight. Admins keep editing any month,
+  -- as with deadlines.
+  if not manager and m > to_char(date_trunc('month',now() at time zone 'Asia/Jerusalem')+interval '2 months','YYYY-MM') then raise exception 'constraints-window-closed:%',m using errcode='42501'; end if;
+  if not manager and d < (now() at time zone 'Asia/Jerusalem')::date then raise exception 'constraints-day-passed' using errcode='42501'; end if;
+  if p_kind='clear' then delete from public.duty_constraints where member_id=p_member and day=d;
+  else insert into public.duty_constraints(member_id,day,kind,note) values(p_member,d,p_kind,trim(coalesce(p_note,''))) on conflict(member_id,day) do update set kind=excluded.kind,note=excluded.note,
+   -- A note edit keeps an admin's availability approval; a newly unavailable date never has one.
+   duty_approved=duty_constraints.duty_approved and duty_constraints.kind='no' and excluded.kind='no'; end if;
+  -- Availability is independent of the working schedule. In particular, an
+  -- admin constraint edit must not create an empty draft of a published month.
+ end loop;
+ update public.duty_workspace set revision=revision+1 where id;
+end $$;

@@ -57,12 +57,21 @@ begin
  schedule:=jsonb_build_object('team','[]'::jsonb,'months',jsonb_build_object('2099-10',jsonb_build_object('deadline','2099-09-25','status','draft','generated',true)),'duties','[]'::jsonb);
  perform public.duty_save_schedule(schedule,rev);
  perform set_config('request.jwt.claim.sub',engineer_id::text,true);
- select revision into rev from public.duty_workspace;perform public.duty_set_constraints(engineer_id,array['2099-10-01'::date],'no','Travel',rev);
+ -- #111: a member writes the third month (this Israel month and the next two) but not the fourth.
+ select revision into rev from public.duty_workspace;perform public.duty_set_constraints(engineer_id,array[(date_trunc('month',now() at time zone 'Asia/Jerusalem')+interval '2 months')::date+9],'no','Travel',rev);
  begin perform public.duty_set_constraints(engineer_id,array['2099-10-02'::date],'no','Stale',rev); raise exception 'Stale revision accepted'; exception when sqlstate 'PT409' then null; end;
+ select revision into rev from public.duty_workspace;
+ begin perform public.duty_set_constraints(engineer_id,array[(date_trunc('month',now() at time zone 'Asia/Jerusalem')+interval '3 months')::date],'no','Too far',rev); raise exception 'Constraint beyond three months accepted'; exception when insufficient_privilege then if sqlerrm<>'constraints-window-closed:'||to_char(date_trunc('month',now() at time zone 'Asia/Jerusalem')+interval '3 months','YYYY-MM') then raise; end if; end;
+ -- A day that has passed (Israel time) is refused even while its month's deadline is open.
+ reset role; insert into public.duty_months(month,deadline) values(to_char((now() at time zone 'Asia/Jerusalem')::date-1,'YYYY-MM'),(now() at time zone 'Asia/Jerusalem')::date+30) on conflict(month) do update set deadline=excluded.deadline; set local role authenticated;
+ begin perform public.duty_set_constraints(engineer_id,array[(now() at time zone 'Asia/Jerusalem')::date-1],'no','Yesterday',rev); raise exception 'Past day accepted'; exception when insufficient_privilege then if sqlerrm<>'constraints-day-passed' then raise; end if; end;
+ select revision into rev from public.duty_workspace;
  select revision into rev from public.duty_workspace;
  begin perform public.duty_set_constraints(admin_id,array['2099-10-02'::date],'no','Other person',rev); raise exception 'Other constraints writable'; exception when insufficient_privilege then null; end;
  perform set_config('request.jwt.claim.sub',second_id::text,true);
  perform public.duty_set_constraints(admin_id,array['2099-10-02'::date],'prefer','Private admin note',rev);
+ -- Admins keep editing any month (#111 applies to members, as deadlines do).
+ select revision into rev from public.duty_workspace;perform public.duty_set_constraints(admin_id,array[(date_trunc('month',now() at time zone 'Asia/Jerusalem')+interval '3 months')::date],'prefer','Admin ahead',rev);
  perform set_config('request.jwt.claim.sub',engineer_id::text,true);
  if (select count(*) from public.duty_constraints)<>1 then raise exception 'Private note leaked'; end if;
  perform set_config('request.jwt.claim.sub',admin_id::text,true);

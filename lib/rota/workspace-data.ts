@@ -24,6 +24,11 @@ export function workspaceMetrics(state: State, month: string, duties: Duty[]) {
     return [a?.primary, a?.secondary].flatMap((id) => id ? unapproved(b, id, state).map((day) => ({member: id, day})) : []);
   }).sort((p, q) => p.day.localeCompare(q.day) || p.member.localeCompare(q.member));
   const conflicts = owned.filter((b) => unavailableDays.some(({day}) => b.start <= day && day < b.end));
+  // Each person and day behind those conflicts, with its duty (#110 draft lines), in date order.
+  const conflictDays = unavailableDays.flatMap(({member, day}) => {
+    const duty = conflicts.find((b) => b.start <= day && day < b.end);
+    return duty ? [{person: member, date: day, duty}] : [];
+  });
   const gaps = active.flatMap((p) => {
     const mine = owned.filter(
       (b) =>
@@ -40,7 +45,7 @@ export function workspaceMetrics(state: State, month: string, duties: Duty[]) {
       .map((b) => ({ p, b }));
   });
 
-  return { owned, active, monthTotals, historyTotals, assigned, conflicts, unavailableDays, gaps };
+  return { owned, active, monthTotals, historyTotals, assigned, conflicts, conflictDays, unavailableDays, gaps };
 }
 export type WorkspaceMetrics = ReturnType<typeof workspaceMetrics>;
 

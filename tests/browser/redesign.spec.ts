@@ -97,6 +97,11 @@ for (const lang of ['en', 'he'] as const) {
     const sheet = page.getByRole('dialog');
     await expect(sheet.getByRole('button', {name: t('Enable', 'הפעלה'), exact: true})).toBeEnabled();
     await both(page, `settings-${lang}`);
+    // The reminder-time wheels sit an even gap inside their card, with concentric corners.
+    const evening = sheet.getByRole('button', {name: new RegExp(`^${t('Evening before', 'ערב לפני')} · `)});
+    await evening.click();
+    await expect(sheet.getByRole('group', {name: new RegExp(`^${t('Evening before', 'ערב לפני')}`)})).toBeVisible();
+    await snapshot(page, `settings-time-wheels-${lang}`);
   });
 }
 
@@ -290,9 +295,9 @@ for (const lang of ['en', 'he'] as const) {
     await both(page, `temporary-member-${lang}`);
   });
 
-  test(`swap consent and declined or inactive access ${lang}`, async ({page, openApp, backend}) => {
+  test(`swap accept with an unavailable cover, and declined or inactive access ${lang}`, async ({page, openApp, backend}) => {
     backend.raw.months[0].status = 'published';
-    // Emergency cover's unavailability still asks for consent (a party's own no longer does, #92).
+    // #116: emergency cover's unavailability no longer asks for consent (a party's own doesn't either, #92).
     backend.raw.constraints.push({member_id: ids.e, day: '2026-11-03', kind: 'no', note: 'Synthetic appointment'});
     backend.raw.assignments.find(d => d.day === '2026-11-03' && d.publication_id)!.secondary_id = ids.e;
     backend.raw.swapRequests = [{
@@ -303,12 +308,16 @@ for (const lang of ['en', 'he'] as const) {
     await openApp('a');
     if (lang === 'he') await switchLanguage(page, 'he');
     await page.locator('[data-swap-card]').getByRole('button', {name: t('Accept', 'קבלה'), exact: true}).click();
-    await expect(page.getByRole('dialog', {name: t('Accept despite a conflict?', 'לאשר למרות התנגשות?')})).toBeVisible();
-    await both(page, `swap-consent-${lang}`);
-    await page.keyboard.press('Escape');
+    await expect.poll(() => backend.raw.swapRequests![0].accepted_by).toBe(ids.a);
+    await expect(page.getByRole('dialog')).toHaveCount(0);
+    // Leave Alex's workspace before the backend declines Alex: its refreshes would otherwise still
+    // be in flight and meet the new refusal (a race, not an app error). A static file on the app's
+    // own origin runs no app code.
+    await page.goto(`${backend.runtimeOrigin ?? ''}/favicon.svg`);
     await openApp('rejected');
     if (lang === 'he') await page.getByRole('button', {name: 'עברית', exact: true}).click();
     await both(page, `access-declined-${lang}`);
+    await page.goto(`${backend.runtimeOrigin ?? ''}/favicon.svg`);
     await openApp('inactive');
     if (lang === 'he') await page.getByRole('button', {name: 'עברית', exact: true}).click();
     await both(page, `access-inactive-${lang}`);

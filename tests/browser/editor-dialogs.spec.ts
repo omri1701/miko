@@ -1,4 +1,4 @@
-import {test,expect,duty,ids,openDutySheet, switchLanguage} from './fixtures';
+import {test,expect,duty,ids,openDutySheet, switchLanguage, editConstraintDay, choose} from './fixtures';
 import type {Page,Locator} from '@playwright/test';
 
 /** Every editor is a Sheet (decision 2026-11-06): a bottom sheet on phones, a side panel on PC. It never
@@ -60,17 +60,14 @@ for(const lang of ['en','he'] as const)for(const weekend of [
  }
 });
 
-test('duty editor dismisses local edits, keeps nested selects open, restores focus and locks pending saves',async({page,openApp,backend},info)=>{
+test('duty editor dismisses local edits, restores focus and locks pending saves',async({page,openApp,backend},info)=>{
  await openApp();
  await schedule(page);
  const cell=duty(page,'2026-11-02'),dialog=page.getByRole('dialog',{name:'Edit duty',exact:true});
  for(const dismissal of ['outside','escape','close']){
   await editDuty(page,'2026-11-02');await fits(page,dialog);
-  await page.getByRole('combobox',{name:'Primary engineer',exact:true}).click();
-  // Radix temporarily hides the dialog from the accessibility tree while its
-  // modal select owns focus; the editor must remain visually mounted.
-  await expect(page.getByRole('listbox')).toBeVisible();await expect(page.locator('.duty-dialog')).toBeVisible();
-  await page.getByRole('option',{name:'Drew Dale',exact:true}).click();
+  // The picker is a native select: choosing someone keeps the editor open.
+  await choose(page.getByRole('combobox',{name:'Primary engineer',exact:true}),'Drew Dale');
   await expect(dialog).toBeVisible();
   if(dismissal==='outside')await page.mouse.click(5,5);
   else if(dismissal==='escape')await page.keyboard.press('Escape');
@@ -78,7 +75,7 @@ test('duty editor dismisses local edits, keeps nested selects open, restores foc
   await expect(dialog).toBeHidden();await expect(cell).toBeFocused();
   expect(backend.calls.filter(c=>c.name==='duty_save_schedule')).toHaveLength(0);
  }
- await editDuty(page,'2026-11-02');await expect(page.getByRole('combobox',{name:'Primary engineer',exact:true})).toContainText('Alex Atlas');
+ await editDuty(page,'2026-11-02');await expect(page.getByRole('combobox',{name:'Primary engineer',exact:true}).locator('option:checked')).toContainText('Alex Atlas');
  let release!:()=>void;const gate=new Promise<void>(resolve=>{release=resolve});
  await page.route('**/rest/v1/rpc/duty_save_schedule',async route=>{await gate;await route.fallback()});
  const request=page.waitForRequest('**/rest/v1/rpc/duty_save_schedule');
@@ -97,7 +94,7 @@ test('availability fits the screen, supports every dismissal, and discards unsav
  await openApp('a');await page.getByRole('tab',{name:'Availability',exact:true}).click();
  const cell=page.locator('.availability-day[data-gesture-key="2026-11-04"]');
  for(const dismissal of ['outside','escape','close']){
-  await cell.click();const dialog=page.getByRole('dialog');await fits(page,dialog);
+  await editConstraintDay(page,cell);const dialog=page.getByRole('dialog');await fits(page,dialog);
   await expect(page.getByLabel('Description (optional)')).toHaveValue('Synthetic vacation');
   await page.getByLabel('Description (optional)').fill('Unsaved local changes');
   if(dismissal==='outside')await page.mouse.click(5,5);

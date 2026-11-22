@@ -21,6 +21,9 @@ export function millisecondsUntilIsraelMidnight(now: Date) {
 /** The month the schedule opens on (decision 2026-11-07): the current month in Israel, for every
  * role, on every open, reload or sign-in. A `?month=` deep link still wins. */
 export const initialCalendarMonth = () => todayIsrael().slice(0,7);
+/** The last month constraints can be entered for (#111): the current Israel month and the next two.
+ * `today` is an Israel date (todayIsrael); the database enforces the same window. */
+export const constraintsLastMonth = (today:string) => monthNext(today.slice(0,7),2);
 export const calendarMonthLabel = (month:string,lang:'en'|'he') => new Date(month+'-15T12:00:00Z').toLocaleDateString(lang==='en'?'en-GB':'he-IL',{month:'long',year:'numeric',timeZone:'Asia/Jerusalem'});
 
 export function calendarDates(month:string) {

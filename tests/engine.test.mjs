@@ -22,6 +22,7 @@ test('calendar blocks cover each date exactly once throughout a year',()=>{for(l
 test('regenerating preserves emergency cover and never makes it the primary',()=>{const s=demo();s.assignments['2026-10-01']={primary:'e0',secondary:'e1'};run(s);assert.equal(s.assignments['2026-10-01'].secondary,'e1');assert.notEqual(s.assignments['2026-10-01'].primary,'e1')});
 
 import {applyConstraints,swapDraft} from '../lib/rota/engine.ts';
+import {workspaceMetrics} from '../lib/rota/workspace-data.ts';
 test('fresh seeds produce substantially different fair arrangements',()=>{
  const s=demo(),bs=blocks('2026-10',[]);const schedules=[11,22,33,44,55].map(seed=>generate(s,'2026-10',seed).assignments);
  for(const a of schedules){const counts=Object.values(totals({...s,assignments:a},bs));assert.ok(Math.max(...counts)-Math.min(...counts)<=1);for(const b of bs)assert.equal(unavailable(b,a[b.id].primary,s.constraints).length,0)}
@@ -60,6 +61,15 @@ test('draft swaps require unlocking even when manager exceptions are approved',(
 });
 test('swaps reject published, cross-month, and duplicate emergency assignments',()=>{
  const s=swapFixture();s.months['2026-10'].status='published';assert.equal(swapDraft(s,'2026-10','2026-10-01','2026-10-02').reason,'published');s.months['2026-10'].status='draft';assert.equal(swapDraft(s,'2026-10','2026-09-30','2026-10-02').reason,'other-month');s.assignments['2026-10-01'].secondary='e1';assert.equal(swapDraft(s,'2026-10','2026-10-01','2026-10-02').reason,'duplicate');
+});
+test('#116: a draft swap ignores the emergency cover’s own unavailable day; Publish still counts it',()=>{
+ const s=swapFixture();s.constraints={e2:{'2026-10-01':'no'}};
+ const r=swapDraft(s,'2026-10','2026-10-01','2026-10-02');
+ assert.ok(r.ok);assert.deepEqual(r.conflicts,[]);
+ assert.equal(r.assignments['2026-10-01'].secondary,'e2');assert.equal(r.assignments['2026-10-01'].override,undefined);
+ // Rule 4: Publish still sees the cover's unavailable day as a conflict to resolve.
+ const metrics=workspaceMetrics({...s,assignments:r.assignments},'2026-10',blocks('2026-10',[]));
+ assert.deepEqual(metrics.conflictDays.filter(c=>c.person==='e2').map(c=>[c.date,c.duty.id]),[['2026-10-01','2026-10-01']]);
 });
 test('swap constraint conflicts require an explicit new override including Saturday',()=>{
  const s=swapFixture();s.constraints={e0:{'2026-10-03':'no'}};const r=swapDraft(s,'2026-10','2026-10-01','2026-10-02');assert.equal(r.reason,'availability');assert.deepEqual(r.conflicts,[{person:'e0',date:'2026-10-03'}]);const approved=swapDraft(s,'2026-10','2026-10-01','2026-10-02',true);assert.ok(approved.ok);assert.equal(approved.assignments['2026-10-02'].override,true);assert.equal(approved.assignments['2026-10-01'].override,undefined);

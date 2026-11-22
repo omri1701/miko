@@ -51,6 +51,7 @@ for (const width of [320, 375, 390, 430, 768, 1440]) {
         if (identity === 'a') {
           const day = page.locator('.availability-day[data-gesture-key="2026-11-04"]');
           await day.click();
+          // One sheet (#105 rule 5): the tap opens the editor with the whole note.
           const editor = page.getByLabel(language === 'en' ? 'Description (optional)' : 'תיאור (לא חובה)');
           await expect(editor).toHaveValue(original.constraints[0].note);
           await editor.focus();

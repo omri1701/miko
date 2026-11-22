@@ -1,5 +1,5 @@
 import type {Page} from '@playwright/test';
-import {test, expect, monthAction, ids, MONTH, duty, drag, switchLanguage} from './fixtures';
+import {test, expect, monthAction, ids, MONTH, duty, drag, switchLanguage, editConstraintDay, choose} from './fixtures';
 
 const schedule = (page: Page) => page.getByRole('tab', {name: 'Schedule', exact: true}).click();
 /** A tap opens the duty sheet on PC; on phones it shows the day's details, whose row opens the sheet. */
@@ -124,8 +124,7 @@ test('duty editing, availability override, save failure and published draft sepa
   await schedule(page);
   const original = backend.raw.assignments.find(d => d.day === '2026-11-04' && d.publication_id)!.primary_id;
   await editDuty(page, '2026-11-04');
-  await page.getByRole('combobox', {name: 'Primary engineer', exact: true}).click();
-  await page.getByRole('option', {name: 'Alex Atlas · unavailable', exact: true}).click();
+  await choose(page.getByRole('combobox', {name: 'Primary engineer', exact: true}), 'Alex Atlas · unavailable');
   await expect(page.getByRole('button', {name: 'Save assignment'})).toBeDisabled();
   await expect(page.getByRole('dialog')).toContainText('Synthetic vacation');
   await page.getByRole('checkbox', {name: 'Approve these exceptions as manager'}).check();
@@ -167,7 +166,7 @@ test('engineer availability save, preference and removal before deadline', async
   await page.getByLabel('Description (optional)').fill('Synthetic appointment');
   await page.getByRole('button', {name: 'Save', exact: true}).click();
   await expect(page.getByRole('button', {name: /^5 Nov.*Unavailable.*Synthetic appointment/})).toBeVisible();
-  await page.getByRole('button', {name: /^5 Nov.*Unavailable/}).click();
+  await editConstraintDay(page, page.getByRole('button', {name: /^5 Nov.*Unavailable/}));
   await page.getByRole('button', {name: 'Prefer duty', exact: true}).click();
   await page.getByRole('button', {name: 'Save', exact: true}).click();
   await expect(page.getByRole('button', {name: /^5 Nov.*Preferred/})).toBeVisible();
@@ -236,8 +235,7 @@ test('weekend editor saves split owners atomically', async ({page, openApp, back
   await editDuty(page, '2026-11-06');
   await expect(page.getByRole('dialog', {name: 'Weekend'})).toBeVisible();
   await page.getByRole('radio', {name: 'Two days', exact: true}).click();
-  await page.getByRole('combobox', {name: 'Saturday primary engineer', exact: true}).click();
-  await page.getByRole('option', {name: 'Alex Atlas', exact: true}).click();
+  await choose(page.getByRole('combobox', {name: 'Saturday primary engineer', exact: true}), 'Alex Atlas');
   const override = page.getByRole('checkbox', {name: 'Approve these exceptions as manager'});
   if (await override.isVisible()) await override.check();
   await page.getByRole('button', {name: 'Save assignment'}).click();
@@ -299,8 +297,7 @@ test('a weekend split by hand and joined back to one person is one weekend again
     await schedule(page);
     await editDuty(page, day);
     if (two) await page.getByRole('radio', {name: 'Two days', exact: true}).click();
-    await page.getByRole('combobox', {name: field, exact: true}).click();
-    await page.getByRole('option', {name: person, exact: true}).click();
+    await choose(page.getByRole('combobox', {name: field, exact: true}), person);
     const override = page.getByRole('checkbox', {name: 'Approve these exceptions as manager'});
     if (await override.isVisible()) await override.check();
     await page.getByRole('button', {name: 'Save assignment'}).click();

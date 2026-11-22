@@ -44,13 +44,14 @@ test('the first published drag completes once the target availability arrives', 
 
 test('a first drop on a target the server refuses explains why and opens nothing', async ({page, openApp, backend}, info) => {
   backend.raw.months[0].status = 'published';
-  // Emergency cover's unavailability still refuses (a party's own is red and pickable since #92).
-  backend.raw.constraints.push({member_id: ids.c, day: '2026-11-02', kind: 'no', note: ''});
+  // Emergency cover who left the team refuses (a party's own constraint is red and pickable since #92;
+  // the cover's constraint no longer counts, #116).
+  backend.raw.members.find(m => m.id === ids.c)!.active = false;
   const gate = hold(); backend.availabilityGate = gate.wait;
   await openApp('a'); await schedule(page);
   await quickDrag(page, info.project.name === 'mobile', '2026-11-02', '2026-11-03');
   gate.release();
-  await expect(page.locator('[data-sonner-toast]').filter({hasText: 'Emergency cover can’t take 2 Nov'})).toBeVisible();
+  await expect(page.locator('[data-sonner-toast]').filter({hasText: 'Emergency cover is no longer active'})).toBeVisible();
   await expect(page.getByRole('dialog')).toHaveCount(0);
   expect(backend.calls.filter(c => c.name === 'duty_request_swap')).toHaveLength(0);
 });

@@ -17,6 +17,21 @@ export const LOCAL_ACCOUNTS=[['admin@duty.local','Local Admin'],['engineer@duty.
 // Fictional temporary members, in seniority order, for a 12-engineer LOCAL team.
 export const LOCAL_TEMPORARY_MEMBERS=['Avi','Dana','Yossi','Noa','Eitan','Maya','Lior','Tamar','Omer','Shira'];
 export const missingTemporaryMembers=members=>LOCAL_TEMPORARY_MEMBERS.filter(name=>!members.some(m=>m.name===name));
+const shiftDay=(day,n)=>{const d=new Date(`${day}T12:00:00Z`);d.setUTCDate(d.getUTCDate()+n);return d.toISOString().slice(0,10);};
+/** #105 rule 8: passed constraints with notes to look at locally (a long note, and days in a row
+ * across the month edge), relative to the Israel day. Admins may write past days; members can't. */
+export function localPastConstraints(today,members){
+  const id=name=>members.find(m=>m.name===name)?.id;
+  const first=`${today.slice(0,7)}-01`;
+  return [
+    {member:id('Local Engineer'),days:[shiftDay(first,-2),shiftDay(first,-1),first,shiftDay(first,1)],kind:'no',note:'Vacation in Greece'},
+    {member:id('Local Engineer'),days:[shiftDay(today,-3)],kind:'no',note:'Doctor: yearly check-up in Tel Aviv, away the whole day and back late in the evening, so please keep this day free.'},
+    {member:id('Local Engineer'),days:[shiftDay(today,-6)],kind:'prefer',note:''},
+    {member:id('Local Admin'),days:[shiftDay(today,-5),shiftDay(today,-4)],kind:'no',note:'Army reserve'},
+    {member:id('Avi'),days:[shiftDay(today,-3)],kind:'no',note:'Dentist'},
+    {member:id('Dana'),days:[shiftDay(today,-3)],kind:'prefer',note:''},
+  ].filter(c=>c.member);
+}
 function cli(args,capture=false) {
   // pnpm scripts provide its executable path, avoiding shell quoting on Windows.
   if (!process.env.npm_execpath) throw Error('Run via pnpm local:setup or pnpm start:local.');
@@ -95,6 +110,13 @@ export async function prepareLocal() {
       if(loaded.error)throw Error('Local admin workspace load failed.');
     }
     if(missingTemporaryMembers(loaded.data.members).length)throw Error('Local temporary members missing.');
+    const today=new Date().toLocaleDateString('en-CA',{timeZone:'Asia/Jerusalem'});
+    for(const c of localPastConstraints(today,loaded.data.members)){
+      const set=await users[0].client.rpc('duty_set_constraints',{p_member:c.member,p_days:c.days,p_kind:c.kind,p_note:c.note,p_revision:loaded.data.revision});
+      if(set.error)throw Error('Local past constraints failed.');
+      loaded=await users[0].client.rpc('duty_load');
+      if(loaded.error)throw Error('Local admin workspace load failed.');
+    }
   }
   for(const user of users){
     const loaded=await user.client.rpc('duty_load');
