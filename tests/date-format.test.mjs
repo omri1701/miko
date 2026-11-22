@@ -32,4 +32,9 @@ test('English weekday dates: "Sat 1 Jan", "Saturday 1 January", no comma; Hebrew
   assert.equal(weekdayDate('2026-10-09', 'en', 'long'), 'Friday 9 October');
   assert.equal(weekdayDate('2026-11-12', 'en', 'short', 'Asia/Jerusalem'), 'Thu 12 Nov');
   assert.equal(weekdayDate('2026-11-06', 'he'), new Date('2026-11-06T12:00:00Z').toLocaleDateString('he-IL', {weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC'}));
+
+test('#105: a single day reads "Sat 1 Jan" in English with no comma, whatever the engine adds', () => {
+ assert.equal(weekdayDate('2028-01-01','en'),'Sat 1 Jan');
+ assert.equal(weekdayDate('2026-12-09','en'),'Wed 9 Dec');
+ assert.equal(weekdayDate('2026-12-09','he'),new Date('2026-12-09T12:00:00Z').toLocaleDateString('he-IL',{weekday:'short',day:'numeric',month:'short',timeZone:'UTC'}));
 });
