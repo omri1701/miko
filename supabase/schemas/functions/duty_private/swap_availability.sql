@@ -22,8 +22,9 @@ begin
    raise exception 'Choose duties starting today or later';
   end if;
  end if;
- -- Exactly the conflicts validate_swap refuses: the two primaries, which date, never the
- -- note. Emergency cover doesn't move, so its constraints are not listed (#116).
+ -- Exactly what a swap meets: the two primaries' own unavailability, which date, never the
+ -- note. A primary's own never blocks a request (#92); the card shows it. Emergency cover
+ -- doesn't move, so its constraints are not listed (#116).
  return coalesce((select jsonb_agg(jsonb_build_object('member',c.member_id,'day',c.day) order by c.day,c.member_id)
   from public.duty_constraints c where c.kind='no' and
   ((c.member_id=b.primary_id and c.day>=a.day and c.day<a.end_day)

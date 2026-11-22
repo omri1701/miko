@@ -2,7 +2,7 @@ import type {Page} from '@playwright/test';
 import {test, expect, ids, duty, switchLanguage, type Backend} from './fixtures';
 
 // #110: a draft names each availability conflict ("Avi marked 22 Dec as unavailable · doctor") instead of a count; a tap selects
-// the day, and the conflicting days are red. Publish stays blocked; no explanation text is added.
+// the day, and the conflicting days are red. No explanation text is added.
 const lines = (page: Page) => page.locator('[data-conflicts] .conflict-line');
 /** Alex (unavailable on 4 Nov, "Synthetic vacation") and Blair (unavailable on 25 Nov, no note) are on those days in the draft. */
 function conflicts(backend: Backend) {
@@ -40,13 +40,13 @@ for (const lang of ['en', 'he'] as const) test(`#110 rules 1-4: each conflict is
   await expect(duty(page, '2026-11-25')).toBeInViewport();
   if (info.project.name === 'mobile') await expect(page.locator('[data-day-details]')).toContainText('Blair');
   else await expect(page.getByRole('dialog')).toHaveCount(0);
-  // Rule 4: Publish stays blocked while a conflict remains.
-  await expect(page.getByRole('button', {name: he ? 'פרסום' : 'Publish', exact: true})).toHaveCount(0);
+  // Since #103 (owner 2026-11-21) availability never blocks Publish: its popup lists these conflicts.
 });
 
 test('#110 rule 3: an approved exception leaves no line and no red day', async ({page, backend, openApp}) => {
   conflicts(backend);
-  for (const row of backend.raw.assignments.filter(r => r.publication_id === null && r.day === '2026-11-25')) row.manager_override = true;
+  // One approval per person and date (#103).
+  backend.raw.constraints.find(c => c.member_id === ids.b && c.day === '2026-11-25')!.duty_approved = true;
   await openApp();
   await openSchedule(page, false);
   await expect(lines(page)).toHaveCount(1);

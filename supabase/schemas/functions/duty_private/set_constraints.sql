@@ -19,7 +19,9 @@ begin
   if not manager and m > to_char(date_trunc('month',now() at time zone 'Asia/Jerusalem')+interval '2 months','YYYY-MM') then raise exception 'constraints-window-closed:%',m using errcode='42501'; end if;
   if not manager and d < (now() at time zone 'Asia/Jerusalem')::date then raise exception 'constraints-day-passed' using errcode='42501'; end if;
   if p_kind='clear' then delete from public.duty_constraints where member_id=p_member and day=d;
-  else insert into public.duty_constraints(member_id,day,kind,note) values(p_member,d,p_kind,trim(coalesce(p_note,''))) on conflict(member_id,day) do update set kind=excluded.kind,note=excluded.note; end if;
+  else insert into public.duty_constraints(member_id,day,kind,note) values(p_member,d,p_kind,trim(coalesce(p_note,''))) on conflict(member_id,day) do update set kind=excluded.kind,note=excluded.note,
+   -- A note edit keeps an admin's availability approval; a newly unavailable date never has one.
+   duty_approved=duty_constraints.duty_approved and duty_constraints.kind='no' and excluded.kind='no'; end if;
   -- Availability is independent of the working schedule. In particular, an
   -- admin constraint edit must not create an empty draft of a published month.
  end loop;

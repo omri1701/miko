@@ -3,6 +3,7 @@ CREATE TABLE public.duty_constraints (
     day date NOT NULL,
     kind text NOT NULL,
     note text DEFAULT ''::text NOT NULL,
+    duty_approved boolean DEFAULT false NOT NULL,
     CONSTRAINT duty_constraints_note_check CHECK ((length(note) <= 300))
 );
 

@@ -231,6 +231,7 @@ REVOKE ALL ON FUNCTION public.duty_edit_published_weekend(uuid, date, uuid, nume
 GRANT EXECUTE ON FUNCTION public.duty_edit_published_weekend(uuid, date, uuid, numeric, uuid, numeric, text, bigint, text) TO authenticated;
 
 REVOKE ALL ON FUNCTION duty_private.join_weekend_halves(uuid, date) FROM PUBLIC, anon, authenticated, service_role;
+REVOKE ALL ON FUNCTION duty_private.prune_duty_approvals() FROM PUBLIC, anon, authenticated, service_role;
 
 REVOKE ALL ON FUNCTION duty_private.swap_availability(p_from uuid, p_to uuid) FROM PUBLIC, anon, authenticated, service_role;
 GRANT EXECUTE ON FUNCTION duty_private.swap_availability(p_from uuid, p_to uuid) TO authenticated;

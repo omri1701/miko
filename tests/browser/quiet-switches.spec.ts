@@ -45,6 +45,8 @@ test.describe('with motion', () => {
 
   test('#115 rule 2: switching tabs replays no entrance and changing month elsewhere doesn’t roll the Schedule name later', async ({page, openApp}) => {
     await openApp();
+    // The app's own start-up entrance (the sidebar labels, Home) finishes first.
+    await page.waitForFunction(() => document.getAnimations().every(a => a.playState !== 'running' || a.effect?.getTiming().iterations === Infinity));
     await page.evaluate(() => {
       const w = window as unknown as {played: string[]};
       w.played = [];

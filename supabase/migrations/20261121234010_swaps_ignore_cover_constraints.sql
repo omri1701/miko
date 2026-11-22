@@ -3,6 +3,7 @@
 -- validate_swap, swap_availability or the approved copy's manager_override (an earlier approval
 -- of the cover's day carries over, none is granted). A party's own constraint is unchanged, and
 -- Publish still asks about the cover's days. Signatures, grants and data are unchanged.
+-- Built on develop's #103 swap functions (a primary's own constraint never refuses a swap).
 
 -- Source: schemas/functions/duty_private/validate_swap.sql
 CREATE OR REPLACE FUNCTION duty_private.validate_swap(p_from uuid, p_to uuid, p_publication uuid, p_override boolean DEFAULT false) RETURNS boolean
@@ -23,12 +24,10 @@ begin
  if a.secondary_id=b.primary_id or b.secondary_id=a.primary_id then raise exception 'A primary engineer cannot also be emergency cover'; end if;
  if exists(select 1 from duty_private.current_duties() x join duty_private.current_duties() y on x.id<>y.id and x.day<y.end_day and y.day<x.end_day
   where x.id in (a.id,b.id)) then raise exception 'Published duty dates overlap'; end if;
- -- Only the two engineers move: emergency cover stays on its own duty, so its constraints
- -- are not this swap's conflict (#116; Publish still asks about them).
- select exists(select 1 from public.duty_constraints c where c.kind='no' and
-  ((c.member_id=b.primary_id and c.day>=a.day and c.day<a.end_day)
-   or (c.member_id=a.primary_id and c.day>=b.day and c.day<b.end_day))) into conflicts;
- if conflicts and not p_override then raise exception 'Availability conflict. An admin must explicitly override with a reason.'; end if;
+ -- Availability never refuses a swap: a primary's own constraint is consented to by sending or
+ -- accepting, and the admin's approval is the override (#92); emergency cover doesn't move,
+ -- so its constraints are not this swap's (#116; Publish still asks about them).
+ conflicts:=false;
  -- Either half and emergency cover count as one weekend; preserve existing exceptions,
  -- but swaps cannot increase anyone's count above one (same rule as swapDraft).
  foreach who in array array[a.primary_id,b.primary_id] loop
@@ -67,8 +66,9 @@ begin
    raise exception 'Choose duties starting today or later';
   end if;
  end if;
- -- Exactly the conflicts validate_swap refuses: the two primaries, which date, never the
- -- note. Emergency cover doesn't move, so its constraints are not listed (#116).
+ -- Exactly what a swap meets: the two primaries' own unavailability, which date, never the
+ -- note. A primary's own never blocks a request (#92); the card shows it. Emergency cover
+ -- doesn't move, so its constraints are not listed (#116).
  return coalesce((select jsonb_agg(jsonb_build_object('member',c.member_id,'day',c.day) order by c.day,c.member_id)
   from public.duty_constraints c where c.kind='no' and
   ((c.member_id=b.primary_id and c.day>=a.day and c.day<a.end_day)
@@ -135,9 +135,10 @@ begin
   select current_publication_id into current_publication from public.duty_months where month=r.month;
   select * into a from public.duty_assignments where publication_id=current_publication and day=r.from_day and end_day=r.from_end_day;
   select * into b from public.duty_assignments where publication_id=current_publication and day=r.to_day and end_day=r.to_end_day;
-  -- Consent may precede an audited availability override, but never bypasses
-  -- active membership, emergency duplication, overlap, weekends or future dates.
-  perform duty_private.validate_swap(a.id,b.id,current_publication,p_action='accept' or length(reason)>0);
+  -- Availability never refuses a consented swap (#92, owner 2026-11-21): the admin's approval
+  -- is the override, no reason needed; the published duty is marked manager_override. Never
+  -- bypasses active membership, emergency duplication, overlap, weekends or future dates.
+  perform duty_private.validate_swap(a.id,b.id,current_publication,true);
  end if;
  if p_action='approve' then
   update public.duty_months set publication_sequence=publication_sequence+1 where month=r.month returning publication_sequence into next_version;
@@ -168,6 +169,10 @@ begin
   -- Both halves of a weekend on one person are one weekend again (decision 2026-11-07).
   joined:=duty_private.join_weekend_halves(publication,a.day);
   joined:=duty_private.join_weekend_halves(publication,b.day) or joined;
+  -- The admin's approval is the availability approval (owner 2026-11-21): each new holder's
+  -- unavailable dates on the swapped duties are approved for them. No lock; never asked again.
+  update public.duty_constraints c set duty_approved=true from (values(a.day,a.end_day,r.other_id),(b.day,b.end_day,r.requester_id)) x(day,end_day,who)
+  where c.kind='no' and c.member_id=x.who and c.day>=x.day and c.day<x.end_day;
  end if;
  next_status:=case p_action when 'accept' then case when (side='other' and (r.proposed_by is null or r.requester_accepted_at is not null))
    or (side='requester' and r.accepted_by is not null) then 'awaiting_admin' else 'awaiting_engineer' end
@@ -182,6 +187,8 @@ begin
   result_publication_id=publication,override_reason=case when p_action='approve' then reason else '' end where id=r.id;
  if publication is not null then
   update public.duty_months set current_publication_id=publication where month=r.month;
+  -- The two former holders' approvals on the swapped dates lapse (they are no longer on them).
+  perform duty_private.prune_duty_approvals();
   -- A joined weekend changed the month's calendar; the copied plan follows it.
   if joined then
    update public.duty_allocations set calendar_fingerprint=md5((select jsonb_agg(d-array['primary','secondary'] order by d->>'id')::text

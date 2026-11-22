@@ -2,6 +2,7 @@
 -- Israel month and the next two ("constraints-window-closed:<month>") or for a day that has
 -- passed ("constraints-day-passed") is refused with SQLSTATE 42501, never 40001/40P01.
 -- Admins, deadlines and published months are unchanged, as are the signature, grants and data.
+-- Re-stamped after develop's #103 migrations, which replace set_constraints too; this keeps both.
 
 -- Source: schemas/functions/duty_private/set_constraints.sql
 CREATE OR REPLACE FUNCTION duty_private.set_constraints(p_member uuid, p_days date[], p_kind text, p_note text, p_revision bigint) RETURNS void
@@ -25,9 +26,12 @@ begin
   if not manager and m > to_char(date_trunc('month',now() at time zone 'Asia/Jerusalem')+interval '2 months','YYYY-MM') then raise exception 'constraints-window-closed:%',m using errcode='42501'; end if;
   if not manager and d < (now() at time zone 'Asia/Jerusalem')::date then raise exception 'constraints-day-passed' using errcode='42501'; end if;
   if p_kind='clear' then delete from public.duty_constraints where member_id=p_member and day=d;
-  else insert into public.duty_constraints(member_id,day,kind,note) values(p_member,d,p_kind,trim(coalesce(p_note,''))) on conflict(member_id,day) do update set kind=excluded.kind,note=excluded.note; end if;
+  else insert into public.duty_constraints(member_id,day,kind,note) values(p_member,d,p_kind,trim(coalesce(p_note,''))) on conflict(member_id,day) do update set kind=excluded.kind,note=excluded.note,
+   -- A note edit keeps an admin's availability approval; a newly unavailable date never has one.
+   duty_approved=duty_constraints.duty_approved and duty_constraints.kind='no' and excluded.kind='no'; end if;
   -- Availability is independent of the working schedule. In particular, an
   -- admin constraint edit must not create an empty draft of a published month.
  end loop;
  update public.duty_workspace set revision=revision+1 where id;
 end $$;
+

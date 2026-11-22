@@ -28,7 +28,7 @@ export function WorkspaceCalendar({state, calendarState, calendarBlocks, dateCel
   /** The neighbouring month sliding in (month-stage.tsx): the same grid, without the gesture surface. */
   preview?: boolean;
 }) {
-  const {keyboardSource, dragFrom, dragOver, pendingDrop, swapSourceDays, publishedDuty, requestTarget, swapHint, swapBlock, dragContainer, ignoreDragClick, selectCalendarDuty} = interactions;
+  const {keyboardSource, dragFrom, dragOver, pendingDrop, swapSourceDays, publishedDuty, requestTarget, swapHint, swapWarning, swapBlock, dragContainer, ignoreDragClick, selectCalendarDuty} = interactions;
   const mobile = useMobileLayout();
   // Display only: adjacent duties of one member read as a single bar; a split weekend's halves
   // stay two regular day chips (decision 2026-11-07).
@@ -65,7 +65,9 @@ export function WorkspaceCalendar({state, calendarState, calendarBlocks, dateCel
       // While a swap is chosen, a day the server would refuse is greyed with its reason.
       const swapFrom = requesting ? keyboardSource ?? dragFrom ?? pendingDrop?.from ?? null : null,
         blocked = swapFrom && b && interactive && b.id !== swapFrom ? swapHint(swapFrom, b.id) : null,
-        swapState = swapFrom && b && interactive && b.id !== swapFrom ? swapBlock(swapFrom, b.id) : undefined;
+        swapState = swapFrom && b && interactive && b.id !== swapFrom ? swapBlock(swapFrom, b.id) : undefined,
+        // A date a primary marked unavailable shows red but stays pickable (#92).
+        warned = swapFrom && b && swapState === null ? swapWarning(swapFrom, b.id) : null;
       const source = !!b && (dragFrom === b.id || keyboardSource === b.id || pickingFrom === b.id || pendingDrop?.from === b.id);
       const name = p ? nickname(p.id) : '', long = name.length > 7;
       const initials = p ? p.name.trim().split(/\s+/).map(n => n[0] ?? '').join('').slice(0, 2) : '';
@@ -77,8 +79,8 @@ export function WorkspaceCalendar({state, calendarState, calendarBlocks, dateCel
         <CalendarDay date={d} month={month} combined={combined} weekend={!!b?.weekendId} special={b?.kind === 'special'}
           disabled={readOnly || !interactive || (requesting && !!keyboardSource && !publishedDuty(b!.id) && !blocked)}
           aria-disabled={blocked ? true : undefined}
-          title={blocked ?? undefined}
-          data-swap-state={swapState === undefined ? undefined : swapState === 'pending' ? 'pending' : swapState ? 'blocked' : 'ok'}
+          title={blocked ?? warned ?? undefined}
+          data-swap-state={swapState === undefined ? undefined : swapState === 'pending' ? 'pending' : swapState ? 'blocked' : warned ? 'constrained' : 'ok'}
           key={d}
           data-gesture-key={interactive ? b?.id : undefined}
           onClick={() => {
@@ -110,8 +112,9 @@ export function WorkspaceCalendar({state, calendarState, calendarBlocks, dateCel
             pendingDrop?.to === b?.id || (dragOver === b?.id && swapState === 'pending') ? 'checking' : '',
             (requesting ? b && swapSourceDays.has(b.id) : draft && a?.primary) ? 'can-swap' : '',
             blocked ? 'swap-blocked' : '',
+            warned ? 'swap-constrained' : '',
           ].join(' ')}
-          aria-label={`${b && swapSourceDays.has(b.id) && requesting ? t('Request swap: ', 'בקשת החלפה: ') : ''}${fmt(d)}${combined ? ' – ' + fmt(addDays(b!.end, -1)) : ''} ${p?.name ?? t('Unassigned', 'ללא שיבוץ')}${blocked ? ` · ${t('Unavailable', 'לא זמין')}: ${blocked}` : ''}`}
+          aria-label={`${b && swapSourceDays.has(b.id) && requesting ? t('Request swap: ', 'בקשת החלפה: ') : ''}${fmt(d)}${combined ? ' – ' + fmt(addDays(b!.end, -1)) : ''} ${p?.name ?? t('Unassigned', 'ללא שיבוץ')}${blocked ? ` · ${t('Unavailable', 'לא זמין')}: ${blocked}` : warned ? ` · ${warned}` : ''}`}
         >
           <CalendarDateLine today={today} date={d} end={combined ? addDays(b!.end, -1) : undefined}>
             {source && <span className="swap-source-mark" role="img" aria-label={t('Swapping this duty', 'מחליפים את הכוננות הזאת')}><ArrowLeftRight/></span>}
