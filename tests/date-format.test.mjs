@@ -6,16 +6,16 @@ test('availability date titles: single, chronological ranges, months and years',
   assert.equal(dateRange(['2026-10-12'], 'en'), '12 October');
   assert.equal(dateRange(['2026-10-17', '2026-10-12'], 'en'), '12–17 October');
   assert.equal(dateRange(['2026-11-02', '2026-10-30'], 'en'), '30 October–2 November');
-  assert.equal(dateRange(['2027-01-02', '2026-12-30'], 'en'), '30/12/2026–02/01/2027');
+  assert.equal(dateRange(['2027-01-02', '2026-12-30'], 'en'), '30 December 2026–2 January 2027');
   assert.equal(dateRange(['2026-10-12'], 'he'), '12 באוקטובר');
   assert.equal(dateRange(['2026-10-17', '2026-10-12'], 'he'), '12–17 באוקטובר');
   assert.equal(dateRange(['2026-11-02', '2026-10-30'], 'he'), '30 באוקטובר–2 בנובמבר');
   assert.equal(dateRange([], 'en'), '');
 });
 
-// #113 (owner 2026-11-22): English text dates are day first, as before; a date with a year is
-// numeric and day first; times are 24-hour. Hebrew is unchanged.
-test('English dates: day first; with a year DD/MM/YYYY, zero-padded, 24-hour times', () => {
+// #113 (owner 2026-11-22): English text dates are day first, as before, and keep the year as
+// "9 Oct 2026"; only the version list is numeric ("09/11/2026, 14:05"), 24-hour. Hebrew is unchanged.
+test('English dates: day first; version list DD/MM/YYYY, zero-padded, 24-hour times', () => {
   assert.equal(shortDate('2026-11-05', 'en'), '5 Nov');
   assert.equal(shortDate('2026-11-05', 'he'), '5 בנוב׳');
   assert.equal(numericDate('2026-11-03'), '03/11/2026');

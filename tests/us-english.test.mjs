@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {readdirSync, readFileSync, statSync} from 'node:fs';
 import {join} from 'node:path';
 
-// US English spelling (#113); English dates stay day first, and a date with a year is numeric.
+// US English spelling (#113); English dates stay day first ("9 Oct 2026").
 // Hebrew texts and dates, code identifiers, CSS classes and stored values don't change.
 const ROOTS = ['app', 'components', 'hooks', 'lib'];
 const SKIP = new Set(['node_modules', '.next']);
@@ -38,10 +38,3 @@ test('rule 2: English dates are day first, never en-US', () => {
   assert.deepEqual(hits, []);
 });
 
-// An English date with a year is numeric and day first ("03/11/2026", numericDate), never
-// "3 Nov 2026"; month titles ("November 2026") have no day and stay.
-test('rule 3: English dates with a day and a year are not formatted with Intl', () => {
-  const hits = lines().filter(({line}) => line.includes('en-GB') && /\bday:/.test(line) && /\byear:/.test(line))
-    .map(({file, n, line}) => `${file}:${n}: ${line.trim().slice(0, 100)}`);
-  assert.deepEqual(hits, []);
-});

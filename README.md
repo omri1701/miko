@@ -191,7 +191,7 @@ and cyan `#19f2f7`, used only on navy or dark surfaces or as a glow, never as te
 white (`--brand`, `--brand-fg`, `--cyan`). In dark mode navy fills get a thin near-white edge and a soft
 cyan glow (`--brand-edge`). The Hebrew UI calls a duty כוננות (plural כוננויות) and the person on
 duty כונן/ית; `tests/hebrew-terms.test.mjs` keeps the older word out. English uses US spelling (#113) with day-first dates
-("26 Nov", "Friday 9 October"); a date with a year is numeric ("03/11/2026"); times are 24-hour. Checked by `tests/us-english.test.mjs`. Member colors come from the 20-color palette in
+("26 Nov", "Friday 9 October", "9 Oct 2026"; the version list shows "09/11/2026, 14:05"); times are 24-hour. Checked by `tests/us-english.test.mjs`. Member colors come from the 20-color palette in
 `lib/theme/palette.ts` (the 15 older stored values map onto it); each member picks their own
 in Settings (`duty_set_color`, own row, taken colors grayed) and an admin can change anyone's
 in the member sheet.
