@@ -12,13 +12,16 @@ begin
  if a.day<(now() at time zone 'Asia/Jerusalem')::date or b.day<(now() at time zone 'Asia/Jerusalem')::date then raise exception 'Choose duties starting today or later'; end if;
  if a.primary_id is null or b.primary_id is null or a.primary_id=b.primary_id then raise exception 'Choose two different primary engineers'; end if;
  if exists(select 1 from unnest(array[a.primary_id,b.primary_id,a.secondary_id,b.secondary_id]) person
-  where person is not null and not exists(select 1 from public.duty_members where id=person and active and status='approved')) then raise exception 'An engineer is no longer active and approved'; end if;
+  where person is not null and not exists(select 1 from public.duty_members where id=person and active and status='approved' and not viewer)) then raise exception 'An engineer is no longer active and approved'; end if;
  if a.secondary_id=b.primary_id or b.secondary_id=a.primary_id then raise exception 'A primary engineer cannot also be emergency cover'; end if;
  if exists(select 1 from duty_private.current_duties() x join duty_private.current_duties() y on x.id<>y.id and x.day<y.end_day and y.day<x.end_day
   where x.id in (a.id,b.id)) then raise exception 'Published duty dates overlap'; end if;
- select exists(select 1 from public.duty_constraints c where c.kind='no' and
-  ((c.member_id in (b.primary_id,a.secondary_id) and c.day>=a.day and c.day<a.end_day)
-   or (c.member_id in (a.primary_id,b.secondary_id) and c.day>=b.day and c.day<b.end_day))) into conflicts;
+ -- Emergency cover's unavailability refuses a request. A primary's own constraint never
+ -- does (#92): they consent by sending or accepting; the admin's approval overrides both.
+ -- An admin-approved date of that cover (owner 2026-11-21) is never asked again.
+ select exists(select 1 from public.duty_constraints c where c.kind='no' and not c.duty_approved and
+  ((c.member_id=a.secondary_id and c.day>=a.day and c.day<a.end_day)
+   or (c.member_id=b.secondary_id and c.day>=b.day and c.day<b.end_day))) into conflicts;
  if conflicts and not p_override then raise exception 'Availability conflict. An admin must explicitly override with a reason.'; end if;
  -- Either half and emergency cover count as one weekend; preserve existing exceptions,
  -- but swaps cannot increase anyone's count above one (same rule as swapDraft).

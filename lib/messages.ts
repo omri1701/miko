@@ -1,4 +1,26 @@
+import {constraintLine, visibleNote} from './supabase/swaps.ts';
 type Translate = (en: string, he: string) => string;
+
+/** Who and when behind an availability refusal (#103): the database adds every conflict as
+ * [{member,day}] (never a note) after "unavailable-primary:" or "Availability conflict:". */
+export function availabilityConflicts(raw: string): {member: string; day: string}[] | null {
+  const found = /(?:unavailable-primary|Availability conflict): (\[[\s\S]*\])\s*$/.exec(raw);
+  if (!found) return null;
+  try {
+    const list: unknown = JSON.parse(found[1]);
+    return Array.isArray(list) && list.length && list.every(c => typeof c?.member === 'string' && typeof c?.day === 'string')
+      ? list.map(c => ({member: c.member as string, day: c.day as string})) : null;
+  } catch {return null;}
+}
+/** userMessage, with one line per conflict first for an availability refusal: "Avi marked Dec 22
+ * as unavailable · doctor". The note shows only to its owner and admins. */
+export function explainedMessage(raw: string, t: Translate, context?: {me: string; admin: boolean; name: (id: string) => string;
+  note: (member: string, day: string) => string | undefined; day: (d: string) => string}): string {
+  const conflicts = context && availabilityConflicts(raw), lang = t('en', 'he') as 'en' | 'he';
+  if (!conflicts || !context) return userMessage(raw, t);
+  return [...conflicts.map(c => constraintLine({member: c.member, day: c.day, note: visibleNote(context.note(c.member, c.day), c.member, context)},
+    {me: context.me, name: context.name, day: context.day, lang})), userMessage(raw, t)].join('\n');
+}
 
 /** What every error or refusal says to the user, in English and Hebrew (decision
  * 2026-11-01): codes from the client libraries and the checked RPCs, and the RPCs'
@@ -128,6 +150,9 @@ const SENTENCES: readonly (readonly [RegExp, string, string])[] = [
   [/An open month draft is required|Duty requires its owning month draft|Edit duties in their owning month/, 'Edit this month’s draft first: open the month, then try again.', 'יש לערוך קודם את טיוטת החודש: לפתוח את החודש ולנסות שוב.'],
   [/Choose whether this member takes weekends/, 'Choose whether this member takes weekends.', 'יש לבחור אם החבר הזה עושה סופי שבוע.'],
   [/Approve this member first/, 'Approve this member first.', 'יש לאשר קודם את החבר הזה.'],
+  [/Choose whether this member is a Viewer/, 'Choose whether this member is a Viewer.', 'יש לבחור אם החבר הזה צופה.'],
+  [/A temporary member cannot be a Viewer/, 'A temporary member can’t be a Viewer.', 'חבר צוות זמני לא יכול להיות צופה.'],
+  [/Viewers have no constraints/, 'Viewers don’t add constraints.', 'צופים לא מוסיפים אילוצים.'],
   [/Calendar changed\. Confirm allocation again/, 'The month’s calendar changed. Confirm the plan again.', 'לוח החודש השתנה. יש לאשר שוב את התוכנית.'],
   [/Choose duties in the same current publication|Choose duties owned by the same published month/, 'Choose two duties from the same published month.', 'יש לבחור שתי כוננויות מאותו חודש שפורסם.'],
   [/Choose duties starting today or later/, 'Choose duties from today on.', 'יש לבחור כוננויות מהיום והלאה.'],

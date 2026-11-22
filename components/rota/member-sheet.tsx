@@ -18,18 +18,18 @@ import type {Language, Translate} from './workspace-types';
 export type MemberSheetProps = {
   member: Engineer | null; open: boolean; onClose: () => void; lang: Language; t: Translate; selfId: string; admin: boolean; saving: boolean;
   roles: Role[]; temporary: boolean; noWeekends: boolean; monthPoints: number; allPoints: number; balance: Balance | null; name: (id: string) => string; team: Engineer[];
-  onRole: (role: string) => void; onNoWeekends: (value: boolean) => void; onActive: (value: boolean) => void; onColor: (hex: string) => void; onRename?: () => void;
+  onRole: (role: string) => void; onNoWeekends: (value: boolean) => void; onViewer: (value: boolean) => void; onActive: (value: boolean) => void; onColor: (hex: string) => void; onRename?: () => void;
 };
 
 /** One member (decision 2026-11-06): their points and balance for everyone; role, No weekends,
- * Active and a colour override for admins. A bottom sheet on phones, a panel on PC. */
-export function MemberSheet({member, open, onClose, lang, t, selfId, admin, saving, roles, temporary, noWeekends, monthPoints, allPoints, balance, name, team, onRole, onNoWeekends, onActive, onColor, onRename}: MemberSheetProps) {
+ * Viewer (#90), Active and a colour override for admins. A bottom sheet on phones, a panel on PC. */
+export function MemberSheet({member, open, onClose, lang, t, selfId, admin, saving, roles, temporary, noWeekends, monthPoints, allPoints, balance, name, team, onRole, onNoWeekends, onViewer, onActive, onColor, onRename}: MemberSheetProps) {
   const [colorBusy, setColorBusy] = useState(false);
   const p = member;
   const roleLabel = (code?: string) => {const r = roles.find(r => r.code === code); return r ? (lang === 'he' ? (r.can_manage ? 'מנהל' : 'מהנדס') : r.label) : t('Engineer', 'מהנדס');};
   const taken = new Map(team.filter(m => m.id !== p?.id && m.active).map(m => [memberColor(m.color).hex, m.name]));
   const current = memberColor(p?.color).hex;
-  return <Sheet open={open && !!p} onOpenChange={next => {if (!next) onClose();}} lang={lang} title={p?.name ?? ''} description={p ? [temporary ? t('Temporary', 'זמני') : roleLabel(p.role), p.id === selfId ? t('you', 'אני') : null, !p.active ? t('Inactive', 'לא פעיל') : null].filter(Boolean).join(' · ') : ''}
+  return <Sheet open={open && !!p} onOpenChange={next => {if (!next) onClose();}} lang={lang} title={p?.name ?? ''} description={p ? [temporary ? t('Temporary', 'זמני') : roleLabel(p.role), p.id === selfId ? t('you', 'אני') : null, p.viewer ? t('Viewer', 'צופה') : null, !p.active ? t('Inactive', 'לא פעיל') : null].filter(Boolean).join(' · ') : ''}
     className="member-sheet" busy={saving}
     tools={admin && temporary && onRename ? <Button variant="ghost" size="icon-sm" aria-label={t('Edit name', 'עריכת שם')} onClick={onRename}><PenLine/></Button> : undefined}>
     {p && <>
@@ -48,6 +48,8 @@ export function MemberSheet({member, open, onClose, lang, t, selfId, admin, savi
         </span></div>
         <div className="row"><span className="row-body"><label className="row-title" htmlFor="member-no-weekends">{t('No weekends', 'ללא סופי שבוע')}</label></span><span className="row-trail">
           <Switch id="member-no-weekends" disabled={saving} checked={noWeekends} aria-label={`${t('No weekends', 'ללא סופי שבוע')} ${p.name}`} onCheckedChange={v => onNoWeekends(v === true)}/></span></div>
+        {!temporary && <div className="row"><span className="row-body"><label className="row-title" htmlFor="member-viewer">{t('Viewer', 'צופה')}</label></span><span className="row-trail">
+          <Switch id="member-viewer" disabled={saving} checked={!!p.viewer} aria-label={`${t('Viewer', 'צופה')} ${p.name}`} onCheckedChange={v => onViewer(v === true)}/></span></div>}
         <div className="row"><span className="row-body"><label className="row-title" htmlFor="member-active">{t('Active', 'פעיל')}</label>{p.id === selfId && <span className="row-subtitle">{t('You can’t deactivate yourself', 'אי אפשר להשבית את עצמך')}</span>}</span><span className="row-trail">
           <Switch id="member-active" disabled={saving || p.id === selfId} checked={p.active} aria-label={`${t('Active', 'פעיל')} ${p.name}`} onCheckedChange={v => onActive(v === true)}/></span></div>
         <div className="row row-column">
@@ -66,6 +68,7 @@ export function MemberSheet({member, open, onClose, lang, t, selfId, admin, savi
         </div>
       </Card>}
       {!admin && noWeekends && <Chip tone="neutral">{t('No weekends', 'ללא סופי שבוע')}</Chip>}
+      {!admin && p.viewer && <Chip tone="neutral">{t('Viewer', 'צופה')}</Chip>}
     </>}
   </Sheet>;
 }

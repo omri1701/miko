@@ -25,7 +25,7 @@ async function home(page: Page) {
   await page.getByRole('tab', {name: /^(Home|בית)$/}).click();
 }
 async function contexts(browser: Browser, page: Page, count: number) {
-  return Promise.all(Array.from({length: count}, () => browser.newContext({viewport: page.viewportSize()!, timezoneId: 'Asia/Jerusalem', locale: 'en-US', serviceWorkers: 'block'})));
+  return Promise.all(Array.from({length: count}, () => browser.newContext({viewport: page.viewportSize()!, timezoneId: 'Asia/Jerusalem', locale: 'en-GB', serviceWorkers: 'block'})));
 }
 
 test('admin proposal needs both members, then an explicit approval with a copyable summary', async ({page, browser, openApp, backend}) => {
@@ -129,13 +129,13 @@ for (const lang of ['en', 'he'] as const) test(`a stale approval dialog shows th
 for (const lang of ['en', 'he'] as const) test(`availability alert names whose constraint blocks a swap ${lang}`, async ({page, openApp, backend}) => {
   const t = (en: string, he: string) => lang === 'en' ? en : he;
   await openApp('a'); await language(page, lang);
-  // Alex would receive 4 November, which Alex marked unavailable: greyed before the pick, no note.
+  // Alex would receive 4 November, which Alex marked unavailable: red before the pick, no note (#92).
   await startSwap(page, '2026-11-09');
   await targetReady(page, '2026-11-04');
-  await expect(duty(page, '2026-11-04')).toHaveAttribute('title', t('You can’t take Nov 4', 'אין לך אפשרות לקחת את 4 בנוב׳'));
+  await expect(duty(page, '2026-11-04')).toHaveAttribute('title', t('You marked Nov 4 as unavailable · Synthetic vacation', 'סימנת את 4 בנוב׳ כלא זמין · Synthetic vacation'));
   await duty(page, '2026-11-04').focus(); await page.keyboard.press('Space');
-  await expect(page.getByRole('dialog')).toHaveCount(0);
-  await expect(page.locator('body')).not.toContainText('Synthetic vacation');
+  await expect(page.getByRole('dialog').getByRole('note')).toHaveText(t('You marked Nov 4 as unavailable · Synthetic vacation', 'סימנת את 4 בנוב׳ כלא זמין · Synthetic vacation'));
+  await expect(page.getByRole('button', {name: t('Send anyway', 'לשלוח בכל זאת'), exact: true})).toBeEnabled();
   await page.keyboard.press('Escape');
   expect(backend.calls.filter(c => c.name === 'duty_request_swap')).toHaveLength(0);
   // Without a conflict the same dialog sends normally.
@@ -144,7 +144,9 @@ for (const lang of ['en', 'he'] as const) test(`availability alert names whose c
   await expect(page.getByRole('button', {name: t('Confirm Request', 'אישור בקשה'), exact: true})).toBeEnabled();
 });
 
-for (const lang of ['en', 'he'] as const) test(`availability is rechecked at consent and final approval ${lang}`, async ({page, browser, openApp, backend}) => {
+// #92 (owner 2026-11-20): a member may accept a date they marked unavailable; the card says so
+// (never the note), accepting keeps the constraint, and the admin approves as usual.
+for (const lang of ['en', 'he'] as const) test(`a member accepts a date they marked unavailable; the admin approves as usual ${lang}`, async ({page, browser, openApp, backend}) => {
   const t = (en: string, he: string) => lang === 'en' ? en : he;
   await openApp('admin'); await published(page, lang);
   await pick(page, '2026-11-02', '2026-11-03');
@@ -157,27 +159,43 @@ for (const lang of ['en', 'he'] as const) test(`availability is rechecked at con
   const [bc] = await contexts(browser, page, 1);
   try {
     const b = await bc.newPage(); await openApp('b', b); await language(b, lang);
-    await b.getByRole('button', {name: t('Accept', 'קבלה'), exact: true}).click();
-    const consent = b.getByRole('dialog', {name: t('Accept despite a conflict?', 'לאשר למרות התנגשות?')});
-    await expect(consent.getByRole('alert')).toContainText(t('Blair Birch is unavailable on Nov 2', 'ל־Blair Birch יש אילוץ אי־זמינות ב־2 בנוב׳'));
-    await consent.getByRole('button', {name: t('Accept anyway', 'אישור בכל זאת'), exact: true}).click();
-    await expect(consent).toBeHidden();
+    const card = b.locator('[data-swap-card]');
+    // The owner reads their own constraint, note included.
+    await expect(card.getByRole('note')).toHaveText(t('You marked Nov 2 as unavailable · Late private note', 'סימנת את 2 בנוב׳ כלא זמין · Late private note'));
+    // Owner 2026-11-21: below the title row, the people row and conflict lines span the card
+    // (not a column beside the icon), and the people row stays on one line.
+    const [cardBox, pairBox, noteBox, iconBox] = await Promise.all([card, card.locator('.swap-card-pair'), card.getByRole('note'), card.locator('.swap-card-icon')]
+      .map(l => l.boundingBox()));
+    for (const box of [pairBox!, noteBox!]) {
+      expect(box.y).toBeGreaterThanOrEqual(iconBox!.y + iconBox!.height - 1);
+      expect(box.width).toBeGreaterThan(cardBox!.width - 40);
+    }
+    expect(await card.locator('.swap-party').evaluateAll(parts => new Set(parts.map(p => Math.round(p.getBoundingClientRect().top))).size)).toBe(1);
+    // Owner 2026-11-21: the label itself warns, on the button and the swipe action; no popup.
+    await expect(b.locator('.swap-swipe .swipe-actions-start .swipe-action')).toHaveText(t('Accept anyway', 'לקבל בכל זאת'));
+    await card.getByRole('button', {name: t('Accept anyway', 'לקבל בכל זאת'), exact: true}).click();
+    await expect(b.getByRole('dialog')).toHaveCount(0);
+    await expect.poll(() => backend.raw.swapRequests![0].accepted_by).toBe(ids.b);
   } finally {await bc.close();}
   // Alex's side, accepted on the server to keep this test on the admin review.
   Object.assign(backend.raw.swapRequests![0], {requester_accepted_at: NOW, status: 'awaiting_admin'});
   backend.raw.revision!++;
   await page.reload(); await language(page, lang);
-  await page.getByRole('button', {name: t('Approve', 'אישור'), exact: true}).click();
+  await expect(page.locator('.swap-swipe .swipe-actions-start .swipe-action')).toHaveText(t('Approve anyway', 'לאשר בכל זאת'));
+  await page.getByRole('button', {name: t('Approve anyway', 'לאשר בכל זאת'), exact: true}).click();
   const dialog = page.getByRole('dialog', {name: t('Approve swap', 'אישור החלפה')});
   await expect(dialog.getByLabel(t('Swap summary', 'סיכום ההחלפה'))).toContainText(t('Duty swap: Alex Atlas ⇄ Blair Birch', 'החלפת כוננויות: Alex Atlas ⇄ Blair Birch'));
-  await expect(dialog.getByRole('alert')).toContainText(t('Approving requires an explicit override with a reason.', 'האישור מחייב חריגה מפורשת עם נימוק.'));
-  const approve = dialog.getByRole('button', {name: t('Approve & publish', 'אישור ופרסום')});
-  await expect(approve).toBeDisabled();
-  await dialog.getByRole('checkbox').check();
-  await dialog.getByLabel(t('Required audit reason', 'נימוק חובה לתיעוד')).fill('Recorded in the external system');
+  // Owner 2026-11-21: the admin sees the conflict with its note, no explanation, checkbox or reason.
+  await expect(dialog.getByRole('alert').getByRole('listitem')).toHaveText(t('Blair Birch marked Nov 2 as unavailable · Late private note', 'Blair Birch סימן/ה את 2 בנוב׳ כלא זמין · Late private note'));
+  await expect(dialog.getByRole('checkbox')).toHaveCount(0);
+  await expect(dialog.getByRole('textbox')).toHaveCount(0);
+  await expect(dialog).not.toContainText(t('reason', 'נימוק'));
+  const approve = dialog.getByRole('button', {name: t('Approve anyway', 'לאשר בכל זאת'), exact: true});
+  await expect(approve).toBeEnabled();
   await approve.click();
   await expect(dialog).toBeHidden();
-  expect(backend.raw.swapRequests![0]).toMatchObject({status: 'approved', override_reason: 'Recorded in the external system'});
+  expect(backend.raw.swapRequests![0]).toMatchObject({status: 'approved', override_reason: ''});
+  expect(backend.raw.constraints.some(c => c.member_id === ids.b && c.day === '2026-11-02')).toBe(true);
 });
 
 for (const lang of ['en', 'he'] as const) test(`an admin answers for temporary members, then approves separately ${lang}`, async ({page, openApp, backend}) => {
@@ -205,6 +223,8 @@ for (const lang of ['en', 'he'] as const) test(`an admin answers for temporary m
   expect(backend.raw.swapRequests![0]).toMatchObject({requester_id: tamar, other_id: noa, status: 'awaiting_admin', accepted_by: noa, requester_accepted_at: NOW});
   // Answering never publishes: the explicit approval with its summary still follows.
   expect(backend.raw.publications).toHaveLength(1);
+  // No conflict line: the plain labels stay, on the button and the swipe action.
+  await expect(page.locator('.swap-swipe .swipe-actions-start .swipe-action')).toHaveText(t('Approve', 'אישור'));
   await page.getByRole('button', {name: t('Approve', 'אישור'), exact: true}).click();
   const dialog = page.getByRole('dialog', {name: t('Approve swap', 'אישור החלפה')});
   await expect(dialog.getByLabel(t('Swap summary', 'סיכום ההחלפה'))).toContainText('Tamar Temp ⇄ Noa Temp');

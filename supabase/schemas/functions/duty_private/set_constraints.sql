@@ -7,6 +7,8 @@ begin
  perform duty_private.check_revision(p_revision);
  manager:=duty_private.is_manager();
  if (not manager and p_member is distinct from duty_private.current_member_id()) or not exists(select 1 from public.duty_members where id=p_member and status='approved') then raise exception 'Not allowed' using errcode='42501'; end if;
+ -- A Viewer (#90) is never scheduled, so nobody adds constraints for them.
+ if exists(select 1 from public.duty_members where id=p_member and viewer) then raise exception 'Viewers have no constraints' using errcode='42501'; end if;
  if p_kind not in ('no','prefer','clear') or p_kind is null or coalesce(cardinality(p_days),0) not between 1 and 62 or length(coalesce(p_note,''))>300 then raise exception 'Invalid constraints'; end if;
  foreach d in array p_days loop
   if d is null then raise exception 'Invalid date'; end if;
@@ -14,7 +16,9 @@ begin
   insert into public.duty_months(month,deadline) values(m,date_trunc('month',d)::date-7) on conflict do nothing;
   if not manager and exists(select 1 from public.duty_months where month=m and (status='published' or deadline < (now() at time zone 'Asia/Jerusalem')::date)) then raise exception 'Constraints are closed for this month' using errcode='42501'; end if;
   if p_kind='clear' then delete from public.duty_constraints where member_id=p_member and day=d;
-  else insert into public.duty_constraints(member_id,day,kind,note) values(p_member,d,p_kind,trim(coalesce(p_note,''))) on conflict(member_id,day) do update set kind=excluded.kind,note=excluded.note; end if;
+  else insert into public.duty_constraints(member_id,day,kind,note) values(p_member,d,p_kind,trim(coalesce(p_note,''))) on conflict(member_id,day) do update set kind=excluded.kind,note=excluded.note,
+   -- A note edit keeps an admin's availability approval; a newly unavailable date never has one.
+   duty_approved=duty_constraints.duty_approved and duty_constraints.kind='no' and excluded.kind='no'; end if;
   -- Availability is independent of the working schedule. In particular, an
   -- admin constraint edit must not create an empty draft of a published month.
  end loop;

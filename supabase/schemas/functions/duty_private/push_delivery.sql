@@ -16,7 +16,7 @@ begin
   select m.month,m.deadline,w.kind,x.id as member from public.duty_months m
   cross join lateral (values ('deadline_3',(m.deadline-3)+time '10:00',(m.deadline-1)+time '10:00'),
    ('deadline_1',(m.deadline-1)+time '10:00',(m.deadline+1)::timestamp)) w(kind,fire,until)
-  join public.duty_members x on x.status='approved' and x.active and x.auth_user_id is not null
+  join public.duty_members x on x.status='approved' and x.active and not x.viewer and x.auth_user_id is not null
   where m.status='draft' and m.current_publication_id is null and local>=w.fire and local<w.until
    and (w.kind='deadline_3' or not exists(select 1 from public.duty_constraints c where c.member_id=x.id
     and c.day>=to_date(m.month,'YYYY-MM') and c.day<(to_date(m.month,'YYYY-MM')+interval '1 month')))

@@ -241,3 +241,23 @@ for(const lang of ['en','he'] as const)test(`a published weekend edit to a No we
  await dialog.getByRole('checkbox',{name:he?'אישור החריגה כמנהל':'Approve this exception as manager'}).check();
  await expect(review).toBeEnabled();
 });
+
+// Owner 2026-11-21 (#103): draft conflicts read like a person; the admin sees the note, and
+// "You" for their own constraint. The manager approval checkbox is unchanged.
+for(const lang of ['en','he'] as const)test(`draft duty editor names constraints as human lines ${lang}`,async({page,openApp,backend})=>{
+ const he=lang==='he';
+ backend.raw.constraints.push({member_id:ids.admin,day:'2026-11-04',kind:'no',note:'Own errand'});
+ await openApp();
+ if(he)await switchLanguage(page,'he');
+ await editDuty(page,'2026-11-04');
+ const dialog=page.getByRole('dialog'),warning=dialog.locator('.warning-note');
+ for(const [who,line] of [['Alex Atlas',he?'Alex Atlas סימן/ה את 4 בנוב׳ כלא זמין · Synthetic vacation':'Alex Atlas marked Nov 4 as unavailable · Synthetic vacation'],
+  ['Avery Admin',he?'סימנת את 4 בנוב׳ כלא זמין · Own errand':'You marked Nov 4 as unavailable · Own errand']] as const){
+  await dialog.getByRole('combobox',{name:he?'מהנדס ראשי':'Primary engineer',exact:true}).click();
+  await page.getByRole('option',{name:new RegExp(`^${who}`)}).click();
+  // One conflict per line, never joined by " / " (owner 2026-11-21).
+  await expect(warning.getByRole('listitem')).toHaveText([line]);
+  await expect(warning).not.toContainText(/\s\/\s/);
+ }
+ await expect(dialog.getByRole('checkbox',{name:he?'אישור החריגות כמנהל':'Approve these exceptions as manager'})).toBeVisible();
+});

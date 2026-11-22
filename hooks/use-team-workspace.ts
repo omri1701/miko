@@ -3,7 +3,7 @@ import {useEffect,useMemo,useRef,useState} from 'react';
 import type {User} from '@supabase/supabase-js';
 import {getSupabase,getEnvironment,signInWithGoogle,signInLocally,completeInspectionLogin} from '@/lib/supabase/client';
 import type {Environment} from '@/lib/supabase/environment';
-import {fromSnapshot,schedulePayload,canManage,findMe,readSnapshot,type Snapshot} from '@/lib/supabase/snapshot';
+import {fromSnapshot,schedulePayload,canManage,isViewer,findMe,readSnapshot,type Snapshot,type DayConflict} from '@/lib/supabase/snapshot';
 import {observeSession} from '@/lib/supabase/session';
 import {createWorkspace} from '@/lib/supabase/workspace';
 import {errorMessage,type DutyClient} from '@/lib/supabase/rpc';
@@ -101,6 +101,9 @@ export function useTeamWorkspace(){
  const offline=!snapshot&&!!user&&cached?.userId===user.id;
  const shown=snapshot??(offline?cached!.snapshot:null);
  const me=shown&&user?findMe(shown,user.id):undefined;
+ // A Viewer (#90) never edits the schedule (the database refuses it), so every schedule write is
+ // read-only for them; their own name, colour, language and devices stay theirs to change.
+ const viewer=!!shown&&!!user&&isViewer(shown,user.id),settingsReadOnly=(environment?.readOnly??true)||offline;
  // Personal settings (decision 2026-11-06): direct checked RPCs without the workspace
  // revision, so they never conflict with schedule edits or refresh the team.
  const personal=useMemo(()=>({
@@ -111,7 +114,7 @@ export function useTeamWorkspace(){
   async removeDevice(endpoint:string){if(!client)throw Error('Not connected');const {error}=await client.rpc('duty_delete_push_subscription',{p_endpoint:endpoint});if(error)throw error},
   }),[client,environment,user]);
  // The caller's member id: their sign-in id, or the id of the temporary member they were linked to.
- return {user,me,memberId:me?.id??user?.id??'',snapshot:shown,loading,saving,error:offline?'':error,environment,offline:offline||!online,readOnly:(environment?.readOnly??true)||offline,isAdmin:!!shown&&!!user&&canManage(shown,user.id),clearError:()=>setError(''),state:shown&&user?fromSnapshot(shown,user.id):null,
+ return {user,me,memberId:me?.id??user?.id??'',snapshot:shown,loading,saving,error:offline?'':error,environment,offline:offline||!online,readOnly:settingsReadOnly||viewer,settingsReadOnly,viewer,isAdmin:!!shown&&!!user&&canManage(shown,user.id),clearError:()=>setError(''),state:shown&&user?fromSnapshot(shown,user.id):null,
   refresh:()=>workspace.refresh(),
   // Loading the team failed while signed in: Try again re-verifies the session and reloads.
   loadFailed:loadFailed&&!snapshot&&!offline,retrying,
@@ -131,7 +134,7 @@ export function useTeamWorkspace(){
   async signInLocal(email:string,password:string){try{setError('');await signInLocally(email,password)}catch(e){setError(errorMessage(e,'Could not sign in. Please try again.'))}},
   async completeInspection(returnUrl:string){try{setError('');await completeInspectionLogin(returnUrl)}catch{setError('Could not complete inspection login. Start Google sign-in again.')}},
   async signOut(){forgetCalendarLinks();if(client){try{const {error}=await signOutSafely(client);if(error)setError(error.message)}catch(e){setError(errorMessage(e,'Could not sign out. Please try again.'))}}},
-  save:(s:State,publish?:string,month?:string,reviewedLocks?:string[])=>workspace.mutate('duty_save_schedule',{p_state:schedulePayload(s,month??publish,!!publish,reviewedLocks),p_publish:publish??null}).then(()=>{}),
+  save:(s:State,publish?:string,month?:string,reviewedLocks?:string[],publishAnyway?:DayConflict[])=>workspace.mutate('duty_save_schedule',{p_state:schedulePayload(s,month??publish,!!publish,reviewedLocks,publishAnyway),p_publish:publish??null}).then(()=>{}),
   constraints:(person:string,days:string[],kind:string,note:string)=>workspace.mutate('duty_set_constraints',{p_member:person,p_days:days,p_kind:kind,p_note:note}).then(()=>{}),
   rename:(name:string)=>workspace.mutate('duty_rename_self',{p_name:name}).then(()=>{}),
   setColor:(color:string)=>workspace.mutate('duty_set_color',{p_color:color}).then(()=>{}),
@@ -139,6 +142,7 @@ export function useTeamWorkspace(){
 
   setRole:(person:string,role:string)=>workspace.mutate('duty_set_role',{p_member:person,p_role:role}).then(()=>{}),
   setNoWeekends:(person:string,noWeekends:boolean)=>workspace.mutate('duty_set_no_weekends',{p_member:person,p_no_weekends:noWeekends}).then(()=>{}),
+  setViewer:(person:string,viewer:boolean)=>workspace.mutate('duty_set_viewer',{p_member:person,p_viewer:viewer}).then(()=>{}),
   restore:(publication:string)=>workspace.mutate('duty_restore_publication',{p_publication:publication}).then(()=>{}),
   cancelDraft:(month:string)=>workspace.mutate('duty_cancel_draft',{p_month:month}).then(()=>{}),
   deleteVersion:(publication:string)=>workspace.mutate('duty_delete_publication',{p_publication:publication}).then(()=>{}),

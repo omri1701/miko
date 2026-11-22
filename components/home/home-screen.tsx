@@ -24,11 +24,12 @@ export function HomeScreen({remote, swaps, today, lang, t, onSchedule, onAvailab
   /** Starts a swap for the member's own published duty on that day. */
   onSwap: (month: string, day: string) => void;
 }) {
-  const raw = remote.snapshot!, me = remote.memberId, admin = remote.isAdmin;
+  // A Viewer (#90) adds no constraints and asks for no swaps; a Viewer-admin has nothing to do.
+  const raw = remote.snapshot!, me = remote.memberId, admin = remote.isAdmin, viewer = remote.viewer;
   const name = (id: string | null) => raw.members.find(m => m.id === id)?.name ?? '';
   const first = (remote.me?.name ?? '').trim().split(/\s+/)[0] || '';
   const duties = myUpcomingDuties(raw, me, today);
-  const due = constraintsDue(raw, today, admin);
+  const due = viewer ? null : constraintsDue(raw, today, admin);
   // Requests that wait for the member (or the admin), then the member's own open ones.
   const toAnswer = swaps.requests.filter(r => swapNeedsAction(r, me, admin, swaps.temporary));
   const mine = swaps.requests.filter(r => !toAnswer.includes(r) && ['awaiting_engineer', 'awaiting_admin'].includes(r.status));
@@ -37,7 +38,7 @@ export function HomeScreen({remote, swaps, today, lang, t, onSchedule, onAvailab
   const pending = admin ? raw.members.filter(m => m.status === 'pending').length : 0;
   const approvals = admin ? (raw.swapRequests ?? []).filter(r => r.status === 'awaiting_admin').length : 0;
   const drafts = admin ? raw.months.filter(m => m.status === 'draft' && m.generated && m.month >= today.slice(0, 7)) : [];
-  const todo = pending + approvals + drafts.length;
+  const todo = viewer ? 0 : pending + approvals + drafts.length;
   const dateLine = new Date(today + 'T12:00:00Z').toLocaleDateString(lang === 'en' ? 'en-US' : 'he-IL', {weekday: 'long', day: 'numeric', month: 'long', timeZone: 'UTC'});
   // The balance is a display projection, read where it is shown (never at startup).
   // Shown at once from the last read while a newer revision loads (hooks/use-balance.ts).
@@ -48,7 +49,7 @@ export function HomeScreen({remote, swaps, today, lang, t, onSchedule, onAvailab
       <p className="home-date">{dateLine}</p>
       <h1 className="home-greeting">{greeting(new Date(), lang)}{first ? `, ${first}` : ''}</h1>
     </header>
-    <DutyCarousel duties={duties} today={today} lang={lang} t={t} name={name} onSwap={onSwap} onSchedule={onSchedule}/>
+    <DutyCarousel duties={duties} today={today} lang={lang} t={t} name={name} onSwap={viewer ? undefined : onSwap} onSchedule={onSchedule}/>
     {due && <Card inset>
       <ListRow lead={<span className="row-icon" data-tone="brand"><CalendarCheck/></span>} title={t(`Constraints for ${calendarMonthLabel(due.month, lang)}`, `אילוצים ל${calendarMonthLabel(due.month, lang)}`)}
         subtitle={t(`Due ${shortDate(due.deadline, lang)}`, `עד ${shortDate(due.deadline, lang)}`)} trail={<span className="row-action">{t('Enter now', 'להזין')}</span>} chevron onClick={() => onAvailability(due.month)}/>
@@ -85,7 +86,7 @@ export function HomeScreen({remote, swaps, today, lang, t, onSchedule, onAvailab
   </div>;
 }
 
-function DutyCarousel({duties, today, lang, t, name, onSwap, onSchedule}: {duties: MyDuty[]; today: string; lang: Language; t: Translate; name: (id: string | null) => string; onSwap: (month: string, day: string) => void; onSchedule: (month: string) => void}) {
+function DutyCarousel({duties, today, lang, t, name, onSwap, onSchedule}: {duties: MyDuty[]; today: string; lang: Language; t: Translate; name: (id: string | null) => string; onSwap?: (month: string, day: string) => void; onSchedule: (month: string) => void}) {
   const track = useRef<HTMLDivElement>(null), [page, setPage] = useState(0);
   const shown = duties.slice(0, 6);
   useEffect(() => {
@@ -118,7 +119,7 @@ function DutyCarousel({duties, today, lang, t, name, onSwap, onSchedule}: {dutie
         const last = weekend ? shortDate(addDays(d.row.end_day, -1), lang) : null;
         const points = d.role === 'cover' ? 0 : d.row.points;
         const kind = d.role === 'cover' ? t('Emergency cover', 'כיסוי חירום') : d.kind === 'holiday' ? (d.row.title || t('Holiday', 'חג')) : d.kind === 'weekend' ? t('Weekend', 'סוף שבוע') : t('Weekday', 'יום חול');
-        const swappable = d.role === 'primary' && (when.diff > 0 || d.row.day === today);
+        const swappable = !!onSwap && d.role === 'primary' && (when.diff > 0 || d.row.day === today);
         return <article key={d.row.id} role="listitem" className="hero" data-when={when.diff <= 0 ? 'today' : when.diff === 1 ? 'tomorrow' : 'later'} aria-current={i === page ? 'true' : undefined}>
           <p className="hero-when">{when.label}</p>
           <h2 className="hero-title">{when.long}{last && <span className="hero-range"> – {last}</span>}</h2>
@@ -129,7 +130,7 @@ function DutyCarousel({duties, today, lang, t, name, onSwap, onSchedule}: {dutie
             {d.role === 'cover' && d.row.primary_id && <Chip tone="brand" className="hero-chip">{t('For', 'עבור')} {name(d.row.primary_id)}</Chip>}
           </div>
           <div className="hero-actions">
-            {swappable ? <Button className="hero-button" onClick={() => onSwap(d.month, d.row.day)}><ArrowLeftRight/>{t('Ask to swap', 'בקשת החלפה')}</Button>
+            {swappable ? <Button className="hero-button" onClick={() => onSwap?.(d.month, d.row.day)}><ArrowLeftRight/>{t('Ask to swap', 'בקשת החלפה')}</Button>
               : <Button className="hero-button" variant="secondary" onClick={() => onSchedule(d.month)}><CalendarDays/>{t('Open month', 'פתיחת החודש')}</Button>}
           </div>
         </article>;

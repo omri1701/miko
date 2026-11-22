@@ -292,7 +292,9 @@ for (const lang of ['en', 'he'] as const) {
 
   test(`swap consent and declined or inactive access ${lang}`, async ({page, openApp, backend}) => {
     backend.raw.months[0].status = 'published';
-    backend.raw.constraints.push({member_id: ids.a, day: '2026-11-03', kind: 'no', note: 'Synthetic appointment'});
+    // Emergency cover's unavailability still asks for consent (a party's own no longer does, #92).
+    backend.raw.constraints.push({member_id: ids.e, day: '2026-11-03', kind: 'no', note: 'Synthetic appointment'});
+    backend.raw.assignments.find(d => d.day === '2026-11-03' && d.publication_id)!.secondary_id = ids.e;
     backend.raw.swapRequests = [{
       id: 'request-conflict', month: '2026-11', source_publication_id: backend.raw.publications[0].id, requester_id: ids.b, other_id: ids.a,
       from_day: '2026-11-03', from_end_day: '2026-11-04', to_day: '2026-11-02', to_end_day: '2026-11-03', explanation: 'Family event', status: 'awaiting_engineer',

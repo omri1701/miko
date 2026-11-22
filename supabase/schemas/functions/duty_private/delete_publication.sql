@@ -24,5 +24,7 @@ begin
  end if;
  update public.duty_months set current_publication_id=replacement,status=case when replacement is null then 'draft' else status end where current_publication_id=v.id;
  delete from public.duty_publications where id=v.id;
+ -- Whoever this left off a date loses its availability approval (#103).
+ perform duty_private.prune_duty_approvals();
  update public.duty_workspace set revision=revision+1 where id;
 end $$;
