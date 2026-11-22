@@ -26,7 +26,7 @@ test('iPhone WebKit keeps published requests and bilingual version controls usab
   backend.raw.assignments.find(d=>d.publication_id && d.day==='2026-11-02')!.primary_id=ids.admin;
   const browser=await webkit.launch();
   try {
-    const context=await browser.newContext({...devices['iPhone 13'],locale:'en-US',timezoneId:'Asia/Jerusalem',reducedMotion:'reduce'});
+    const context=await browser.newContext({...devices['iPhone 13'],locale:'en-GB',timezoneId:'Asia/Jerusalem',reducedMotion:'reduce'});
     const page=await context.newPage();
     await openApp('admin',page);
     await schedule(page);

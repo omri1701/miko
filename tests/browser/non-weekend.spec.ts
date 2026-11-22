@@ -251,8 +251,8 @@ for(const lang of ['en','he'] as const)test(`draft duty editor names constraints
  if(he)await switchLanguage(page,'he');
  await editDuty(page,'2026-11-04');
  const dialog=page.getByRole('dialog'),warning=dialog.locator('.warning-note');
- for(const [who,line] of [['Alex Atlas',he?'Alex Atlas סימן/ה את 4 בנוב׳ כלא זמין · Synthetic vacation':'Alex Atlas marked Nov 4 as unavailable · Synthetic vacation'],
-  ['Avery Admin',he?'סימנת את 4 בנוב׳ כלא זמין · Own errand':'You marked Nov 4 as unavailable · Own errand']] as const){
+ for(const [who,line] of [['Alex Atlas',he?'Alex Atlas סימן/ה את 4 בנוב׳ כלא זמין · Synthetic vacation':'Alex Atlas marked 4 Nov as unavailable · Synthetic vacation'],
+  ['Avery Admin',he?'סימנת את 4 בנוב׳ כלא זמין · Own errand':'You marked 4 Nov as unavailable · Own errand']] as const){
   await dialog.getByRole('combobox',{name:he?'מהנדס ראשי':'Primary engineer',exact:true}).click();
   await page.getByRole('option',{name:new RegExp(`^${who}`)}).click();
   // One conflict per line, never joined by " / " (owner 2026-11-21).

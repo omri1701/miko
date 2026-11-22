@@ -73,7 +73,7 @@ export function DraftSwapDialog({controller, state, duties, lang, t, fmt, nickna
         {!!swapPreview?.conflicts?.length && <div><strong>{t('Availability conflicts', 'התנגשות עם אילוצים')}</strong>
           <ul className="swap-conflicts">{swapPreview.conflicts.map((c) => <li key={`${c.person}${c.date}`}>{constraintLine({member: c.person, day: c.date, note: state.constraintNotes?.[c.person]?.[c.date]}, {me, name: personName, day: fmt, lang})}</li>)}</ul></div>}
         {swapPreview?.weekendConflicts?.map(c => {
-          const monthLabel = new Intl.DateTimeFormat(lang === 'he' ? 'he-IL' : 'en-US', {month: 'long', timeZone: 'UTC'}).format(new Date(c.month + '-01T12:00:00Z'));
+          const monthLabel = new Intl.DateTimeFormat(lang === 'he' ? 'he-IL' : 'en-GB', {month: 'long', timeZone: 'UTC'}).format(new Date(c.month + '-01T12:00:00Z'));
           return <p key={c.person}>{t(`This swap gives ${personName(c.person)} ${c.count} weekends in ${monthLabel}. Approve exception?`, `ההחלפה נותנת ל${personName(c.person)} ${c.count} סופי שבוע בחודש ${monthLabel}. לאשר חריגה?`)}</p>;
         })}
         {swapPreview?.noWeekendConflicts?.map(c => <p key={`${c.person}${c.date}`}>{t(`${personName(c.person)} doesn’t take weekends · ${fmt(c.date)}`, `${personName(c.person)} לא עושה סופי שבוע · ${fmt(c.date)}`)}</p>)}

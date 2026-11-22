@@ -32,7 +32,7 @@ function useSwapConflicts(remote:TeamWorkspace,from?:string,to?:string){
  return key&&result?.key===key?result.conflicts:null;
 }
 
-const fmtDay=(day:string,lang:'en'|'he')=>new Date(day+'T12:00:00Z').toLocaleDateString(lang==='he'?'he-IL':'en-US',{day:'numeric',month:'short',timeZone:'Asia/Jerusalem'});
+const fmtDay=(day:string,lang:'en'|'he')=>new Date(day+'T12:00:00Z').toLocaleDateString(lang==='he'?'he-IL':'en-GB',{day:'numeric',month:'short',timeZone:'Asia/Jerusalem'});
 const spanOf=(start:string,end:string,lang:'en'|'he')=>fmtDay(start,lang)+(end!==addDays(start,1)?` – ${fmtDay(addDays(end,-1),lang)}`:'');
 
 function conflictAlert(conflicts:SwapConflict[]|null,name:(id:string)=>string,t:Translate,lang:'en'|'he',note:(member:string,day:string)=>string,me:string){

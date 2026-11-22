@@ -50,7 +50,7 @@ test('a first drop on a target the server refuses explains why and opens nothing
   await openApp('a'); await schedule(page);
   await quickDrag(page, info.project.name === 'mobile', '2026-11-02', '2026-11-03');
   gate.release();
-  await expect(page.locator('[data-sonner-toast]').filter({hasText: 'Emergency cover can’t take Nov 2'})).toBeVisible();
+  await expect(page.locator('[data-sonner-toast]').filter({hasText: 'Emergency cover can’t take 2 Nov'})).toBeVisible();
   await expect(page.getByRole('dialog')).toHaveCount(0);
   expect(backend.calls.filter(c => c.name === 'duty_request_swap')).toHaveLength(0);
 });

@@ -84,8 +84,8 @@ export const partyConflict=(c:SwapConflict,source:DutyRow,target:DutyRow)=>
 export const coverConflicts=(conflicts:SwapConflict[],source:DutyRow,target:DutyRow)=>conflicts.filter(c=>!partyConflict(c,source,target));
 /** A note is shown only to its owner and to admins (owner 2026-11-21); never to other members. */
 export const visibleNote=(note:string|undefined,member:string,{me,admin}:{me:string;admin:boolean})=>admin||member===me?note??'':'';
-/** One constraint line, read like a person wrote it: "You marked Dec 22 as unavailable · doctor",
- * "Avi marked Dec 22 as unavailable · doctor" (admins) or without the note (other members).
+/** One constraint line, read like a person wrote it: "You marked 22 Dec as unavailable · doctor",
+ * "Avi marked 22 Dec as unavailable · doctor" (admins) or without the note (other members).
  * Callers pass `note` through visibleNote. */
 export function constraintLine({member,day:d,note}:{member:string;day:string;note?:string},{me,name,day,lang}:{me:string;name:(id:string)=>string;day:(d:string)=>string;lang:'en'|'he'}){
  const he=lang==='he';

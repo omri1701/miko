@@ -60,7 +60,7 @@ for (const lang of ['en', 'he'] as const) test(`split a published weekend: two d
   await page.getByRole('option', {name: names[taker]}).click();
   await dialog.getByLabel(t('Saturday points', 'נקודות ביום שבת')).fill('1');
   await expect(dialog.getByRole('group', {name: t('Compensation', 'פיצוי')})).toBeVisible();
-  if (lang === 'en') await expect(dialog).toContainText(`${names[owner]} owes ${names[taker]} 0.5 points (Nov 7), repaid in later months.`);
+  if (lang === 'en') await expect(dialog).toContainText(`${names[owner]} owes ${names[taker]} 0.5 points (7 Nov), repaid in later months.`);
   await both(page, `published-weekend-two-${lang}`);
   await dialog.getByRole('button', {name: t('Review change', 'בדיקת השינוי')}).click();
   const summary = page.getByLabel(t('Summary', 'סיכום'));

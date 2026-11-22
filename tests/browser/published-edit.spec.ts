@@ -87,7 +87,7 @@ test('a combined weekend edits each date’s points in the weekend editor; engin
   await openApp();
   await edit(page, '2026-11-06');
   const dialog = page.locator('.published-edit-dialog');
-  await expect(dialog).toContainText('Nov 6 – Nov 7');
+  await expect(dialog).toContainText('6 Nov – 7 Nov');
   await dialog.getByLabel('Saturday points').fill('1.5');
   await expect(dialog.getByRole('group', {name: 'Compensation'})).toHaveCount(0);
   await dialog.getByRole('button', {name: 'Review change'}).click();
@@ -95,7 +95,7 @@ test('a combined weekend edits each date’s points in the weekend editor; engin
   await page.getByRole('button', {name: 'Publish change'}).click();
   await expect(page.getByRole('dialog')).toBeHidden();
   expect(backend.calls.filter(c => c.name === 'duty_edit_published_weekend')[0].params).toMatchObject({p_friday: '2026-11-06', p_friday_extra: 0, p_saturday_extra: 1});
-  const context = await browser.newContext({viewport: page.viewportSize()!, timezoneId: 'Asia/Jerusalem', locale: 'en-US', serviceWorkers: 'block'});
+  const context = await browser.newContext({viewport: page.viewportSize()!, timezoneId: 'Asia/Jerusalem', locale: 'en-GB', serviceWorkers: 'block'});
   try {
     const engineer = await context.newPage();
     await openApp('a', engineer);

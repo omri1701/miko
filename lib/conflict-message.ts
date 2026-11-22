@@ -13,7 +13,7 @@ export function conflictContext(remote: {memberId: string; isAdmin: boolean}, st
     note: (member: string, day: string) => state.constraintNotes?.[member]?.[day]};
 }
 
-/** One conflict as its human line: "Avi marked Dec 9 as unavailable · note" (note for its owner and admins). */
+/** One conflict as its human line: "Avi marked 9 Dec as unavailable · note" (note for its owner and admins). */
 export function conflictLine(c: {member: string; day: string}, context: ReturnType<typeof conflictContext>) {
   return constraintLine({member: c.member, day: c.day, note: visibleNote(context.note(c.member, c.day), c.member, context)}, {me: context.me, name: context.name, day: context.day, lang: context.lang});
 }

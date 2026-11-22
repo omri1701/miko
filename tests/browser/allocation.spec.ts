@@ -482,7 +482,7 @@ test('real generation Worker saves a verified partial, retains targets and emerg
   await page.getByRole('button', {name: 'Open plan', exact: true}).click();
   await expect(page.locator('.plan-row output')).toHaveText(targets);
   const dialog = page.getByRole('dialog', {name: 'Plan the month'});
-  await expect(dialog.getByRole('note').filter({hasText: 'Uncovered: '})).toContainText('Nov 18');
+  await expect(dialog.getByRole('note').filter({hasText: 'Uncovered: '})).toContainText('18 Nov');
   await expect(dialog.locator('.allocation-row-warning').filter({hasText: /scheduled, plan says/})).not.toHaveCount(0);
 });
 

@@ -12,7 +12,7 @@ export function availabilityConflicts(raw: string): {member: string; day: string
       ? list.map(c => ({member: c.member as string, day: c.day as string})) : null;
   } catch {return null;}
 }
-/** userMessage, with one line per conflict first for an availability refusal: "Avi marked Dec 22
+/** userMessage, with one line per conflict first for an availability refusal: "Avi marked 22 Dec
  * as unavailable · doctor". The note shows only to its owner and admins. */
 export function explainedMessage(raw: string, t: Translate, context?: {me: string; admin: boolean; name: (id: string) => string;
   note: (member: string, day: string) => string | undefined; day: (d: string) => string}): string {

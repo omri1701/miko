@@ -39,7 +39,7 @@ export function HomeScreen({remote, swaps, today, lang, t, onSchedule, onAvailab
   const approvals = admin ? (raw.swapRequests ?? []).filter(r => r.status === 'awaiting_admin').length : 0;
   const drafts = admin ? raw.months.filter(m => m.status === 'draft' && m.generated && m.month >= today.slice(0, 7)) : [];
   const todo = viewer ? 0 : pending + approvals + drafts.length;
-  const dateLine = new Date(today + 'T12:00:00Z').toLocaleDateString(lang === 'en' ? 'en-US' : 'he-IL', {weekday: 'long', day: 'numeric', month: 'long', timeZone: 'UTC'});
+  const dateLine = new Date(today + 'T12:00:00Z').toLocaleDateString(lang === 'en' ? 'en-GB' : 'he-IL', {weekday: 'long', day: 'numeric', month: 'long', timeZone: 'UTC'});
   // The balance is a display projection, read where it is shown (never at startup).
   // Shown at once from the last read while a newer revision loads (hooks/use-balance.ts).
   const balance = useBalance(remote);

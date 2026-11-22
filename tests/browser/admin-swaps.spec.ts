@@ -60,8 +60,8 @@ test('admin proposal needs both members, then an explicit approval with a copyab
     const dialog = page.getByRole('dialog', {name: 'Approve swap'});
     await expect(dialog).toContainText('Record it in the external system first');
     const summary = ['Duty swap: Alex Atlas ⇄ Blair Birch',
-      'Alex Atlas — gives: Nov 2 (1 pt) · takes: Nov 3 (1 pt) · change: 0 pts',
-      'Blair Birch — gives: Nov 3 (1 pt) · takes: Nov 2 (1 pt) · change: 0 pts'].join('\n');
+      'Alex Atlas — gives: 2 Nov (1 pt) · takes: 3 Nov (1 pt) · change: 0 pts',
+      'Blair Birch — gives: 3 Nov (1 pt) · takes: 2 Nov (1 pt) · change: 0 pts'].join('\n');
     await expect(dialog.getByLabel('Swap summary')).toHaveText(summary);
     await dialog.getByRole('button', {name: 'Copy summary'}).click();
     await expect(page.getByText('Copied', {exact: true})).toBeVisible();
@@ -132,9 +132,9 @@ for (const lang of ['en', 'he'] as const) test(`availability alert names whose c
   // Alex would receive 4 November, which Alex marked unavailable: red before the pick, no note (#92).
   await startSwap(page, '2026-11-09');
   await targetReady(page, '2026-11-04');
-  await expect(duty(page, '2026-11-04')).toHaveAttribute('title', t('You marked Nov 4 as unavailable · Synthetic vacation', 'סימנת את 4 בנוב׳ כלא זמין · Synthetic vacation'));
+  await expect(duty(page, '2026-11-04')).toHaveAttribute('title', t('You marked 4 Nov as unavailable · Synthetic vacation', 'סימנת את 4 בנוב׳ כלא זמין · Synthetic vacation'));
   await duty(page, '2026-11-04').focus(); await page.keyboard.press('Space');
-  await expect(page.getByRole('dialog').getByRole('note')).toHaveText(t('You marked Nov 4 as unavailable · Synthetic vacation', 'סימנת את 4 בנוב׳ כלא זמין · Synthetic vacation'));
+  await expect(page.getByRole('dialog').getByRole('note')).toHaveText(t('You marked 4 Nov as unavailable · Synthetic vacation', 'סימנת את 4 בנוב׳ כלא זמין · Synthetic vacation'));
   await expect(page.getByRole('button', {name: t('Send anyway', 'לשלוח בכל זאת'), exact: true})).toBeEnabled();
   await page.keyboard.press('Escape');
   expect(backend.calls.filter(c => c.name === 'duty_request_swap')).toHaveLength(0);
@@ -161,7 +161,7 @@ for (const lang of ['en', 'he'] as const) test(`a member accepts a date they mar
     const b = await bc.newPage(); await openApp('b', b); await language(b, lang);
     const card = b.locator('[data-swap-card]');
     // The owner reads their own constraint, note included.
-    await expect(card.getByRole('note')).toHaveText(t('You marked Nov 2 as unavailable · Late private note', 'סימנת את 2 בנוב׳ כלא זמין · Late private note'));
+    await expect(card.getByRole('note')).toHaveText(t('You marked 2 Nov as unavailable · Late private note', 'סימנת את 2 בנוב׳ כלא זמין · Late private note'));
     // Owner 2026-11-21: below the title row, the people row and conflict lines span the card
     // (not a column beside the icon), and the people row stays on one line.
     const [cardBox, pairBox, noteBox, iconBox] = await Promise.all([card, card.locator('.swap-card-pair'), card.getByRole('note'), card.locator('.swap-card-icon')]
@@ -186,7 +186,7 @@ for (const lang of ['en', 'he'] as const) test(`a member accepts a date they mar
   const dialog = page.getByRole('dialog', {name: t('Approve swap', 'אישור החלפה')});
   await expect(dialog.getByLabel(t('Swap summary', 'סיכום ההחלפה'))).toContainText(t('Duty swap: Alex Atlas ⇄ Blair Birch', 'החלפת כוננויות: Alex Atlas ⇄ Blair Birch'));
   // Owner 2026-11-21: the admin sees the conflict with its note, no explanation, checkbox or reason.
-  await expect(dialog.getByRole('alert').getByRole('listitem')).toHaveText(t('Blair Birch marked Nov 2 as unavailable · Late private note', 'Blair Birch סימן/ה את 2 בנוב׳ כלא זמין · Late private note'));
+  await expect(dialog.getByRole('alert').getByRole('listitem')).toHaveText(t('Blair Birch marked 2 Nov as unavailable · Late private note', 'Blair Birch סימן/ה את 2 בנוב׳ כלא זמין · Late private note'));
   await expect(dialog.getByRole('checkbox')).toHaveCount(0);
   await expect(dialog.getByRole('textbox')).toHaveCount(0);
   await expect(dialog).not.toContainText(t('reason', 'נימוק'));

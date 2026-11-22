@@ -28,9 +28,9 @@ export function DutyEditor({state,duty,month,lang,onClose,onMonth,onSave,onRemov
  const day=(start:string):Duty=>({...duty,id:start,start,end:addDays(start,1)});
  const edits=weekend?[{block:day(friday),assignment:fri},{block:day(saturday),assignment:sat}]:[{block:duty,assignment:fri}];
  const name=(id:string)=>state.team.find(p=>p.id===id)?.name??id;
- const dateLabel=(d:string)=>new Date(d+'T12:00:00Z').toLocaleDateString(lang==='en'?'en-US':'he-IL',{weekday:'short',day:'numeric',month:'short',timeZone:'UTC'});
- const fmt=(d:string)=>new Date(d+'T12:00:00Z').toLocaleDateString(lang==='en'?'en-US':'he-IL',{day:'numeric',month:'short',timeZone:'UTC'});
- const range=`${dateLabel(friday)} – ${dateLabel(saturday)}`;
+ const dateLabel=(d:string)=>new Date(d+'T12:00:00Z').toLocaleDateString(lang==='en'?'en-GB':'he-IL',{weekday:'short',day:'numeric',month:'short',timeZone:'UTC'});
+ const fmt=(d:string)=>new Date(d+'T12:00:00Z').toLocaleDateString(lang==='en'?'en-GB':'he-IL',{day:'numeric',month:'short',timeZone:'UTC'});
+ const range=lang==='en'&&friday.slice(0,7)===saturday.slice(0,7)?`${dateLabel(friday).replace(/ \S+$/,'')} – ${dateLabel(saturday)}`:`${dateLabel(friday)} – ${dateLabel(saturday)}`;
  const pts=(n:number)=>`${n} ${t('pt','נק׳')}`;
  // Dates already approved for that person are never asked again (owner 2026-11-21).
  const unapprovedDays=edits.flatMap(({block,assignment})=>[assignment.primary,assignment.secondary].filter((id):id is string=>!!id).flatMap(id=>unapproved(block,id,state).map(day=>({member:id,day}))));

@@ -59,7 +59,7 @@ export function ActivityBell({raw, me, admin, lang, onOpenMonth}: {raw: Snapshot
     return true;
   };
   const unread = events.filter(e => e.at > seen).length;
-  const when = (at: string) => at === '9999' ? t('Now', 'עכשיו') : new Date(at).toLocaleDateString(lang === 'en' ? 'en-US' : 'he-IL', {day: 'numeric', month: 'short', timeZone: 'Asia/Jerusalem'});
+  const when = (at: string) => at === '9999' ? t('Now', 'עכשיו') : new Date(at).toLocaleDateString(lang === 'en' ? 'en-GB' : 'he-IL', {day: 'numeric', month: 'short', timeZone: 'Asia/Jerusalem'});
   const icons = {published: <CalendarDays/>, edited: <PenLine/>, swap: <ArrowLeftRight/>, member: <UserPlus/>};
   return <Popover open={open} onOpenChange={next => {
     setOpen(next);

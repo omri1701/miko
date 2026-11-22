@@ -53,10 +53,10 @@ test('admin creates 12 temporary engineers, edits constraints/order/status and s
  await page.getByRole('tab',{name:'Availability',exact:true}).click();
  await page.getByRole('combobox',{name:'Engineer',exact:true}).click();
  await page.getByRole('option',{name:'Renamed Engineer',exact:true}).click();
- await page.getByRole('button',{name:/^Nov 5.*Available/}).click();
+ await page.getByRole('button',{name:/^5 Nov.*Available/}).click();
  await page.getByLabel('Description (optional)').fill('Private temporary absence');
  await page.getByRole('button',{name:'Save',exact:true}).click();
- await expect(page.getByRole('button',{name:/^Nov 5.*Unavailable.*Private temporary absence/})).toBeVisible();
+ await expect(page.getByRole('button',{name:/^5 Nov.*Unavailable.*Private temporary absence/})).toBeVisible();
  await page.getByRole('tab',{name:'Schedule',exact:true}).click();
  await page.getByRole('button',{name:'Plan the month',exact:true}).click();
  await expect(page.getByRole('button',{name:'Confirm & generate',exact:true})).toBeEnabled({timeout:30_000});

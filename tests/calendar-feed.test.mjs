@@ -71,7 +71,7 @@ test('duties are all-day events on their Israel dates, with exclusive ends and s
   assert.equal(weekday.SUMMARY, 'Duty'); assert.equal(weekend.SUMMARY, 'Weekend duty');
   assert.equal(weekday.UID, `20261102-primary-${KEY}@duty-scheduler`);
   assert.equal(weekday.DTSTAMP, '20261030T080000Z');
-  assert.match(weekend.DESCRIPTION, /^Fri\\, Nov 6 09:00 – Sun\\, Nov 8 09:00 \(Israel time\)\\n1 point\\nOpen MiKo: https:\/\/duty\.example\.test\/$/);
+  assert.match(weekend.DESCRIPTION, /^Fri 6 Nov 09:00 – Sun 8 Nov 09:00 \(Israel time\)\\n1 point\\nOpen MiKo: https:\/\/duty\.example\.test\/$/);
   assert.equal(weekend.URL, APP);
   // Rendering the same feed twice gives the same bytes (stable ETag); an edit keeps the UID.
   assert.equal(buildCalendar(feed([duty('2026-11-06', '2026-11-08')]), APP), buildCalendar(feed([duty('2026-11-06', '2026-11-08')]), APP));
@@ -96,7 +96,7 @@ test('split weekends are two events, each half named; emergency cover has its ow
   // Extra points show in the title only when they differ from the duty's usual points.
   const [holiday] = events(buildCalendar(feed([duty('2026-11-20', '2026-11-22', {title: 'Weekend holiday', points: 3})]), APP));
   assert.equal(holiday.SUMMARY, 'Weekend holiday · 3 points');
-  assert.match(holiday.DESCRIPTION, /^Weekend duty\\nFri\\, Nov 20/);
+  assert.match(holiday.DESCRIPTION, /^Weekend duty\\nFri 20 Nov/);
 });
 
 test('Hebrew feeds use Hebrew names, dates and points, still valid UTF-8 within 75 octets', () => {

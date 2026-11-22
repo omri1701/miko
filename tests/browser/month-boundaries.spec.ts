@@ -7,7 +7,7 @@ for(const iphone of [false,true])for(const split of [false,true])for(const lang 
     test.skip(iphone&&info.project.name!=='desktop','One independent iPhone WebKit context.');
     const browser=iphone?await webkit.launch():null;
     try {
-      if(browser)page=await (await browser.newContext({...devices['iPhone 13'],locale:'en-US',timezoneId:'Asia/Jerusalem',reducedMotion:'reduce'})).newPage();
+      if(browser)page=await (await browser.newContext({...devices['iPhone 13'],locale:'en-GB',timezoneId:'Asia/Jerusalem',reducedMotion:'reduce'})).newPage();
       backend.raw.assignments=[];backend.raw.publications=[];backend.raw.months=[];
       for(const month of ['2027-12','2028-01']) {
         const publication=`boundary-${month}`;
@@ -60,7 +60,7 @@ for(const iphone of [false,true])for(const split of [false,true])for(const lang 
       await expect(days.first()).not.toHaveAttribute('data-gesture-key');
       await saturday.click();
       let dialog=page.getByRole('dialog');
-      await expect(dialog).toContainText(lang==='en'?'January 1':'1 בינואר');
+      await expect(dialog).toContainText(lang==='en'?'1 January':'1 בינואר');
       await dialog.locator('textarea').fill('Actual Saturday');
       await dialog.getByRole('button',{name:lang==='en'?'Save':'שמירה',exact:true}).click();
       await expect(dialog).toHaveCount(0);

@@ -22,7 +22,7 @@ test('iPhone WebKit: every manager state keeps the primary action and menu on on
   test.skip(info.project.name !== 'desktop', 'One independent iPhone WebKit context.');
   const browser = await webkit.launch();
   try {
-    const context = await browser.newContext({...devices['iPhone 13'], locale: 'en-US', timezoneId: 'Asia/Jerusalem', reducedMotion: 'reduce'});
+    const context = await browser.newContext({...devices['iPhone 13'], locale: 'en-GB', timezoneId: 'Asia/Jerusalem', reducedMotion: 'reduce'});
     for (const state of managerStates) {
       backend.raw = managerMonth(state);
       const page = await context.newPage(); await openApp('admin', page);

@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {readdirSync, readFileSync, statSync} from 'node:fs';
 import {join} from 'node:path';
 
-// US English everywhere (#113): the English UI uses US spelling and month-first dates.
+// US English spelling (#113); English dates stay day first, and a date with a year is numeric.
 // Hebrew texts and dates, code identifiers, CSS classes and stored values don't change.
 const ROOTS = ['app', 'components', 'hooks', 'lib'];
 const SKIP = new Set(['node_modules', '.next']);
@@ -30,20 +30,18 @@ test('rule 1: English UI strings use US spelling', () => {
   assert.deepEqual(hits, []);
 });
 
-// The two clock parsers read numeric parts only (never shown), so their locale doesn't matter.
-const INTERNAL = new Set(['lib/scheduling/calendar.ts', 'components/home/home-data.ts:greeting']);
-test('rule 2: English dates are formatted en-US, never en-GB', () => {
-  const hits = lines().filter(({file, line}) => line.includes('en-GB')
-    && !INTERNAL.has(file.replaceAll('\\', '/'))
-    && !(file.replaceAll('\\', '/') === 'components/home/home-data.ts' && /hour12: false/.test(line)))
+// Owner 2026-11-22: English text dates stay day first, as before #113 ("5 Nov", "Fri 6 Nov",
+// "Friday 9 October"), so English dates are never formatted en-US (month first).
+test('rule 2: English dates are day first, never en-US', () => {
+  const hits = lines().filter(({line}) => line.includes('en-US'))
     .map(({file, n, line}) => `${file}:${n}: ${line.trim().slice(0, 100)}`);
   assert.deepEqual(hits, []);
 });
 
-// Owner 2026-11-22: an English date with a year is numeric and day first ("03/11/2026", numericDate),
-// never "Nov 3, 2026"; month titles ("November 2026") have no day and stay.
+// An English date with a year is numeric and day first ("03/11/2026", numericDate), never
+// "3 Nov 2026"; month titles ("November 2026") have no day and stay.
 test('rule 3: English dates with a day and a year are not formatted with Intl', () => {
-  const hits = lines().filter(({line}) => line.includes('en-US') && /\bday:/.test(line) && /\byear:/.test(line))
+  const hits = lines().filter(({line}) => line.includes('en-GB') && /\bday:/.test(line) && /\byear:/.test(line))
     .map(({file, n, line}) => `${file}:${n}: ${line.trim().slice(0, 100)}`);
   assert.deepEqual(hits, []);
 });

@@ -34,7 +34,7 @@ test('a swap the server would refuse is greyed with its reason before the pick',
   await openApp('a');
   await (await openDutySheet(page, '2026-11-02')).getByRole('button', {name: 'Swap', exact: true}).click();
   // #92: your own unavailability is red but pickable; a second weekend stays grey.
-  await expect(duty(page, '2026-11-05')).toHaveAttribute('title', 'You marked Nov 5 as unavailable');
+  await expect(duty(page, '2026-11-05')).toHaveAttribute('title', 'You marked 5 Nov as unavailable');
   await expect(duty(page, '2026-11-05')).toHaveClass(/swap-constrained/);
   await expect(duty(page, '2026-11-06')).toHaveAttribute('title', 'This would give you a second weekend');
   await duty(page, '2026-11-06').click({force: true});
