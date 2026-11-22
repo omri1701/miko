@@ -68,20 +68,20 @@ export function visibleSwapRequests(requests:SwapRequest[],me:string,admin:boole
   .sort((a,b)=>Number(swapNeedsAction(b,me,admin,temporary))-Number(swapNeedsAction(a,me,admin,temporary))||b.created_at.localeCompare(a.created_at));
 }
 
-/** A member's unavailability that blocks a swap: who and which date, never the note.
- * Members see emergency cover's conflicts without a name (member null). */
-export type SwapConflict={member:string|null;day:string};
+/** A primary's unavailability that blocks a swap: who and which date, never the note.
+ * Emergency cover doesn't move, so its constraints are no swap conflict (#116): an older
+ * database's anonymous cover entry (member null) is dropped. */
+export type SwapConflict={member:string;day:string};
 export function readSwapConflicts(value:unknown):SwapConflict[]{
  if(!Array.isArray(value)||value.some(c=>typeof c!=='object'||c===null||(c.member!==null&&typeof c.member!=='string')||typeof c.day!=='string'||!/^\d{4}-\d{2}-\d{2}$/.test(c.day)))
   throw Error('Invalid availability check');
- return value.map(c=>({member:c.member,day:c.day}));
+ return value.filter(c=>c.member!==null).map(c=>({member:c.member,day:c.day}));
 }
 const inside=(d:{day:string;end_day:string},day:string)=>day>=d.day&&day<d.end_day;
 /** A primary's own unavailability on the duty they would take (#92): they consent by sending or
- * accepting, so it never blocks. Anything else (emergency cover) blocks a request. */
+ * accepting, so it never blocks. Emergency cover doesn't move, so its constraints never count (#116). */
 export const partyConflict=(c:SwapConflict,source:DutyRow,target:DutyRow)=>
- (c.member!==null&&c.member===source.primary_id&&inside(target,c.day))||(c.member!==null&&c.member===target.primary_id&&inside(source,c.day));
-export const coverConflicts=(conflicts:SwapConflict[],source:DutyRow,target:DutyRow)=>conflicts.filter(c=>!partyConflict(c,source,target));
+ (c.member===source.primary_id&&inside(target,c.day))||(c.member===target.primary_id&&inside(source,c.day));
 /** A note is shown only to its owner and to admins (owner 2026-11-21); never to other members. */
 export const visibleNote=(note:string|undefined,member:string,{me,admin}:{me:string;admin:boolean})=>admin||member===me?note??'':'';
 /** One constraint line, read like a person wrote it: "You marked 22 Dec as unavailable · doctor",
@@ -103,15 +103,12 @@ export function swapPartyConstraints(raw:Snapshot,r:SwapRequest){
  * Built from duty_swap_availability's conflicts (who and which date, never the note or kind)
  * and the second-weekend rule, so a day the calendar still offers is one the server accepts. */
 export type SwapBlock=
- |{kind:'cover';person:string|null;day:string}
  |{kind:'weekend';person:string}
  |{kind:'inactive'}
  |{kind:'past'};
-export function swapTargetBlock(raw:Snapshot,month:string,source:DutyRow,target:DutyRow,conflicts:SwapConflict[]):SwapBlock|null{
+export function swapTargetBlock(raw:Snapshot,month:string,source:DutyRow,target:DutyRow):SwapBlock|null{
  // validate_swap refuses a pair whose emergency cover left the team.
  if([source.secondary_id,target.secondary_id].some(id=>id&&!raw.members.some(m=>m.id===id&&m.active&&!m.viewer&&m.status==='approved')))return {kind:'inactive'};
- const cover=coverConflicts(conflicts,source,target)[0];
- if(cover)return {kind:'cover',person:cover.member,day:cover.day};
  const problem=swapProblem(raw,month,source,target,false);
  return problem?.kind==='weekend'?{kind:'weekend',person:problem.person}:null;
 }
@@ -127,14 +124,11 @@ export function swapTargetWarning(source:DutyRow,target:DutyRow,conflicts:SwapCo
 export const swapWarningText=(w:SwapWarning,options:{me:string;name:(id:string)=>string;day:(d:string)=>string;lang:'en'|'he';note?:string})=>
  constraintLine({member:w.person,day:w.day,note:options.note},options);
 /** One short reason, phrased for the viewer: "you" for themselves, names for others. */
-export function swapBlockText(block:SwapBlock,{me,name,day,lang}:{me:string;name:(id:string)=>string;day:(d:string)=>string;lang:'en'|'he'}){
+export function swapBlockText(block:SwapBlock,{me,name,lang}:{me:string;name:(id:string)=>string;day:(d:string)=>string;lang:'en'|'he'}){
  const he=lang==='he';
  switch(block.kind){
   case 'past':return he?'הכוננות הזו כבר עברה':'This day has passed';
   case 'inactive':return he?'כונן החירום כבר אינו פעיל':'Emergency cover is no longer active';
-  case 'cover':return block.person
-   ?he?`ל${name(block.person)} אין אפשרות לכסות את ${day(block.day)}`:`${name(block.person)} can’t cover ${day(block.day)}`
-   :he?`לכונן החירום אין אפשרות ב־${day(block.day)}`:`Emergency cover can’t take ${day(block.day)}`;
   case 'weekend':return block.person===me?(he?'ההחלפה תיתן לך סוף שבוע שני':'This would give you a second weekend')
    :he?`ההחלפה תיתן ל${name(block.person)} סוף שבוע שני`:`This would give ${name(block.person)} a second weekend`;
  }

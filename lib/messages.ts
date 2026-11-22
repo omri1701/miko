@@ -1,3 +1,4 @@
+import {texts} from './texts.ts';
 import {constraintLine, visibleNote} from './supabase/swaps.ts';
 type Translate = (en: string, he: string) => string;
 
@@ -58,6 +59,10 @@ export function userMessage(raw: string, t: Translate): string {
   if (/review-existing-reservation-normalization/.test(message)) return t('This plan would change a debt another month already repays, so it can’t be booked. Undo the last change, or change that month first.', 'התוכנית הייתה משנה חוב שחודש אחר כבר מחזיר, ולכן לא ניתן לרשום אותה. אפשר לבטל את השינוי האחרון, או לשנות קודם את החודש ההוא.');
   if (/review-circular-route/.test(message)) return t('A point someone lent comes back to them, so this plan can’t be booked. Undo the last change.', 'נקודה שמישהו העביר חוזרת אליו, ולכן לא ניתן לרשום את התוכנית. אפשר לבטל את השינוי האחרון.');
   // A published month's plan is replaced from the ledger without its own entries, unless (decision 2026-11-01):
+  // Constraints outside the open window (#111): approved texts in lib/texts.ts.
+  const notOpen = /constraints-window-closed:(\d{4}-\d{2})/.exec(message)?.[1];
+  if (notOpen) return texts.monthNotOpen(notOpen, t('en', 'he') as 'en' | 'he');
+  if (/constraints-day-passed/.test(message)) return texts.dayPassed(t('en', 'he') as 'en' | 'he');
   const later = /review-replan-later:(\d{4}-\d{2})/.exec(message)?.[1];
   if (later) {
     const name = (lang: string) => new Date(`${later}-15T00:00:00Z`).toLocaleString(lang, {month: 'long', year: 'numeric', timeZone: 'UTC'});

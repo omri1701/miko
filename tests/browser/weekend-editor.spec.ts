@@ -1,5 +1,5 @@
 import type {Page} from '@playwright/test';
-import {test, expect, duty, ids, type Backend, switchLanguage, monthAction, openDutySheet} from './fixtures';
+import {test, expect, duty, ids, type Backend, switchLanguage, monthAction, openDutySheet, choose} from './fixtures';
 
 // The weekend editor (decision 2026-11-07): one card with "One weekend | Two days", two day cards
 // in the same sheet, a split half as a regular day with Join, and Plan the month's split notice.
@@ -20,8 +20,7 @@ async function save(page: Page) {
   await expect(dialog).toBeHidden();
 }
 async function pick(page: Page, label: string, who: string) {
-  await page.locator('.duty-dialog').getByRole('combobox', {name: label, exact: true}).click();
-  await page.getByRole('option', {name: new RegExp(`^${who}`)}).click();
+  await choose(page.locator('.duty-dialog').getByRole('combobox', {name: label, exact: true}), new RegExp(`^${who}`));
 }
 
 test('taps open combined, split and holiday weekends; a second phone tap clears the day and the next opens it again', async ({page, backend, openApp}, info) => {
@@ -62,7 +61,7 @@ for (const lang of ['en', 'he'] as const) test(`Two days splits the weekend in t
   await dialog.getByRole('radio', {name: he ? 'שני ימים' : 'Two days', exact: true}).click();
   await expect(dialog.locator('.day-card')).toHaveCount(2);
   // Both halves start with the weekend's person.
-  await expect(dialog.getByRole('combobox', {name: he ? 'מהנדס ראשי ביום שבת' : 'Saturday primary engineer', exact: true})).toHaveText(name(backend, fri));
+  await expect(dialog.getByRole('combobox', {name: he ? 'מהנדס ראשי ביום שבת' : 'Saturday primary engineer', exact: true}).locator('option:checked')).toHaveText(name(backend, fri));
   await expect(dialog.locator('.day-card').nth(1)).toContainText(he ? '0.5 נק׳' : '0.5 pt');
   await pick(page, he ? 'מהנדס ראשי ביום שבת' : 'Saturday primary engineer', name(backend, other));
   // Back to one weekend with different people: choose who keeps it, with the points it moves.
@@ -73,7 +72,7 @@ for (const lang of ['en', 'he'] as const) test(`Two days splits the weekend in t
   await expect(keep.nth(1)).toContainText(`${name(backend, fri)} −0.5`);
   await expect(dialog.getByRole('button', {name: /^(Save assignment|שמירת השיבוץ)$/})).toBeDisabled();
   await dialog.getByRole('radio', {name: he ? 'שני ימים' : 'Two days', exact: true}).click();
-  await expect(dialog.getByRole('combobox', {name: he ? 'מהנדס ראשי ביום שבת' : 'Saturday primary engineer', exact: true})).toHaveText(name(backend, other));
+  await expect(dialog.getByRole('combobox', {name: he ? 'מהנדס ראשי ביום שבת' : 'Saturday primary engineer', exact: true}).locator('option:checked')).toHaveText(name(backend, other));
   await save(page);
   expect(draftRows(backend, ['2026-11-06', '2026-11-07']).map(r => [r.day, r.end_day, r.primary_id])).toEqual([['2026-11-06', '2026-11-07', fri], ['2026-11-07', '2026-11-08', other]]);
   for (const day of ['2026-11-06', '2026-11-07']) await expect(duty(page, day)).not.toHaveClass(/combined-weekend/);
@@ -88,14 +87,14 @@ test('a split half opens as a regular day with Join; different people choose who
   const dialog = page.getByRole('dialog', {name: 'Edit duty', exact: true});
   await expect(dialog.locator('.split-row')).toContainText('Part of a split weekend');
   await expect(dialog.getByRole('radiogroup')).toHaveCount(0);
-  await expect(dialog.getByRole('combobox', {name: 'Primary engineer', exact: true})).toHaveText(name(backend, ids.b));
+  await expect(dialog.getByRole('combobox', {name: 'Primary engineer', exact: true}).locator('option:checked')).toHaveText(name(backend, ids.b));
   await dialog.getByRole('button', {name: 'Join', exact: true}).click();
   await expect(dialog).toHaveCount(0);
   const weekend = page.getByRole('dialog', {name: 'Weekend', exact: true});
   await expect(weekend.getByRole('radio', {name: 'One weekend', exact: true})).toHaveAttribute('aria-checked', 'true');
   await expect(weekend.getByRole('button', {name: `Keep ${name(backend, ids.a)}`})).toContainText(`${name(backend, ids.b)} −0.5`);
   await weekend.getByRole('button', {name: `Keep ${name(backend, ids.b)}`}).click();
-  await expect(weekend.getByRole('combobox', {name: 'Primary engineer', exact: true})).toHaveText(name(backend, ids.b));
+  await expect(weekend.getByRole('combobox', {name: 'Primary engineer', exact: true}).locator('option:checked')).toHaveText(name(backend, ids.b));
   await expect(weekend.getByRole('button', {name: 'Unlock duty', exact: true})).toHaveAttribute('aria-pressed', 'true');
   await save(page);
   expect(draftRows(backend, ['2026-11-13', '2026-11-14']).map(r => [r.day, r.end_day, r.primary_id, r.locked])).toEqual([['2026-11-13', '2026-11-15', ids.b, true]]);

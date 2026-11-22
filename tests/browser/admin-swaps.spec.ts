@@ -198,6 +198,44 @@ for (const lang of ['en', 'he'] as const) test(`a member accepts a date they mar
   expect(backend.raw.constraints.some(c => c.member_id === ids.b && c.day === '2026-11-02')).toBe(true);
 });
 
+for (const lang of ['en', 'he'] as const) test(`#116: the emergency cover's own unavailable day never blocks or warns at request, consent or approval ${lang}`, async ({page, browser, openApp, backend}) => {
+  const t = (en: string, he: string) => lang === 'en' ? en : he;
+  // Both duties' covers are unavailable on their own days; a swap never moves them.
+  const current = backend.raw.months[0].current_publication_id;
+  for (const d of backend.raw.assignments.filter(d => d.publication_id === current && d.day === '2026-11-03')) d.secondary_id = ids.d;
+  backend.raw.constraints.push({member_id: ids.c, day: '2026-11-02', kind: 'no', note: 'Cover away'}, {member_id: ids.d, day: '2026-11-03', kind: 'no', note: 'Cover away'});
+  await openApp('admin'); await published(page, lang);
+  await startSwap(page, '2026-11-02');
+  await targetReady(page, '2026-11-03');
+  await expect(duty(page, '2026-11-03')).not.toHaveAttribute('title', /.+/);
+  await duty(page, '2026-11-03').focus(); await page.keyboard.press('Space');
+  const propose = page.getByRole('dialog', {name: t('Propose swap', 'הצעת החלפה')});
+  await expect(propose).toBeVisible();
+  await expect(propose.getByRole('alert')).toHaveCount(0);
+  await page.getByRole('button', {name: t('Send to both', 'שליחה לשניהם'), exact: true}).click();
+  await expect(page.getByRole('dialog')).toBeHidden();
+  // Blair accepts in one tap: no "Accept despite a conflict?".
+  const [bc] = await contexts(browser, page, 1);
+  try {
+    const b = await bc.newPage(); await openApp('b', b); await language(b, lang);
+    await b.getByRole('button', {name: t('Accept', 'קבלה'), exact: true}).click();
+    await expect(b.getByRole('dialog')).toHaveCount(0);
+    await expect.poll(() => backend.raw.swapRequests![0].accepted_by).toBe(ids.b);
+  } finally {await bc.close();}
+  Object.assign(backend.raw.swapRequests![0], {requester_accepted_at: NOW, status: 'awaiting_admin'});
+  backend.raw.revision!++;
+  await page.reload(); await language(page, lang);
+  await page.getByRole('button', {name: t('Approve', 'אישור'), exact: true}).click();
+  const dialog = page.getByRole('dialog', {name: t('Approve swap', 'אישור החלפה')});
+  await expect(dialog.getByLabel(t('Swap summary', 'סיכום ההחלפה'))).toBeVisible();
+  await expect(dialog.getByRole('alert')).toHaveCount(0);
+  await expect(dialog.getByRole('button', {name: t('Approve & publish', 'אישור ופרסום')})).toBeEnabled();
+  await dialog.getByRole('button', {name: t('Approve & publish', 'אישור ופרסום')}).click();
+  await expect(dialog).toBeHidden();
+  expect(backend.raw.swapRequests![0]).toMatchObject({status: 'approved', override_reason: ''});
+  await expect(page.locator('body')).not.toContainText(/Emergency cover is unavailable|לכונן החירום יש אילוץ/);
+});
+
 for (const lang of ['en', 'he'] as const) test(`an admin answers for temporary members, then approves separately ${lang}`, async ({page, openApp, backend}) => {
   // Decision 2026-11-01: temporary members have no account, so each open side goes to the admin.
   const t = (en: string, he: string) => lang === 'en' ? en : he;

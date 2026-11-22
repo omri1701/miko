@@ -22,6 +22,21 @@ test('captured generation writes refuse newer revisions and share the workspace 
   assert.equal(f.snapshots.at(-1).revision, 2);
 });
 
+test('#115: a quiet context read holds the lock without showing saving; a write meanwhile waits and uses the revision it leaves', async () => {
+  const f = fixture(); await f.workspace.connect(f.client, user('admin'));
+  const gate = deferred(), before = f.saving.length;
+  const read = f.workspace.captured(1, async () => {await gate.promise; return {revision: 2};}, r => r.revision, {quiet: true});
+  assert.equal(f.workspace.isSaving(), true);
+  const write = f.workspace.mutate('duty_rename_self', {p_name: 'After the read'});
+  await assert.rejects(f.workspace.captured(1, async () => {}), /current save/);
+  await tick();
+  assert.equal(f.calls.some(c => c.name === 'duty_rename_self'), false);
+  f.setRaw(snapshot(2)); gate.resolve(); await read; await write;
+  assert.equal(f.calls.find(c => c.name === 'duty_rename_self').args.p_revision, 2);
+  // Only the write showed as saving.
+  assert.deepEqual(f.saving.slice(before), [true, false]);
+});
+
 test('captured completion cannot restore generation data after a session change', async () => {
   const f = fixture(); await f.workspace.connect(f.client, user('admin'));
   const gate = deferred();

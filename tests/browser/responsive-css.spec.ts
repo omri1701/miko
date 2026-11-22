@@ -55,10 +55,10 @@ for (const width of [1440, 390, 320]) {
         expect(geometry.right).toBeLessThanOrEqual(width);
         expect(geometry.overflow).toBe(false);
         if (tab === 2) {
-          // One weekday header row above the grid; no legend and no per-cell weekday (decision 2026-11-06).
-          await expect(page.locator('.mobile-availability-legend')).toHaveCSS('display', 'none');
-          await expect(page.locator('.mobile-availability-weekdays')).toHaveCSS('display', 'grid');
-          await expect(page.locator('.availability-day:not(.outside) .availability-weekday').first()).toHaveCSS('display', 'none');
+          // One weekday header row above the grid; no legend and no per-cell weekday (decision 2026-11-06),
+          // the Schedule calendar's own header since #95.
+          await expect(page.locator('.availability-screen .calendar-panel:not(.schedule-ghost *) .calendar-weekdays')).toHaveCSS('display', 'grid');
+          await expect(page.locator('.availability-day .availability-weekday')).toHaveCount(0);
         }
         await page.screenshot({path: info.outputPath(`${language}-${tab === 1 ? 'schedule' : 'availability'}.png`), fullPage: true});
       }

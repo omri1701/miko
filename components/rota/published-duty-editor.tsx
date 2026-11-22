@@ -7,7 +7,6 @@ import {userMessage} from '@/lib/messages';
 import {Button} from '@/components/ui/button';
 import {Checkbox} from '@/components/ui/checkbox';
 import {EditorDialog} from '@/components/rota/editor-dialog';
-import {Select,SelectTrigger,SelectValue,SelectContent,SelectItem} from '@/components/ui/select';
 import {addDays} from '@/lib/rota/engine';
 import {dayOf} from '@/lib/rota/calendar-dates';
 import {combinedWeekend,dutyPoints,editConflicts,editStale,editSummary,owedUnits,swapPartners,validExtra,type EditKind,type PublishedEdit} from '@/lib/supabase/published-edit';
@@ -69,10 +68,9 @@ export function PublishedDutyEditor({remote,row:opened,lang,onClose,onSwap}:{rem
   {/* Named before saving: saving cancels it (for a new engineer or new points). */}
   {!stale&&!!partners&&<p className="warning-note" role="note">{t(`Pending swap with ${partners}. Saving cancels it.`,`החלפה ממתינה עם ${partners}. השמירה תבטל אותה.`)}</p>}
   {step==='edit'?<>
-   <label className="field-label">{t('Engineer','מהנדס')}<Select disabled={busy} value={primary} onValueChange={v=>{setPrimary(v);setOverride(false);setReason('');setApproveWeekend(false)}}>
-    <SelectTrigger className="picker" aria-label={t('Engineer','מהנדס')}><SelectValue/></SelectTrigger>
-    <SelectContent>{members.map(m=><SelectItem key={m.id} value={m.id}>{m.name}{m.id!==row.primary_id&&editConflicts(raw,m.id,row).length?t(' · unavailable',' · לא זמין'):''}{m.id!==row.primary_id&&skips(m.id)?t(' · no weekends',' · ללא סופי שבוע'):''}</SelectItem>)}</SelectContent>
-   </Select></label>
+   <label className="field-label">{t('Engineer','מהנדס')}<select className="picker" aria-label={t('Engineer','מהנדס')} disabled={busy} value={primary} onChange={e=>{setPrimary(e.target.value);setOverride(false);setReason('');setApproveWeekend(false)}}>
+    {members.map(m=><option key={m.id} value={m.id}>{m.name}{m.id!==row.primary_id&&editConflicts(raw,m.id,row).length?t(' · unavailable',' · לא זמין'):''}{m.id!==row.primary_id&&skips(m.id)?t(' · no weekends',' · ללא סופי שבוע'):''}</option>)}
+   </select></label>
    {weekend?<div className="form-pair">{extraField(t('Friday extra points','תוספת ביום שישי'),extra,setExtra)}{extraField(t('Saturday extra points','תוספת ביום שבת'),saturday,setSaturday)}</div>
     :extraField(t('Extra points','נקודות נוספות'),extra,setExtra)}
    {!validExtras&&<p className="warning-note" role="alert">{t('Use 0 to 20 points in steps of 0.5.','יש להזין 0 עד 20 נקודות בקפיצות של 0.5.')}</p>}

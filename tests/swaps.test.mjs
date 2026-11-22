@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {publishedSwapDuties,eligibleSwapTarget,visibleSwapRequests,swapStarter,swapWaitingOn,swapAnswerFor,swapNeedsAction,readSwapConflicts,swapSummary,swapTargetBlock,swapBlockText,swapTargetWarning,swapWarningText,coverConflicts,swapPartyConstraints,constraintLine,visibleNote} from '../lib/supabase/swaps.ts';
+import {publishedSwapDuties,eligibleSwapTarget,visibleSwapRequests,swapStarter,swapWaitingOn,swapAnswerFor,swapNeedsAction,readSwapConflicts,swapSummary,swapTargetBlock,swapBlockText,swapTargetWarning,swapWarningText,swapPartyConstraints,constraintLine,visibleNote} from '../lib/supabase/swaps.ts';
 import {todayIsrael} from '../lib/rota/calendar-dates.ts';
 
 test('Israeli midnight expires yesterday, including a continuing Friday weekend',()=>{
@@ -107,7 +107,8 @@ test('an admin answers for a temporary member, never for anyone else, in resolve
 test('availability conflicts carry who and when only; malformed responses fail closed',()=>{
  assert.deepEqual(readSwapConflicts([{member:'b',day:'2026-11-02',note:'ignored'}]),[{member:'b',day:'2026-11-02'}]);
  assert.deepEqual(readSwapConflicts([]),[]);
- assert.deepEqual(readSwapConflicts([{member:null,day:'2026-11-03'}]),[{member:null,day:'2026-11-03'}]);
+ // #116: emergency cover's constraints are no swap conflict; an older database's anonymous cover entry is dropped.
+ assert.deepEqual(readSwapConflicts([{member:null,day:'2026-11-03'},{member:'b',day:'2026-11-04'}]),[{member:'b',day:'2026-11-04'}]);
  for(const bad of [null,{},[{member:'b'}],[{member:1,day:'2026-11-02'}],[{member:'b',day:'2 Nov'}]])assert.throws(()=>readSwapConflicts(bad));
 });
 
@@ -125,7 +126,7 @@ test('approval summary names both members, dates and points moved in English and
  assert.match(swapSummary({...input,to:{label:'x',points:1},lang:'en'}),/change: 0 pts/);
 });
 
-test('swap target hints (#92): a primary’s own unavailability is red but pickable; cover and second weekends grey',()=>{
+test('swap target hints (#92): a primary’s own unavailability is red but pickable; the cover’s never counts (#116); second weekends grey',()=>{
  const members=['me','dana','avi','cover'].map(id=>({id,name:id[0].toUpperCase()+id.slice(1),active:true,status:'approved'}));
  const source={id:'s',publication_id:'p',day:'2026-11-02',end_day:'2026-11-03',primary_id:'me',secondary_id:'cover'};
  const target={id:'t',publication_id:'p',day:'2026-11-04',end_day:'2026-11-05',primary_id:'dana',secondary_id:null};
@@ -138,10 +139,9 @@ test('swap target hints (#92): a primary’s own unavailability is red but picka
  assert.deepEqual(swapTargetWarning(source,target,party),{person:'me',day:'2026-11-04'});
  assert.deepEqual(swapTargetWarning(source,target,[{member:'dana',day:'2026-11-02'}]),{person:'dana',day:'2026-11-02'});
  assert.equal(swapTargetWarning(source,target,[]),null);
- // Emergency cover's unavailability still greys the day, anonymous or named (admins).
- assert.deepEqual(block([{member:null,day:'2026-11-02'}]),{kind:'cover',person:null,day:'2026-11-02'});
- assert.deepEqual(block([...party,{member:'cover',day:'2026-11-02'}]),{kind:'cover',person:'cover',day:'2026-11-02'});
- assert.deepEqual(coverConflicts([...party,{member:'cover',day:'2026-11-02'}],source,target),[{member:'cover',day:'2026-11-02'}]);
+ // #116: the cover's own unavailable day neither greys nor warns.
+ assert.equal(block([...party,{member:'cover',day:'2026-11-02'}]),null);
+ assert.equal(swapTargetWarning(source,target,[{member:'cover',day:'2026-11-02'}]),null);
  // Emergency cover who left the team blocks every pair, as validate_swap does.
  assert.deepEqual(swapTargetBlock({...raw,members:members.map(m=>m.id==='cover'?{...m,active:false}:m)},'2026-11',source,target,[]),{kind:'inactive'});
  // A second weekend is checked locally from the published rows.
@@ -153,8 +153,6 @@ test('swap target hints (#92): a primary’s own unavailability is red but picka
 test('swap hint text says who and which day, never the note, for engineers and admins in both languages',()=>{
  const names={me:'Me',dana:'Dana',avi:'Avi'},day=d=>d.slice(8);
  const say=(block,me,lang='en')=>swapBlockText(block,{me,name:id=>names[id],day,lang});
- assert.equal(say({kind:'cover',person:null,day:'2026-11-02'},'me'),'Emergency cover can’t take 02');
- assert.equal(say({kind:'cover',person:'avi',day:'2026-11-02'},'admin'),'Avi can’t cover 02');
  assert.equal(say({kind:'weekend',person:'dana'},'admin'),'This would give Dana a second weekend');
  assert.equal(say({kind:'past'},'me'),'This day has passed');
  // #92 red days: "you marked" for yourself, names for others; never the note.

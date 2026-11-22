@@ -11,7 +11,7 @@ import {useMobileLayout} from '@/hooks/use-mobile-layout';
 
 /** The month grid (decision 2026-11-06): names in member colours, the member's own duties
  * highlighted, today ringed; a tap goes to `onSelect`, a hold-and-drag proposes a swap. */
-export function WorkspaceCalendar({state, calendarState, calendarBlocks, dateCells, today, month, lang, t, fmt, nickname, meId, readOnly, requesting, interactions, onSelect, selectedDay, pickingFrom, notices, flashDays, preview = false}: {
+export function WorkspaceCalendar({state, calendarState, calendarBlocks, dateCells, today, month, lang, t, fmt, nickname, meId, readOnly, requesting, interactions, onSelect, selectedDay, pickingFrom, notices, flashDays, conflictDuties, preview = false}: {
   state: State; calendarState: State; calendarBlocks: Duty[]; dateCells: string[]; today: string; month: string; lang: Language; t: Translate; fmt: FormatDate;
   nickname: (id?: string) => string; meId: string; readOnly: boolean; requesting: boolean; interactions: CalendarInteractions;
   /** A tap or Enter on a day that isn't part of a swap in progress. */
@@ -23,6 +23,8 @@ export function WorkspaceCalendar({state, calendarState, calendarBlocks, dateCel
   notices?: ReactNode;
   /** Days pointed at from elsewhere (the plan's split-weekend notice): they pulse once. */
   flashDays?: readonly string[];
+  /** A draft's duties that clash with someone's availability: their days show red (#110). */
+  conflictDuties?: ReadonlySet<string>;
   /** The neighbouring month sliding in (month-stage.tsx): the same grid, without the gesture surface. */
   preview?: boolean;
 }) {
@@ -37,17 +39,18 @@ export function WorkspaceCalendar({state, calendarState, calendarBlocks, dateCel
   const week = (date: string) => addDays(date, -dayOf(date));
   const markedWeeks = new Set(cells.filter(c => locked(c.period) || (c.period && streaks[c.period.id]?.badge !== undefined)).map(c => week(c.date)));
   const picking = !!(keyboardSource || pickingFrom);
-  // A refresh keeps the grid on screen and fades in only the chips whose person changed; a new
-  // month or the first paint animates nothing (it already looked like this while sliding in).
-  const seen = useRef<{month: string; people: Record<string, string>} | null>(null);
+  // A refresh keeps the grid on screen and blinks once only the days whose shown duty changed (who,
+  // the backup, the title). A new month, the other version (Draft / Published) or the first paint
+  // blinks nothing (#115).
+  const seen = useRef<{view: string; shown: Record<string, string>} | null>(null);
   useLayoutEffect(() => {
     if (preview) return;
-    const people = Object.fromEntries(calendarBlocks.map(b => [b.id, calendarState.assignments[b.id]?.primary ?? '']));
-    const before = seen.current;
-    seen.current = {month, people};
-    if (!before || before.month !== month || matchMedia('(prefers-reduced-motion: reduce)').matches) return;
-    for (const [id, person] of Object.entries(people)) if (id in before.people && before.people[id] !== person)
-      document.querySelector(`.month-pane:not(.month-peek) [data-gesture-key="${CSS.escape(id)}"] .assignment-chip`)?.animate([{opacity: 0, transform: 'scale(.96)'}, {opacity: 1, transform: 'none'}], {duration: 260, easing: 'cubic-bezier(.2,.8,.2,1)'});
+    const shown = Object.fromEntries(calendarBlocks.map(b => {const a = calendarState.assignments[b.id]; return [b.id, `${a?.primary ?? ''}|${a?.secondary ?? ''}|${b.title ?? ''}`];}));
+    const before = seen.current, view = `${month}|${requesting}`;
+    seen.current = {view, shown};
+    if (!before || before.view !== view || matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    for (const [id, duty] of Object.entries(shown)) if (id in before.shown && before.shown[id] !== duty)
+      document.querySelector(`.month-pane:not(.month-peek) [data-gesture-key="${CSS.escape(id)}"] .assignment-chip`)?.animate([{opacity: 1}, {opacity: .45}, {opacity: 1}], {duration: 360, easing: 'ease-in-out'});
   });
   return <CalendarSurface lang={lang} dir={mobile && lang === 'he' ? 'rtl' : 'ltr'} gridRef={preview ? undefined : dragContainer} gridClassName={'gesture-grid' + (picking ? ' picking' : '')} notices={notices}>
     <span id="published-swap-help" className="sr-only" aria-live="polite">
@@ -96,6 +99,7 @@ export function WorkspaceCalendar({state, calendarState, calendarBlocks, dateCel
             d === today ? 'today' : '',
             selectedDay === d ? 'selected-day' : '',
             flashDays?.includes(d) ? 'flash-day' : '',
+            b && interactive && conflictDuties?.has(b.id) ? 'conflict-day' : '',
             cell ? `streak-${cell.position}` : '',
             cell?.breakBefore ? 'streak-break-before' : '',
             cell?.breakAfter ? 'streak-break-after' : '',

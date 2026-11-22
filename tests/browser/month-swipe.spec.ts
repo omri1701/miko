@@ -1,23 +1,9 @@
 import type {Page} from '@playwright/test';
-import {test, expect, ids, switchLanguage, type Backend} from './fixtures';
+import {test, expect, ids, switchLanguage, press, type Backend} from './fixtures';
 
 // The month change (owner rounds 3-4, 2026-11-07): the neighbour is the real calendar, blurred while it
 // slides in with the finger; the month name swipes on its own and the calendar then refreshes in
-// place; landing and refreshes keep the grid on screen. Phones use real touch input (CDP), PC a mouse drag.
-type Gesture = {move: (dx: number) => Promise<void>; end: () => Promise<void>};
-async function press(page: Page, x: number, y: number, mobile: boolean): Promise<Gesture> {
-  if (!mobile) {
-    await page.mouse.move(x, y); await page.mouse.down();
-    return {move: async dx => page.mouse.move(x + dx, y, {steps: 6}), end: async () => page.mouse.up()};
-  }
-  const cdp = await page.context().newCDPSession(page);
-  let at = x;
-  await cdp.send('Input.dispatchTouchEvent', {type: 'touchStart', touchPoints: [{x, y}]});
-  return {
-    move: async dx => {for (let step = 1; step <= 6; step++) await cdp.send('Input.dispatchTouchEvent', {type: 'touchMove', touchPoints: [{x: at + (x + dx - at) * step / 6, y}]}); at = x + dx;},
-    end: async () => {await cdp.send('Input.dispatchTouchEvent', {type: 'touchEnd', touchPoints: []}); await cdp.detach();},
-  };
-}
+// place; landing and refreshes keep the grid on screen. Phones use real touch input (CDP), PC a mouse drag (`press`).
 const heading = (page: Page) => page.locator('.month-bar .month-name');
 /** A December with a combined weekend and a weekday on duty, so the neighbour has real chips. */
 function december(backend: Backend) {

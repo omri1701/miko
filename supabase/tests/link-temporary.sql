@@ -100,10 +100,11 @@ begin
  -- Joining again never makes a second row.
  perform public.duty_join('Dana again');
  rev:=pg_temp.act(dana); perform public.duty_rename_self('Dana L.',rev);
- rev:=pg_temp.act(dana); perform public.duty_set_constraints(temp,array['2099-11-04'::date],'prefer','Mine',rev);
+ -- A member's own write stays inside the three-month window (#111).
+ rev:=pg_temp.act(dana); perform public.duty_set_constraints(temp,array[(date_trunc('month',now() at time zone 'Asia/Jerusalem')+interval '2 months')::date+3],'prefer','Mine',rev);
  reset role;
  if (select count(*) from public.duty_members where auth_user_id=dana)<>1 or (select name from public.duty_members where id=temp)<>'Dana L.'
-  or not exists(select 1 from public.duty_constraints where member_id=temp and day='2099-11-04') then raise exception 'Own-row writes did not reach the merged member'; end if;
+  or not exists(select 1 from public.duty_constraints where member_id=temp and day=(date_trunc('month',now() at time zone 'Asia/Jerusalem')+interval '2 months')::date+3) then raise exception 'Own-row writes did not reach the merged member'; end if;
  set local role authenticated;
 
  -- The waiting swap is now answered by Dana only, never by the admin.

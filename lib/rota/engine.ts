@@ -210,7 +210,8 @@ export function swapDraft(s:State,month:string,from:string,to:string,allowOverri
  if(y.primary===x.secondary||x.primary===y.secondary)return{ok:false,reason:'duplicate'};
  if([x.primary,y.primary,x.secondary,y.secondary].filter(Boolean).some(id=>!s.team.some(p=>p.id===id&&takesDuties(p))))return{ok:false,reason:'inactive'};
  const changed=[{duty:a,assignment:{...x,primary:y.primary}},{duty:b,assignment:{...y,primary:x.primary}}];
- const conflicts=changed.flatMap(({duty,assignment})=>[assignment.primary,assignment.secondary].filter((id):id is string=>!!id).flatMap(id=>unapproved(duty,id,s).map(date=>({person:id,date}))));
+ // Only the primaries move: emergency cover stays put, so its constraints are no swap conflict (#116; Publish still asks).
+ const conflicts=changed.flatMap(({duty,assignment})=>unapproved(duty,assignment.primary,s).map(date=>({person:assignment.primary,date})));
  const assignments={...s.assignments};for(const {duty,assignment} of changed)assignments[duty.id]=assignment;
  const counts=weekendCounts({...s,assignments},month),before=weekendCounts(s,month);
  const weekendConflicts=Object.keys(counts).filter(id=>counts[id]>1&&counts[id]>before[id]).map(person=>({person,count:counts[person],month}));

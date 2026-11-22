@@ -1,4 +1,4 @@
-import {test, expect, ids, MONTH, type Backend, switchLanguage, monthAction, duty, openDutySheet} from './fixtures';
+import {test, expect, ids, MONTH, type Backend, switchLanguage, monthAction, duty, openDutySheet, choose} from './fixtures';
 import {coverageStart} from '../../lib/scheduling/calendar';
 import {validateGeneration} from '../../lib/scheduling/validate';
 import {record} from '../../lib/compensation';
@@ -722,6 +722,43 @@ test('exact cutoff during real Worker generation terminates it without saving as
   expect(backend.calls.filter(c => c.name === 'duty_save_generation')).toHaveLength(0);
 });
 
+test('#112: changing month never flashes the previous month’s "Coverage has started"; a started month still shows it steadily', async ({page, backend, openApp}) => {
+  fresh(backend); backend.generationNow = coverageStart(MONTH, {});
+  const closed = 'Coverage has started: manual edits and swaps only';
+  await openApp();
+  await page.getByRole('tab', {name: 'Schedule', exact: true}).click();
+  await expect(page.getByText(closed, {exact: true})).toBeVisible();
+  // December's facts arrive late, so a stale November window would show for that whole time.
+  let release = () => {};
+  const held = new Promise<void>(resolve => {release = resolve;});
+  await page.route('**/rest/v1/rpc/duty_generation_context', async route => {
+    if (route.request().postDataJSON()?.p_month === '2026-12') await held;
+    await route.fallback();
+  });
+  // Every DOM change is checked, so even one frame with the message is caught.
+  await page.evaluate(text => {
+    const w = window as unknown as {flashed: boolean};
+    w.flashed = false;
+    new MutationObserver(() => {
+      const shown = [...document.querySelectorAll('.note-line')].some(n => n.textContent === text);
+      if (shown && document.querySelector('.month-bar .month-name')?.textContent?.startsWith('December')) w.flashed = true;
+    }).observe(document.body, {subtree: true, childList: true, characterData: true});
+  }, closed);
+  await page.getByRole('button', {name: 'Next month', exact: true}).last().click();
+  await expect(page.locator('.month-bar .month-name')).toHaveText('December 2026');
+  await expect.poll(() => backend.calls.filter(c => c.name === 'duty_generation_context' && c.params.p_month === '2026-12').length).toBe(0);
+  await expect(page.getByText(closed, {exact: true})).toHaveCount(0);
+  release();
+  await expect.poll(() => backend.calls.filter(c => c.name === 'duty_generation_context' && c.params.p_month === '2026-12').length).toBe(1);
+  await expect(page.getByRole('button', {name: 'Plan the month', exact: true})).toBeEnabled();
+  await expect(page.getByText(closed, {exact: true})).toHaveCount(0);
+  expect(await page.evaluate(() => (window as unknown as {flashed: boolean}).flashed)).toBe(false);
+  // Rule 2: back on November, where coverage really started, it shows again and stays.
+  await page.getByRole('button', {name: 'Previous month', exact: true}).last().click();
+  await expect(page.locator('.month-bar .month-name')).toHaveText('November 2026');
+  await expect(page.getByText(closed, {exact: true})).toBeVisible();
+});
+
 test('cutoff equality at the checked save rejects a late result atomically', async ({page, backend, openApp}) => {
   fresh(backend); await openApp(); await openPlan(page);
   const before = structuredClone(backend.raw.assignments);
@@ -784,8 +821,7 @@ test('a hand split never changes the plan: half-point changes save exactly as ty
   // Split by hand: A keeps Friday, B takes Saturday.
   await (await openDutySheet(page, '2026-11-06')).getByRole('button', {name: 'Edit', exact: true}).click();
   await page.getByRole('radio', {name: 'Two days', exact: true}).click();
-  await page.getByRole('combobox', {name: 'Saturday primary engineer', exact: true}).click();
-  await page.getByRole('option', {name: b.name, exact: true}).click();
+  await choose(page.getByRole('combobox', {name: 'Saturday primary engineer', exact: true}), b.name);
   const override = page.getByRole('checkbox', {name: 'Approve these exceptions as manager'});
   if (await override.isVisible()) await override.check();
   await page.getByRole('button', {name: 'Save assignment'}).click();

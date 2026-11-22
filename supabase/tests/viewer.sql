@@ -59,11 +59,12 @@ end$$;
 set local request.jwt.claim.sub='77000000-0000-0000-0000-000000000004';
 select public.duty_request_swap((select id from public.duty_assignments where day='2099-10-01' and publication_id is not null),
  (select id from public.duty_assignments where day='2099-10-10' and publication_id is not null),'',(select revision from public.duty_workspace));
--- A teammate's constraint with a private note (read by the Viewer-admin below).
-select public.duty_set_constraints('77000000-0000-0000-0000-000000000004',array['2099-11-05'::date],'no','Private fixture note',(select revision from public.duty_workspace));
 
 -- Rule 1: making member 3 a Viewer.
 set local request.jwt.claim.sub='77000000-0000-0000-0000-000000000001';
+-- A teammate's constraint with a private note (read by the Viewer-admin below). The admin enters
+-- it: 2099 is past a member's own three-month window (#111).
+select public.duty_set_constraints('77000000-0000-0000-0000-000000000004',array['2099-11-05'::date],'no','Private fixture note',(select revision from public.duty_workspace));
 create temp table before_revision as select revision from public.duty_workspace;
 select public.duty_set_viewer('77000000-0000-0000-0000-000000000003',true,(select revision from public.duty_workspace));
 select pg_temp.check((select revision from public.duty_workspace)=(select revision+1 from before_revision),'setting advances the revision');

@@ -122,7 +122,8 @@ export function useTeamWorkspace(){
   // Display-only projection; read where it is shown, never at startup.
   balance:()=>client?readBalance(client):Promise.reject(Error('Not connected')),
   replannedVersions:(month:string)=>client?replannedVersions(client,month):Promise.reject(Error('Not connected')),
-  generationContext:(month:string,revision:number)=>workspace.captured(revision,c=>generationContext(c,month,revision),result=>result.revision),
+  // A background read (#115): it holds the save lock but never shows as saving.
+  generationContext:(month:string,revision:number)=>workspace.captured(revision,c=>generationContext(c,month,revision),result=>result.revision,{quiet:true}),
   openGenerationMonth:(context:GenerationContext,s:State)=>workspace.captured(context.revision,async c=>{
    const {error}=await c.rpc('duty_save_schedule',{p_state:schedulePayload(s,context.input.schedule.month),p_publish:null,p_revision:context.revision});
    if(error)throw error;

@@ -49,8 +49,8 @@ async function hold(page: Page, from: string, to: string, touch: boolean) {
 }
 
 for (const lang of ['en', 'he'] as const) {
-  // #92: a date a primary marked unavailable is red but stays pickable; emergency cover's stays grey.
-  test(`engineer: "you marked" and "they marked" days are red and pickable; cover stays grey ${lang}`, async ({page, openApp, backend}) => {
+  // #92: a date a primary marked unavailable is red but stays pickable; #116: emergency cover's is no conflict.
+  test(`engineer: "you marked" and "they marked" days are red and pickable; the cover's own day stays green ${lang}`, async ({page, openApp, backend}) => {
     const t = say(lang);
     // Alex is unavailable on 5 Nov (Drew's day); Blair on 2 Nov (Alex's own day); cover Eden on 10 Nov.
     backend.raw.constraints.push({member_id: ids.a, day: '2026-11-05', kind: 'no', note: 'Alex private note'},
@@ -63,10 +63,9 @@ for (const lang of ['en', 'he'] as const) {
     // Owner 2026-11-21: your own note shows to you; another member's never does.
     await expectRed(page, '2026-11-05', t('You marked 5 Nov as unavailable · Alex private note', 'סימנת את 5 בנוב׳ כלא זמין · Alex private note'));
     await expectRed(page, '2026-11-03', t('Blair Birch marked 2 Nov as unavailable', 'Blair Birch סימן/ה את 2 בנוב׳ כלא זמין'));
-    await expectBlocked(page, '2026-11-10', t('Emergency cover can’t take 10 Nov', 'לכונן החירום אין אפשרות ב־10 בנוב׳'));
+    await expectGreen(page, '2026-11-10');
     await expectGreen(page, '2026-11-12');
     await expect(page.locator('#published-swap-help')).toHaveText(t('Choose the duty to swap with. Grayed days say why. Escape cancels.', 'בחרו את הכוננות להחלפה. ימים אפורים מסבירים למה. Escape לביטול.'));
-    await expectTapHint(page, '2026-11-10', t('Emergency cover can’t take 10 Nov', 'לכונן החירום אין אפשרות ב־10 בנוב׳'));
     // Keyboard: Space on a red day opens the request, which names the dates and can be sent.
     await duty(page, '2026-11-05').focus(); await page.keyboard.press('Space');
     const dialog = page.getByRole('dialog', {name: t('Ask to swap', 'בקשת החלפה')});
@@ -123,8 +122,9 @@ for (const lang of ['en', 'he'] as const) {
 }
 
 test('a greyed day is grey once: nothing is green or selectable while checking, and a refetch keeps it grey', async ({page, openApp, backend}) => {
-  // Emergency cover's unavailability still greys (a party's own is red since #92).
-  backend.raw.constraints.push({member_id: ids.e, day: '2026-11-05', kind: 'no', note: ''});
+  // An emergency cover who left the team greys the day (a party's own constraint is red since #92;
+  // the cover's constraint no longer counts, #116).
+  backend.raw.members.find(m => m.id === ids.e)!.active = false;
   backend.raw.assignments.find(d => d.day === '2026-11-05' && d.publication_id)!.secondary_id = ids.e;
   let release!: () => void;
   backend.availabilityGate = new Promise(r => {release = r;});

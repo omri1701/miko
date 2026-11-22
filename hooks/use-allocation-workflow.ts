@@ -44,7 +44,16 @@ export function useAllocationWorkflow(remote: TeamWorkspace, month: string, t: T
   const [locks, setLocks] = useState<Review['locks']>([]), [approvals, setApprovals] = useState<Approval[]>([]);
   const [history, setHistory] = useState<Review[]>([]), [step, setStep] = useState(2);
   const [error, setError] = useState(''), [notice, setNotice] = useState(''), [reviewed, setReviewed] = useState(false);
-  const [closed, setClosed] = useState(false), [progress, setProgress] = useState<number | null>(null);
+  // Coverage start is per month (#112): a month never shows another month's closed window while
+  // its own context loads. Once a month's coverage starts it stays started, so it is remembered.
+  const [closedMonths, setClosedMonths] = useState<Record<string, true>>({}), closed = !!closedMonths[month];
+  const setClosed = (value: boolean) => setClosedMonths(all => {
+    if (!!all[month] === value) return all;
+    const next = {...all};
+    if (value) next[month] = true; else delete next[month];
+    return next;
+  });
+  const [progress, setProgress] = useState<number | null>(null);
   const [result, setResult] = useState<GenerationResult | null>(null);
   // The authoritative month could not be read; the primary action becomes Try again.
   const [retry, setRetry] = useState(false);
@@ -64,12 +73,20 @@ export function useAllocationWorkflow(remote: TeamWorkspace, month: string, t: T
   function fail(e: unknown) {
     setError(errorMessage(e, t('Could not finish. Your saved draft is unchanged. Try again.', 'הפעולה לא הושלמה. הטיוטה השמורה נשמרה. אפשר לנסות שוב.')));
   }
-  async function load() {
-    if (rpc.current || !latest.current.isAdmin || latest.current.readOnly || latest.current.snapshot?.revision == null) return null;
+  // The month's read in flight, so Plan pressed meanwhile waits for it instead of reading twice.
+  const reading = useRef<Promise<GenerationContext | null> | null>(null);
+  function load() {
+    const revision = latest.current.snapshot?.revision;
+    if (rpc.current || !latest.current.isAdmin || latest.current.readOnly || revision == null) return Promise.resolve(null);
+    const read = fetchContext(revision); reading.current = read;
+    void read.finally(() => {if (reading.current === read) reading.current = null;});
+    return read;
+  }
+  async function fetchContext(revision: number) {
     stop(); const id = sequence.current;
     setPhase('loading'); setError(''); rpc.current = true;
     try {
-      const context = await latest.current.generationContext(month, latest.current.snapshot.revision);
+      const context = await latest.current.generationContext(month, revision);
       if (id !== sequence.current) return null;
       accept(context); setRetry(false); return context;
     } catch (e) {if (id === sequence.current) {fail(e); setRetry(true);} return null;}
@@ -253,7 +270,7 @@ export function useAllocationWorkflow(remote: TeamWorkspace, month: string, t: T
   async function show() {
     if (opening.current) return; opening.current = true;
     setOpen(true); setStep(2); setHistory([]); setMoved(null); setError(''); setNotice('');
-    const c = contextRef.current ?? await load();
+    const c = contextRef.current ?? await (reading.current ?? load());
     opening.current = false;
     if (!c) return;
     setDraft(c.allocation); setReviewed(false);
@@ -409,6 +426,8 @@ export function useAllocationWorkflow(remote: TeamWorkspace, month: string, t: T
     history, undo, reset, resetReason: resetState.reason, resetDiscards: resetState.discards, edit, transfer, moved, makePermanent, dismissMoved: () => setMoved(null), confirm, cancel,
     retry: retry && phase === 'idle', refresh: () => {void refresh();},
     busy: phase !== 'idle', saving: phase === 'confirming' || phase === 'saving',
+    // Generate or Save is running (#115); a background read of the month is not shown anywhere.
+    working: phase !== 'idle' && phase !== 'loading',
     canConfirm: !!draft && reviewed && !structural && phase === 'idle', saved: !!draft && draft === savedDraft,
   };
 }

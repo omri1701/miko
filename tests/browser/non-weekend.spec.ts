@@ -1,4 +1,4 @@
-import {test,expect,ids,MONTH,duty, switchLanguage, monthAction} from './fixtures';
+import {test,expect,ids,MONTH,duty, switchLanguage, monthAction, choose} from './fixtures';
 import type {Page} from '@playwright/test';
 import {readGenerationContext} from '../../lib/supabase/generation';
 import {canonicalDuties} from '../../lib/scheduling/calendar';
@@ -182,8 +182,7 @@ for(const lang of ['en','he'] as const)test(`clearing a weekend in the editor ke
  const dialog=page.getByRole('dialog');
  await dialog.getByRole('radio',{name:he?'שני ימים':'Two days',exact:true}).click();
  for(const d of he?['שישי','שבת']:['Friday','Saturday']){
-  await dialog.getByRole('combobox',{name:he?`מהנדס ראשי ביום ${d}`:`${d} primary engineer`,exact:true}).click();
-  await page.getByRole('option',{name:he?'ללא שיבוץ':'Leave unassigned',exact:true}).click();
+  await choose(dialog.getByRole('combobox',{name:he?`מהנדס ראשי ביום ${d}`:`${d} primary engineer`,exact:true}),he?'ללא שיבוץ':'Leave unassigned');
  }
  await dialog.getByRole('button',{name:he?'שמירת השיבוץ':'Save assignment',exact:true}).click();
  await expect(dialog).toBeHidden();
@@ -203,10 +202,9 @@ for(const lang of ['en','he'] as const)test(`placing a No weekends member on a w
  if(he)await switchLanguage(page, 'he');
  await editDuty(page,'2026-11-06');
  const dialog=page.getByRole('dialog'),save=dialog.getByRole('button',{name:he?'שמירת השיבוץ':'Save assignment',exact:true});
- await dialog.getByRole('combobox',{name:he?'מהנדס ראשי':'Primary engineer',exact:true}).click();
- const option=page.getByRole('option',{name:new RegExp(`^${who}`)});
- await expect(option).toContainText(he?' · ללא סופי שבוע':' · no weekends');
- await option.click();
+ const picker=dialog.getByRole('combobox',{name:he?'מהנדס ראשי':'Primary engineer',exact:true});
+ await expect(picker.locator('option').filter({hasText:new RegExp(`^${who}`)})).toContainText(he?' · ללא סופי שבוע':' · no weekends');
+ await choose(picker,new RegExp(`^${who}`));
  // One weekend covers both days: both are named.
  const warning=dialog.locator('.warning-note');
  await expect(warning).toContainText(he?`${who} לא עושה סופי שבוע`:`${who} doesn’t take weekends`);
@@ -234,8 +232,7 @@ for(const lang of ['en','he'] as const)test(`a published weekend edit to a No we
  await editDuty(page,'2026-11-06');
  const dialog=page.getByRole('dialog'),review=dialog.getByRole('button',{name:he?'בדיקת השינוי':'Review change',exact:true});
  // A published weekend opens the One weekend | Two days editor (decision 2026-11-07): one card, one picker.
- await dialog.getByRole('combobox',{name:he?'מהנדס ראשי':'Primary engineer',exact:true}).click();
- await page.getByRole('option',{name:new RegExp(`^${who}`)}).click();
+ await choose(dialog.getByRole('combobox',{name:he?'מהנדס ראשי':'Primary engineer',exact:true}), new RegExp(`^${who}`));
  await expect(dialog.getByRole('alert')).toContainText(he?`${who} לא עושה סופי שבוע`:`${who} doesn’t take weekends`);
  await expect(review).toBeDisabled();
  await dialog.getByRole('checkbox',{name:he?'אישור החריגה כמנהל':'Approve this exception as manager'}).check();
@@ -253,8 +250,7 @@ for(const lang of ['en','he'] as const)test(`draft duty editor names constraints
  const dialog=page.getByRole('dialog'),warning=dialog.locator('.warning-note');
  for(const [who,line] of [['Alex Atlas',he?'Alex Atlas סימן/ה את 4 בנוב׳ כלא זמין · Synthetic vacation':'Alex Atlas marked 4 Nov as unavailable · Synthetic vacation'],
   ['Avery Admin',he?'סימנת את 4 בנוב׳ כלא זמין · Own errand':'You marked 4 Nov as unavailable · Own errand']] as const){
-  await dialog.getByRole('combobox',{name:he?'מהנדס ראשי':'Primary engineer',exact:true}).click();
-  await page.getByRole('option',{name:new RegExp(`^${who}`)}).click();
+  await choose(dialog.getByRole('combobox',{name:he?'מהנדס ראשי':'Primary engineer',exact:true}), new RegExp(`^${who}`));
   // One conflict per line, never joined by " / " (owner 2026-11-21).
   await expect(warning.getByRole('listitem')).toHaveText([line]);
   await expect(warning).not.toContainText(/\s\/\s/);
