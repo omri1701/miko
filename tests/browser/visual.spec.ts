@@ -291,10 +291,14 @@ for (const lang of ['en', 'he'] as const) test(`draft availability conflicts ${l
   await page.locator('[data-conflicts] .conflict-line').last().click();
   await expect(duty(page, '2026-11-25')).toHaveClass(/\bselected-day\b/);
   await expect(duty(page, '2026-11-25')).toBeInViewport();
-  // The screen as the tap leaves it (the day scrolled into view). A full-page capture of a
-  // scrolled phone page placed the fixed and sticky bars a few pixels differently run to run.
-  await page.waitForFunction(() => new Promise(done => {const y = window.scrollY; requestAnimationFrame(() => requestAnimationFrame(() => done(window.scrollY === y)));}));
-  await snapshot(page, `draft-conflict-selected-${lang}`, false, true);
+  // The tap scrolls the day into view on the next frame; capture once that scroll has settled
+  // (scrollY unchanged over a few frames), or the full-page capture catches it half-way.
+  await page.waitForFunction(() => new Promise(done => {
+    const y = window.scrollY; let frames = 0;
+    const step = () => {if (window.scrollY !== y) return done(false); if (++frames < 6) requestAnimationFrame(step); else done(y > 0);};
+    requestAnimationFrame(step);
+  }));
+  await snapshot(page, `draft-conflict-selected-${lang}`);
 });
 
 for (const lang of ['en', 'he'] as const) test(`constraints at the last open month ${lang}`, async ({page, openApp}) => {
