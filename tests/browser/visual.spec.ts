@@ -8,17 +8,18 @@ import {existsSync} from 'node:fs';
 // Generate, non-weekend members and the calendar subscription states.
 test.beforeEach(({backend}) => {backend.url = PROJECTS.prod; backend.runtimeOrigin = 'https://miko-prod.vercel.app';});
 
-async function snapshot(page: Page, name: string, keepPointer = false) {
+/** `screen`: capture the viewport as it is (scrolled), not the full page. */
+async function snapshot(page: Page, name: string, keepPointer = false, screen = false) {
   test.info().annotations.push({type: 'visual-review', description: JSON.stringify({name: name + '.png', viewport: page.viewportSize(), language: await page.locator('html').getAttribute('lang')})});
   await page.evaluate(() => document.fonts.ready);
   if (!keepPointer) await page.mouse.move(0, 0);
   // With updateSnapshots:none Playwright reports missing references without an actual attachment. Retain the candidate explicitly for the review gallery.
   if (!existsSync(test.info().snapshotPath(name + '.png'))) {
     const path = test.info().outputPath(name + '-actual.png');
-    await page.screenshot({path, fullPage: true, animations: 'disabled', caret: 'hide'});
+    await page.screenshot({path, fullPage: !screen, animations: 'disabled', caret: 'hide'});
     await test.info().attach(name + '-actual.png', {path, contentType: 'image/png'});
   }
-  await expect.soft(page).toHaveScreenshot(name + '.png', {fullPage: true});
+  await expect.soft(page).toHaveScreenshot(name + '.png', {fullPage: !screen});
 }
 const schedule = async (page: Page, lang: 'en' | 'he') => {await page.getByRole('tab', {name: lang === 'en' ? 'Schedule' : 'לוח', exact: true}).click(); await expect(page.locator('.calendar-grid')).toBeVisible();};
 /** Opens a duty's sheet: a tap on PC, the day row on phones. */
@@ -289,7 +290,11 @@ for (const lang of ['en', 'he'] as const) test(`draft availability conflicts ${l
   // A tapped line selects its day.
   await page.locator('[data-conflicts] .conflict-line').last().click();
   await expect(duty(page, '2026-11-25')).toHaveClass(/\bselected-day\b/);
-  await snapshot(page, `draft-conflict-selected-${lang}`);
+  await expect(duty(page, '2026-11-25')).toBeInViewport();
+  // The screen as the tap leaves it (the day scrolled into view). A full-page capture of a
+  // scrolled phone page placed the fixed and sticky bars a few pixels differently run to run.
+  await page.waitForFunction(() => new Promise(done => {const y = window.scrollY; requestAnimationFrame(() => requestAnimationFrame(() => done(window.scrollY === y)));}));
+  await snapshot(page, `draft-conflict-selected-${lang}`, false, true);
 });
 
 for (const lang of ['en', 'he'] as const) test(`constraints at the last open month ${lang}`, async ({page, openApp}) => {
