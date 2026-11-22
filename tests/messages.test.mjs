@@ -62,3 +62,20 @@ test('swap refusals keep their own message, not the generic team-data refresh', 
   assert.equal(userMessage('This publication changed. Request a new swap.', hebrew), 'הלוח השתנה מאז הבקשה. יש לבקש החלפה חדשה.');
   assert.equal(userMessage('This swap would create a second weekend', english), 'This swap would give someone a second weekend this month. Choose other duties, or decline or reject it.');
 });
+
+// #103: a publish refused for availability names each conflict as a person, one per line; the
+// note shows only to its owner and admins, and the usual way to fix it follows.
+test('availability refusals name who and when, with notes only for the owner and admins', async () => {
+  const {explainedMessage, availabilityConflicts} = await import('../lib/messages.ts');
+  const raw = 'unavailable-primary: [{"day": "2026-12-22", "member": "avi"}, {"day": "2026-12-23", "member": "me"}]';
+  assert.deepEqual(availabilityConflicts(raw), [{member: 'avi', day: '2026-12-22'}, {member: 'me', day: '2026-12-23'}]);
+  assert.deepEqual(availabilityConflicts('Availability conflict: [{"day": "2026-12-22", "member": "avi"}]'), [{member: 'avi', day: '2026-12-22'}]);
+  assert.equal(availabilityConflicts('unavailable-primary'), null);
+  const notes = {'avi|2026-12-22': 'doctor', 'me|2026-12-23': 'exam'};
+  const context = (me, admin) => ({me, admin, name: id => ({avi: 'Avi', me: 'Me'})[id], day: d => d.slice(8), note: (m, d) => notes[`${m}|${d}`]});
+  const en = (a, _b) => a, he = (_a, b) => b, fix = userMessage(raw, en);
+  assert.equal(explainedMessage(raw, en, context('admin', true)), ['Avi marked 22 as unavailable · doctor', 'Me marked 23 as unavailable · exam', fix].join('\n'));
+  assert.equal(explainedMessage(raw, en, context('me', false)), ['Avi marked 22 as unavailable', 'You marked 23 as unavailable · exam', fix].join('\n'));
+  assert.equal(explainedMessage(raw, he, context('me', false)).split('\n')[0], 'Avi סימן/ה את 22 כלא זמין');
+  assert.equal(explainedMessage(raw, en), fix);
+});

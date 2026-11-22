@@ -24,8 +24,8 @@ import {PublishedDutyEditor} from '@/components/rota/published-duty-editor';
 import {editablePublishedDuty,publishedWeekend} from '@/lib/supabase/published-edit';
 import {PublishedWeekendEditor} from '@/components/rota/published-weekend-editor';
 import {SettingsScreen} from '@/components/rota/settings-screen';
-import {deepLink} from '@/lib/push/settings';
-import {currentSubscription, describe} from '@/lib/push/browser';
+import {DEEP_LINK_KEYS, deepLink, type DeepLink} from '@/lib/push/settings';
+import {clearPendingLink, currentSubscription, describe, takePendingLink} from '@/lib/push/browser';
 import {PublicationHistory} from '@/components/rota/publication-history';
 import {SwapRequestDialog, useSwapActions} from '@/components/rota/swap-requests';
 import {WorkspaceAvailability} from './workspace-availability';
@@ -39,11 +39,12 @@ import {AllocationDialog} from './allocation-dialog';
 import {allocationTotals, repaymentsTaken} from '@/lib/allocation/review';
 import {useIsraelToday} from '@/hooks/use-israel-today';
 import {useCalendarInteractions} from '@/hooks/use-calendar-interactions';
-import {fromSnapshot} from '@/lib/supabase/snapshot';
+import {fromSnapshot, type DayConflict} from '@/lib/supabase/snapshot';
 import {toast} from 'sonner';
 import {addDays, monthNext, blocks, ownerMonth, type Duty} from '@/lib/rota/engine';
 import {calendarDates, workspaceMetrics, visibleCalendarBlocks} from '@/lib/rota/workspace-data';
-import {userMessage} from '@/lib/messages';
+import {userMessage, availabilityConflicts} from '@/lib/messages';
+import {explainedMessage, conflictContext, conflictLine} from '@/lib/conflict-message';
 
 export function RotaWorkspace({remote, lang, setLang}: {remote: TeamWorkspace; lang: 'en' | 'he'; setLang: (lang: 'en' | 'he') => void}) {
   const mobile = useMobileLayout();
@@ -71,32 +72,85 @@ export function RotaWorkspace({remote, lang, setLang}: {remote: TeamWorkspace; l
   const [link] = useState(() => typeof window === 'undefined' ? {} : deepLink(window.location.search));
   const [month, setMonth] = useState(() => link.month ?? initialCalendarMonth()), [tab, setTab] = useState<string>(link.tab ?? 'home');
   const [welcome, setWelcome] = useState(() => typeof window !== 'undefined' && !welcomeSeen());
+  // The exact target inside that screen (a day, a swap request, the approvals), resolved once rendered.
+  const [target, setTarget] = useState<(DeepLink & {refreshed?: boolean}) | null>(() => link.day || link.duty || link.swap || link.focus ? link : null);
   useEffect(() => {
     const url = new URL(window.location.href);
-    if (url.searchParams.has('tab') || url.searchParams.has('month')) {
-      url.searchParams.delete('tab'); url.searchParams.delete('month');
+    if (DEEP_LINK_KEYS.some(key => url.searchParams.has(key))) {
+      for (const key of DEEP_LINK_KEYS) url.searchParams.delete(key);
       window.history.replaceState(window.history.state, '', url.pathname + url.search + url.hash);
     }
-    // A notification tapped while the app is open (public/sw.js falls back to a message).
-    const open = (event: MessageEvent) => {
-      if (event.data?.type !== 'duty-open' || typeof event.data.url !== 'string') return;
-      const next = deepLink(event.data.url.replace(/^\/\?/, '?'));
+    // A notification tapped while the app is open: public/sw.js focuses this window and
+    // sends the link, so it navigates here instead of opening a second window (issue #89).
+    // One tap can arrive several ways (message, broadcast, stash): handle it once.
+    let last = {url: '', at: 0};
+    const go = (url: string) => {
+      const now = performance.now();
+      if (url === last.url && now - last.at < 5000) return;
+      last = {url, at: now};
+      const next = deepLink(url.replace(/^\/\?/, '?'));
       if (next.month) setMonth(next.month);
       if (next.tab) setTab(next.tab);
+      setTarget(next.day || next.duty || next.swap || next.focus ? next : null);
+    };
+    const open = (event: MessageEvent) => {
+      if (event.data?.type !== 'duty-open' || typeof event.data.url !== 'string') return;
+      // Heard: the worker then neither reloads this window nor opens another.
+      event.ports?.[0]?.postMessage('duty-opened');
+      clearPendingLink();
+      go(event.data.url);
+    };
+    // Resumed from the background, a frozen app may have missed the message: the worker left the link.
+    // The phone shows the app before the just-woken worker has stashed the link, so look a few times.
+    let looking = 0;
+    const resumed = () => {
+      if (document.visibilityState !== 'visible') return;
+      const run = ++looking;
+      const look = (left: number[]) => void takePendingLink().then(url => {
+        if (url) go(url);
+        else if (left.length && run === looking) setTimeout(() => look(left.slice(1)), left[0]);
+      });
+      look([300, 700, 1500, 2500, 5000]);
+    };
+    // iOS resumes a suspended Home Screen app without always firing visibilitychange: a timer that
+    // fires far later than scheduled means the app was frozen and is back.
+    let tick = performance.now();
+    const frozen = setInterval(() => {const now = performance.now(); if (now - tick > 4000) resumed(); tick = now;}, 1000);
+    // The worker also broadcasts the link, which a resumed app receives even when the phone did
+    // not list its window (no postMessage) and it missed the stash.
+    const channel = typeof BroadcastChannel === 'undefined' ? null : new BroadcastChannel('duty-links');
+    if (channel) channel.onmessage = event => {
+      if (event.data?.type !== 'duty-open' || typeof event.data.url !== 'string') return;
+      clearPendingLink(); go(event.data.url);
     };
     navigator.serviceWorker?.addEventListener('message', open);
+    navigator.serviceWorker?.startMessages?.();
+    document.addEventListener('visibilitychange', resumed);
+    window.addEventListener('focus', resumed);
+    window.addEventListener('pageshow', resumed);
+    // Opened on a link (a cold start): that link wins and the worker's copy is dropped. Otherwise
+    // the phone may have reloaded the app on the tap, so look for one.
+    if (Object.keys(link).length) clearPendingLink(); else resumed();
     // The offline shell (public/sw.js); push subscribes through the same registration.
     navigator.serviceWorker?.register('/sw.js', {scope: '/'}).catch(() => {});
     // A device that already receives notifications belongs to whoever is signed in now.
     if (!remote.settingsReadOnly && typeof Notification !== 'undefined' && Notification.permission === 'granted')
       void currentSubscription().then(subscription => subscription && remote.personal.saveDevice(describe(subscription))).catch(() => {});
-    return () => navigator.serviceWorker?.removeEventListener('message', open);
+    return () => {
+      navigator.serviceWorker?.removeEventListener('message', open);
+      clearInterval(frozen); channel?.close();
+      document.removeEventListener('visibilitychange', resumed);
+      window.removeEventListener('focus', resumed);
+      window.removeEventListener('pageshow', resumed);
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps -- once per signed-in workspace
   }, []);
   const state = remote.state!;
   const today = useIsraelToday();
   const [settingsOpen, setSettingsOpen] = useState(false), [historyOpen, setHistoryOpen] = useState(false);
-  const [settings, setSettings] = useState(false), [publishOpen, setPublishOpen] = useState(false);
+  const [settings, setSettings] = useState(false), [publishOpen, openPublish] = useState(false);
+  const [publishConflicts, setPublishConflicts] = useState<DayConflict[] | null>(null);
+  const setPublishOpen = (open: boolean) => {setPublishConflicts(null); openPublish(open);};
   const [person, setPerson] = useState(meId), [calendarChoice, setCalendarChoice] = useState({month: '', status: '', version: 'draft'});
   const [cancelDraftMonth, setCancelDraftMonth] = useState<string | null>(null);
   const [publishedEdit, setPublishedEdit] = useState<string | null>(null);
@@ -189,8 +243,17 @@ export function RotaWorkspace({remote, lang, setLang}: {remote: TeamWorkspace; l
       return true;
     } catch (e) {toast.error(userMessage((e as Error).message, t)); return false;}
   }
-  async function publish() {
-    if (!(await update((s) => ({...s, months: {...s.months, [month]: {...monthDetails, status: 'published', generated: true}}}), false))) return;
+  async function publish(anyway?: DayConflict[]) {
+    try {
+      if (!(await draft.update((s) => ({...s, months: {...s.months, [month]: {...monthDetails, status: 'published', generated: true}}}), false, false, undefined, anyway))) return;
+    } catch (e) {
+      // Who is on a date they marked unavailable: the popup lists the database's own list (a newer
+      // conflict included) and asks again, instead of an error.
+      const listed = availabilityConflicts((e as Error).message);
+      if (listed) {remote.clearError(); setPublishConflicts(listed); return;}
+      toast.error(explainedMessage((e as Error).message, t, conflictContext(remote, state, t)));
+      return;
+    }
     setPublishOpen(false);
     setCalendarChoice({month, status: 'published', version: 'draft'});
     interactions.resetSelection();
@@ -250,7 +313,8 @@ export function RotaWorkspace({remote, lang, setLang}: {remote: TeamWorkspace; l
   };
 
   // One state-driven primary action and a ⋯ menu for the rare ones (decision 2026-11-06).
-  const publishable = !allocationMismatch && metrics.assigned === metrics.owned.length && !metrics.conflicts.length && !!metrics.owned.length && !publishBlockers.length;
+  // Availability conflicts never block Publish: its popup lists them (owner 2026-11-21).
+  const publishable = !allocationMismatch && metrics.assigned === metrics.owned.length && !!metrics.owned.length && !publishBlockers.length;
   const planLabel = t('Plan the month', 'תכנון החודש'), closedReason = t('Coverage has started: manual edits and swaps only', 'הכיסוי החודשי התחיל: רק עריכה ידנית והחלפות');
   let primary: PrimaryAction | undefined, menu: MenuItem[] = [];
   // A Viewer-admin browses versions only: no plan, publish, reopen or draft tools.
@@ -306,6 +370,51 @@ export function RotaWorkspace({remote, lang, setLang}: {remote: TeamWorkspace; l
     {isManager && viewingDraft && !!metrics.conflicts.length && <p className="note-line" data-tone="warn">{t(`${metrics.conflicts.length} duties conflict with availability`, `${metrics.conflicts.length} כוננויות מתנגשות עם אילוצים`)}</p>}
   </>;
   const openSchedule = (m: string) => {if (m !== month) goToMonth(m); setTab('schedule');};
+  // A notification's exact target (issue #89); when it no longer exists, the closest screen and a short note.
+  function resolve(target: DeepLink & {refreshed?: boolean}) {
+    const raw = remote.snapshot!;
+    const openSwap = !!target.swap && swaps.requests.some(r => r.id === target.swap && ['awaiting_engineer', 'awaiting_admin'].includes(r.status));
+    const mineOn = (day: string) => {
+      const current = raw.months.find(m => m.month === day.slice(0, 7))?.current_publication_id;
+      return raw.assignments.some(a => a.publication_id === current && a.day === day && (a.primary_id === meId || a.secondary_id === meId));
+    };
+    const missing = target.swap ? !openSwap : target.duty ? !mineOn(target.duty) : target.focus === 'approvals' && !(isManager && raw.members.some(m => m.status === 'pending'));
+    // The notification may be newer than this copy of the team (a request made after the app
+    // loaded, a reverse swap of one just approved): reload once before calling it gone. A swap's
+    // two dates always reload first: an app left in the background still shows the old owners.
+    if ((missing || (target.or && !openSwap)) && !target.refreshed) {void remote.refresh().catch(() => {}).finally(() => setTarget({...target, refreshed: true})); return;}
+    const note = (en: string, he: string) => toast.info(t(en, he), {id: 'deep-link'});
+    const reveal = (selector: string) => setTimeout(() => document.querySelector(selector)?.scrollIntoView({block: 'center'}), 60);
+    const showDay = (first?: string) => {
+      setTab('schedule');
+      // Of a swap's two dates, the one that is the member's duty now: each person their own day.
+      const day = [first, target.or].find(d => d && mineOn(d)) ?? first;
+      if (!day) return;
+      if (day.slice(0, 7) !== month) goToMonth(day.slice(0, 7));
+      setSelectedDay(day); setFlashDays([day]);
+      reveal(`button[data-date="${day}"]`);
+    };
+    if (target.swap) {
+      if (openSwap) {setTab('home'); reveal(`[data-swap-card="${CSS.escape(target.swap)}"]`);}
+      else {showDay(target.day); note('This swap request was already handled.', 'בקשת ההחלפה הזו כבר טופלה.');}
+    } else if (target.duty) {
+      showDay(target.duty);
+      if (missing) note('This duty has changed. Here is the current schedule.', 'הכוננות הזו השתנתה. זה הלוח העדכני.');
+    } else if (target.day) showDay(target.day);
+    else if (target.or) showDay(target.or);
+    else if (target.focus === 'approvals') {
+      setTab('team');
+      if (!missing) reveal('.join-requests');
+      else note('No one is waiting for approval now.', 'אין כרגע מי שממתין לאישור.');
+    }
+  }
+  useEffect(() => {
+    if (!target) return;
+    // After this render commits, so the target screen exists to scroll to.
+    const timer = setTimeout(() => {setTarget(null); resolve(target);}, 0);
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- runs once per link
+  }, [target]);
   return <>
     <AppToaster/>
     <AppShell lang={lang} t={t} tab={tab} onRefresh={() => remote.refresh()} setTab={next => {setTab(next); if (next !== 'schedule') {setPickingFrom(null); setSheetDuty(null);}}} disabled={!!remote.saving}
@@ -317,7 +426,7 @@ export function RotaWorkspace({remote, lang, setLang}: {remote: TeamWorkspace; l
       status={remote.saving ? <span className="side-status" role="status">{t('Saving…', 'שומר…')}</span> : undefined}>
       <InspectionWarning environment={remote.environment} lang={lang}/>
       {remote?.error && <div className="note-card" role="alert" data-tone="danger">
-        <span>{userMessage(remote.error, t)}</span>
+        <span className="message-lines">{explainedMessage(remote.error, t, conflictContext(remote, state, t))}</span>
         <Button variant="ghost" size="sm" onClick={() => remote.refresh().then(() => remote.clearError()).catch((e) => toast.error(userMessage(e.message, t)))}><RefreshCw/>{t('Refresh', 'רענון')}</Button>
       </div>}
       <fieldset disabled={!!remote?.saving} className="workspace-controls">
@@ -365,7 +474,7 @@ export function RotaWorkspace({remote, lang, setLang}: {remote: TeamWorkspace; l
     {isManager && allocation.open && <AllocationDialog flow={allocation} state={state} month={month} monthLabel={monthLabel} lang={lang} t={t}
       onShowSplits={fridays => {allocation.close(); setTab('schedule'); if (mobile) setSelectedDay(fridays[0]); setFlashDays(fridays.flatMap(f => [f, addDays(f, 1)]));}}/>}
     {isManager && <PublicationHistory key={`history-${month}`} remote={remote} month={month} open={historyOpen} onOpenChange={setHistoryOpen} lang={lang}/>}
-    {selected && <DutyEditor key={selected.id} state={state} duty={selected} month={month} lang={lang} onClose={() => setSelected(null)} saving={remote.saving}
+    {selected && <DutyEditor key={selected.id} state={state} duty={selected} month={month} lang={lang} me={remote.memberId} onClose={() => setSelected(null)} saving={remote.saving}
       onMonth={(m) => {goToMonth(m); setSelected(null);}} onSave={draft.editor.save} onRemoveSpecial={draft.editor.removeSpecial}/>}
     {/* A weekend that hasn't started opens the "One weekend | Two days" editor (decision 2026-11-07). */}
     {publishedEditRow && (publishedEditWeekend
@@ -373,7 +482,7 @@ export function RotaWorkspace({remote, lang, setLang}: {remote: TeamWorkspace; l
         onSwap={interactions.swapSourceDays.has(publishedEditRow.day) ? () => {setPublishedEdit(null); interactions.setKeyboardSource(publishedEditRow.day);} : undefined}/>
       : <PublishedDutyEditor key={publishedEditRow.day} remote={remote} row={publishedEditRow} lang={lang} onClose={() => setPublishedEdit(null)}
         onSwap={interactions.swapSourceDays.has(publishedEditRow.day) ? () => {setPublishedEdit(null); interactions.setKeyboardSource(publishedEditRow.day);} : undefined}/>)}
-    <DraftSwapDialog controller={draft.swap} state={state} duties={duties} lang={lang} t={t} fmt={fmt} nickname={nickname} personName={personName}/>
+    <DraftSwapDialog controller={draft.swap} state={state} duties={duties} lang={lang} t={t} fmt={fmt} nickname={nickname} personName={personName} me={remote.memberId}/>
     <CancelDraftDialog open={cancelDraftMonth !== null} onOpenChange={open => {if (!open) setCancelDraftMonth(null);}} saving={remote.saving} lang={lang} t={t} monthLabel={monthLabel} onConfirm={async () => {
       if (!cancelDraftMonth) return;
       try {
@@ -387,7 +496,8 @@ export function RotaWorkspace({remote, lang, setLang}: {remote: TeamWorkspace; l
     <SpecialDutyDialog form={draft.special} month={month} lang={lang} t={t} fmt={fmt}/>
     <MonthSettingsDialog settings={settings} setSettings={setSettings} monthLabel={monthLabel} monthDetails={monthDetails} lang={lang} t={t}
       onDeadline={(deadline) => {update((s) => ({...s, months: {...s.months, [month]: {...monthDetails, deadline}}}), false);}}/>
-    <PublishDialog publishOpen={publishOpen} setPublishOpen={setPublishOpen} monthLabel={monthLabel} assigned={metrics.assigned} saving={!!remote?.saving} lang={lang} t={t} onPublish={publish}/>
+    <PublishDialog publishOpen={publishOpen} setPublishOpen={setPublishOpen} monthLabel={monthLabel} assigned={metrics.assigned} saving={!!remote?.saving} lang={lang} t={t} onPublish={publish}
+      conflicts={publishConflicts ?? metrics.unavailableDays} line={c => conflictLine(c, conflictContext(remote, state, t))}/>
   </>;
 }
 

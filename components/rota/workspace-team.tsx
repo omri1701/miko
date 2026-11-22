@@ -75,7 +75,7 @@ export function WorkspaceTeam({remote, state, metrics, month, monthLabel, onMont
         />
       </Card>
       {isManager && <>
-        <SectionTitle>{t('Join requests', 'בקשות הצטרפות')}</SectionTitle>
+        <SectionTitle className="join-requests">{t('Join requests', 'בקשות הצטרפות')}</SectionTitle>
         <Card inset>
           {pending.length ? pending.map((m) => <ListRow key={m.id} className={temporaryMembers.length > 0 ? 'membership-request can-link' : 'membership-request'} title={m.name} subtitle={m.email}
             trail={!remote.viewer && <span className="row-buttons">

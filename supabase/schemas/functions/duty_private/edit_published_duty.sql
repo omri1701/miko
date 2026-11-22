@@ -103,6 +103,12 @@ begin
   'intents',case when intent is null then '[]'::jsonb when jsonb_typeof(intent)='array' then intent else jsonb_build_array(intent) end,
   'reason','Published duty edit '||d.day||' ('||p_kind||')'||case when conflicts then '. Availability override: '||reason else '' end));
  update public.duty_months set current_publication_id=publication where month=m.month;
+ -- A reason is the availability approval (owner 2026-11-21): the new engineer's unavailable dates
+ -- on this duty are approved for them, so a reopened draft never asks again. The old one's lapse.
+ if changed and conflicts then
+  update public.duty_constraints c set duty_approved=true where c.kind='no' and c.member_id=p_primary and c.day>=d.day and c.day<d.end_day;
+ end if;
+ perform duty_private.prune_duty_approvals();
  -- New points, or a weekend joined again, change the month's calendar; the copied plan follows it.
  if p_extra_points<>d.extra_points or saturday<>d.saturday_extra_points or fri.id is not null then
   update public.duty_allocations set calendar_fingerprint=md5((select jsonb_agg(x-array['primary','secondary'] order by x->>'id')::text

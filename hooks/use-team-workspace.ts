@@ -3,7 +3,7 @@ import {useEffect,useMemo,useRef,useState} from 'react';
 import type {User} from '@supabase/supabase-js';
 import {getSupabase,getEnvironment,signInWithGoogle,signInLocally,completeInspectionLogin} from '@/lib/supabase/client';
 import type {Environment} from '@/lib/supabase/environment';
-import {fromSnapshot,schedulePayload,canManage,isViewer,findMe,readSnapshot,type Snapshot} from '@/lib/supabase/snapshot';
+import {fromSnapshot,schedulePayload,canManage,isViewer,findMe,readSnapshot,type Snapshot,type DayConflict} from '@/lib/supabase/snapshot';
 import {observeSession} from '@/lib/supabase/session';
 import {createWorkspace} from '@/lib/supabase/workspace';
 import {errorMessage,type DutyClient} from '@/lib/supabase/rpc';
@@ -134,7 +134,7 @@ export function useTeamWorkspace(){
   async signInLocal(email:string,password:string){try{setError('');await signInLocally(email,password)}catch(e){setError(errorMessage(e,'Could not sign in. Please try again.'))}},
   async completeInspection(returnUrl:string){try{setError('');await completeInspectionLogin(returnUrl)}catch{setError('Could not complete inspection login. Start Google sign-in again.')}},
   async signOut(){forgetCalendarLinks();if(client){try{const {error}=await signOutSafely(client);if(error)setError(error.message)}catch(e){setError(errorMessage(e,'Could not sign out. Please try again.'))}}},
-  save:(s:State,publish?:string,month?:string,reviewedLocks?:string[])=>workspace.mutate('duty_save_schedule',{p_state:schedulePayload(s,month??publish,!!publish,reviewedLocks),p_publish:publish??null}).then(()=>{}),
+  save:(s:State,publish?:string,month?:string,reviewedLocks?:string[],publishAnyway?:DayConflict[])=>workspace.mutate('duty_save_schedule',{p_state:schedulePayload(s,month??publish,!!publish,reviewedLocks,publishAnyway),p_publish:publish??null}).then(()=>{}),
   constraints:(person:string,days:string[],kind:string,note:string)=>workspace.mutate('duty_set_constraints',{p_member:person,p_days:days,p_kind:kind,p_note:note}).then(()=>{}),
   rename:(name:string)=>workspace.mutate('duty_rename_self',{p_name:name}).then(()=>{}),
   setColor:(color:string)=>workspace.mutate('duty_set_color',{p_color:color}).then(()=>{}),

@@ -83,3 +83,22 @@ export async function forgetDevice(remove: (endpoint: string) => Promise<void>, 
   } catch {}
   finally {await subscription.unsubscribe().catch(() => false);}
 }
+
+// The link a tapped notification left for an open window (public/sw.js, issue #89): a phone
+// app resumed from the background can miss the worker's message, so it reads this instead.
+const LINKS = 'duty-links-v1', PENDING = '/__duty-pending-link', FRESH_MS = 2 * 60_000;
+/** Takes the pending link (read once, then removed); null when there is none or it is stale. */
+export async function takePendingLink(): Promise<string | null> {
+  if (typeof caches === 'undefined') return null;
+  try {
+    const cache = await caches.open(LINKS), response = await cache.match(PENDING);
+    if (!response) return null;
+    await cache.delete(PENDING);
+    const {url, at} = await response.json() as {url?: unknown; at?: unknown};
+    return typeof url === 'string' && typeof at === 'number' && Math.abs(Date.now() - at) < FRESH_MS ? url : null;
+  } catch {return null;}
+}
+/** Drops the pending link once the message itself arrived. */
+export function clearPendingLink() {
+  if (typeof caches !== 'undefined') void caches.open(LINKS).then(cache => cache.delete(PENDING)).catch(() => {});
+}

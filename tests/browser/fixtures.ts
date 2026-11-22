@@ -46,6 +46,8 @@ export class Backend {
   runtimeOrigin?: string;
   raw = seed();
   calls: Call[] = [];
+  expectedRefusal?: RegExp;
+  refusals: string[] = [];
   authGate?: Promise<void>;
   configGate?: Promise<void>;
   loadGate?: Promise<void>;
@@ -54,6 +56,12 @@ export class Backend {
   authFailure = false;
   invalidated = false;
   failNextSave = false;
+  /** validate_swap's blocking conflicts: emergency cover's unavailability (a primary's own never blocks, #92). */
+  coverConflict(from: DutyRow, to: DutyRow) {
+    const inside = (d: DutyRow, day: string) => day >= d.day && day < d.end_day;
+    return this.raw.constraints.some(c => c.kind === 'no' &&
+      ((c.member_id === from.secondary_id && inside(from, c.day)) || (c.member_id === to.secondary_id && inside(to, c.day))));
+  }
   /** Display-only projection served by duty_balance; null serves zero for everyone. */
   balance: Balance | null = null;
   /** Versions a re-plan reversed, served by duty_replanned_versions. */
@@ -240,7 +248,21 @@ export class Backend {
     } else if (name === 'duty_save_schedule') {
       expect(admin).toBe(true);
       if (this.failNextSave) {this.failNextSave = false; throw Error('Synthetic stale revision. Refresh and try again.');}
-      const state = p.p_state as {team:{id:string;color:string;active:boolean}[];duties: Omit<DutyRow, 'id' | 'publication_id' | 'points'>[]; months: Record<string, {deadline: string; status: 'draft' | 'published'; generated: boolean}>};
+      const state = p.p_state as {team:{id:string;color:string;active:boolean}[];duties: Omit<DutyRow, 'id' | 'publication_id' | 'points'>[]; months: Record<string, {deadline: string; status: 'draft' | 'published'; generated: boolean}>;
+        approve_unavailable?: {member: string; day: string}[]; publish_anyway?: {member: string; day: string}[]};
+      // Like save_schedule (owner 2026-11-21): an approval holds for someone on that date in this
+      // draft; Publish refuses unapproved conflicts as [{day,member}] unless publish_anyway lists them all.
+      const on = (member: string, day: string) => state.duties.find(d => d.day <= day && day < d.end_day && (d.primary_id === member || d.secondary_id === member));
+      const listed = (list: {member: string; day: string}[] | undefined, c: {member_id: string; day: string}) => !!list?.some(a => a.member === c.member_id && a.day === c.day);
+      const approving = this.raw.constraints.filter(c => c.kind === 'no' && on(c.member_id, c.day) && (c.duty_approved || listed(state.approve_unavailable, c)));
+      if (p.p_publish) {
+        const ownerOf = (day: string) => (dayOf(day) === 6 ? addDays(day, -1) : day).slice(0, 7);
+        const conflicts = this.raw.constraints.filter(c => c.kind === 'no' && !approving.includes(c) && on(c.member_id, c.day) && ownerOf(on(c.member_id, c.day)!.day) === p.p_publish)
+          .sort((a, b) => a.day.localeCompare(b.day) || a.member_id.localeCompare(b.member_id));
+        if (conflicts.some(c => !listed(state.publish_anyway, c))) throw Error(`Availability conflict: ${JSON.stringify(conflicts.map(c => ({day: c.day, member: c.member_id})))}`);
+        approving.push(...conflicts);
+      }
+      for (const c of approving) c.duty_approved = true;
       state.team.forEach((member, seniority) => Object.assign(this.raw.members.find(m => m.id === member.id)!, member, {seniority}));
       this.raw.members.sort((a,b) => a.seniority - b.seniority);
       const draftIds = new Map(this.raw.assignments.filter(d => d.publication_id === null).map(d => [d.day, d.id]));
@@ -319,6 +341,8 @@ export class Backend {
       // Admins may propose for others; an admin party becomes the requester.
       if (from.primary_id !== user) {expect(admin).toBe(true); if (to.primary_id === user) [from, to] = [to, from];}
       expect(to.primary_id).not.toBe(from.primary_id);
+      // Mirrors request_swap (#92): emergency cover's unavailability refuses; a primary's own never does.
+      if (this.coverConflict(from, to)) throw Error('Availability conflict. An admin must explicitly override with a reason.');
       this.raw.swapRequests!.unshift({id: `request-${this.raw.revision}`, month: MONTH, source_publication_id: from.publication_id, requester_id: from.primary_id!, other_id: to.primary_id!, from_day: from.day, from_end_day: from.end_day, to_day: to.day, to_end_day: to.end_day, explanation: p.p_explanation as string, status: 'awaiting_engineer', accepted_by: null, accepted_at: null, created_at: NOW, resolved_at: null, resolved_by: null, result_publication_id: null, override_reason: '', proposed_by: from.primary_id === user ? null : user, requester_accepted_at: null});
     } else if (name === 'duty_delete_publication') {
       expect(admin).toBe(true);
@@ -352,6 +376,8 @@ export class Backend {
         const current = this.raw.months[0].current_publication_id;
         const rows = this.raw.assignments.filter(d => d.publication_id === current).map(d => ({...d}));
         const from = rows.find(d => d.day === r.from_day)!, to = rows.find(d => d.day === r.to_day)!;
+        // Mirrors resolve_swap: approving is the availability override, never a typed reason (owner 2026-11-21).
+        expect(p.p_override_reason).toBe('');
         [from.primary_id, to.primary_id] = [to.primary_id, from.primary_id];
         r.result_publication_id = this.publish(MONTH, rows);
       }
@@ -490,6 +516,8 @@ export const test = base.extend<Fixtures>({
             try {return await route.fulfill({json: backend.rpc(url.pathname.split('/').at(-1)!, route.request().postDataJSON() ?? {}, user.id)});}
             catch (error) {
               const message = (error as Error).message;
+              // A refusal the test expects (a checked rule, not a bug) is a plain P0001 like PostgreSQL's.
+              if (backend.expectedRefusal?.test(message)) {backend.refusals.push(message); return route.fulfill({status: 400, json: {message, code: 'P0001'}});}
               if (!message.startsWith('Synthetic stale')) errors.push(message);
               return route.fulfill({status: 409, json: {message, code: 'PT409'}});
             }
@@ -517,7 +545,7 @@ export {expect};
 export const duty = (page: Page, day: string) => page.locator(`button[data-date="${day}"]`).filter({has: page.locator('.date-line')});
 /** A published swap target is neither green nor greyed until its availability is known. */
 export async function targetReady(page: Page, day: string) {
-  await expect(duty(page, day)).toHaveAttribute('data-swap-state', /^(ok|blocked)$/);
+  await expect(duty(page, day)).toHaveAttribute('data-swap-state', /^(ok|blocked|constrained)$/);
 }
 /** Opens the duty sheet for a day on the Schedule tab: Enter opens it on PC; phones show the day's details first. */
 export async function openDutySheet(page: Page, day: string) {

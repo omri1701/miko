@@ -7,7 +7,7 @@ export type Special = { id: string; title: string; start: string; end: string; e
 export type Duty = { id: string; start: string; end: string; points: number; kind: 'day'|'weekend'|'special'; title?: string; weekendId?: string; specialId?: string; /** Dates of this duty covered by a special range (a combined weekend may have one or both). */ specialDates?: string[] };
 export type Assignment = { primary: string; secondary?: string; locked?: boolean; override?: boolean };
 export type Constraints = Record<string, Record<string, 'no'|'prefer'>>;
-export type State = { team: Engineer[]; splitWeekends?: string[]; specials: Special[]; constraints: Constraints; constraintNotes?: Record<string, Record<string,string>>; assignments: Record<string, Assignment>; months: Record<string, { deadline: string; status: 'draft'|'published'; generated?: boolean }>; version: number };
+export type State = { team: Engineer[]; splitWeekends?: string[]; specials: Special[]; constraints: Constraints; constraintNotes?: Record<string, Record<string,string>>; dutyApproved?: Record<string, Record<string,true>>; assignments: Record<string, Assignment>; months: Record<string, { deadline: string; status: 'draft'|'published'; generated?: boolean }>; version: number };
 export const overlap=(a:{start:string;end:string},b:{start:string;end:string})=>a.start<b.end&&b.start<a.end;
 export const ownerMonth=(b:Duty)=>(b.weekendId??b.start).slice(0,7);
 export const specialAt=(specials:Special[],date:string)=>specials.find(s=>s.start<=date&&date<s.end);
@@ -108,6 +108,15 @@ export function migrate(s:State):State{
  return {...s,version:3,team:s.team.map((p,i)=>({...p,color:COLORS[i%COLORS.length]})),assignments,months:Object.fromEntries(Object.entries(s.months).map(([m,v])=>[m,{...v,status:'draft'}]))};
 }
 export const unavailable=(b:Duty,id:string,c:Constraints)=>dates(b.start,b.end).filter(d=>c[id]?.[d]==='no');
+/** Unavailable dates an admin has not approved for that person (owner 2026-11-21): one approval,
+ * from the duty editor, a swap, a published edit or Publish anyway, is never asked again. */
+export const unapproved=(b:Duty,id:string,s:Pick<State,'constraints'|'dutyApproved'>)=>unavailable(b,id,s.constraints).filter(d=>!s.dutyApproved?.[id]?.[d]);
+export function approveDates(s:State,pairs:{member:string;day:string}[]):State{
+ if(!pairs.length)return s;
+ const approved={...s.dutyApproved};
+ for(const {member,day} of pairs)approved[member]={...approved[member],[day]:true};
+ return {...s,dutyApproved:approved};
+}
 export const preferred=(b:Duty,id:string,c:Constraints)=>dates(b.start,b.end).some(d=>c[id]?.[d]==='prefer');
 export function allKnownBlocks(s:State):Duty[]{const map=new Map<string,Duty>();for(const m of Object.keys(s.months))for(const b of blocks(m,s.specials,s.splitWeekends))map.set(b.id,b);return [...map.values()].sort((a,b)=>a.start.localeCompare(b.start));}
 export function totals(s:State,bs:Duty[]){return Object.fromEntries(s.team.map(p=>[p.id,bs.reduce((v,b)=>v+(s.assignments[b.id]?.primary===p.id?b.points:0),0)]));}
@@ -201,7 +210,7 @@ export function swapDraft(s:State,month:string,from:string,to:string,allowOverri
  if(y.primary===x.secondary||x.primary===y.secondary)return{ok:false,reason:'duplicate'};
  if([x.primary,y.primary,x.secondary,y.secondary].filter(Boolean).some(id=>!s.team.some(p=>p.id===id&&takesDuties(p))))return{ok:false,reason:'inactive'};
  const changed=[{duty:a,assignment:{...x,primary:y.primary}},{duty:b,assignment:{...y,primary:x.primary}}];
- const conflicts=changed.flatMap(({duty,assignment})=>[assignment.primary,assignment.secondary].filter((id):id is string=>!!id).flatMap(id=>unavailable(duty,id,s.constraints).map(date=>({person:id,date}))));
+ const conflicts=changed.flatMap(({duty,assignment})=>[assignment.primary,assignment.secondary].filter((id):id is string=>!!id).flatMap(id=>unapproved(duty,id,s).map(date=>({person:id,date}))));
  const assignments={...s.assignments};for(const {duty,assignment} of changed)assignments[duty.id]=assignment;
  const counts=weekendCounts({...s,assignments},month),before=weekendCounts(s,month);
  const weekendConflicts=Object.keys(counts).filter(id=>counts[id]>1&&counts[id]>before[id]).map(person=>({person,count:counts[person],month}));

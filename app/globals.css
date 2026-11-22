@@ -249,6 +249,8 @@ textarea{resize:vertical;min-height:76px}
 .bell-when{font-size:12px;color:var(--ink-3);white-space:nowrap}
 [data-sonner-toaster]{--mobile-offset-bottom:calc(88px + var(--sab))!important;font-family:var(--font)!important}
 [data-sonner-toast]{border-radius:14px!important;font-size:14px!important}
+/* #103: an availability refusal names each conflict on its own line. */
+[data-sonner-toast] [data-title],.message-lines{white-space:pre-line}
 [data-slot=select-content]{z-index:70;border-radius:14px;box-shadow:var(--shadow-pop),0 0 0 1px var(--line);border:0}
 [data-slot=select-item]{min-height:40px;border-radius:9px;font-size:15px;color:var(--ink);transition:background 120ms var(--ease)}
 [data-slot=select-item][data-highlighted],[data-slot=select-item]:focus{background:var(--hover)!important;color:var(--ink)!important}
@@ -466,6 +468,9 @@ textarea{resize:vertical;min-height:76px}
 @media(prefers-reduced-motion:no-preference){.calendar-grid .drag-target.checking{animation:checking-pulse 900ms ease-in-out infinite}@keyframes checking-pulse{50%{opacity:.72}}}
 .calendar-grid .swap-blocked{background:var(--surface-2)!important;cursor:not-allowed}
 .calendar-grid .swap-blocked .assignment-chip{filter:grayscale(1);opacity:.4}
+/* #92: a primary marked this date unavailable. Red, yet still pickable (their consent waives it). */
+.calendar-grid .swap-constrained{background:var(--danger-soft)!important}
+.calendar-grid .drag-target.swap-constrained{box-shadow:inset 0 0 0 3px var(--danger)}
 .calendar-grid.picking .day-cell:not(.drag-target):not(.drag-source):not(.swap-blocked) .assignment-chip{opacity:.9}
 .mobile-drag-layer{position:fixed;inset:0;z-index:45;pointer-events:none!important;display:block!important;border:0!important;margin:0!important;padding:0!important}
 .mobile-drag-layer *{pointer-events:none!important}
@@ -732,20 +737,22 @@ textarea{resize:vertical;min-height:76px}
 /* ---------- swap requests, history, published edit ---------- */
 .swap-cards{display:flex;flex-direction:column;gap:10px}
 .swap-card{background:var(--surface);border-radius:var(--radius-l);box-shadow:var(--shadow-card);padding:14px 16px;display:flex;flex-direction:column;gap:12px}
-.swap-card-head{display:flex;align-items:flex-start;gap:12px}
+.swap-card-head{display:flex;align-items:center;gap:12px}
+.swap-card-title{flex:1;min-width:0;font-size:15px;font-weight:600}
 .swap-card-icon{display:inline-grid;place-items:center;width:34px;height:34px;border-radius:10px;background:var(--surface-3);color:var(--ink-2);flex-shrink:0}
 .swap-card-icon svg{width:18px;height:18px}
 .swap-card-icon[data-tone=info]{background:var(--info-soft);color:var(--info)}.swap-card-icon[data-tone=warn]{background:var(--warn-soft);color:var(--warn)}
-.swap-card-text{flex:1;min-width:0;display:flex;flex-direction:column;gap:4px;font-size:14px}
-.swap-card-text strong{font-size:15px;font-weight:600}
+.swap-card-text{min-width:0;display:flex;flex-direction:column;gap:4px;font-size:14px;margin-top:-4px}
 .swap-card-text small{font-size:12px;color:var(--ink-3)}
 .swap-card-pair{display:flex;flex-wrap:wrap;align-items:center;gap:6px;color:var(--ink-2);font-size:13px}
 .swap-party{display:inline-flex;align-items:center;gap:6px;white-space:nowrap}
 .swap-arrow{color:var(--ink-4);padding:0 2px}
 .swap-refused{color:var(--warn)!important}
-.swap-status{flex-shrink:0;align-self:flex-start}
+.swap-unavailable{color:var(--danger)!important}
+.swap-status{flex-shrink:0}
 .swap-card-actions{display:flex;flex-wrap:wrap;gap:8px}
-.swap-conflicts{margin:6px 0;padding-inline-start:18px;list-style:disc}
+.swap-conflicts{margin:4px 0 0;padding:0;list-style:none}
+.swap-conflicts li+li{margin-top:2px}
 
 .swap-review{display:grid;gap:10px}
 .swap-conflicts ul{margin:6px 0;padding-inline-start:20px;list-style:disc}

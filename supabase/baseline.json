@@ -32,6 +32,7 @@
     "schemas/functions/duty_private/set_color.sql",
     "schemas/functions/duty_private/request_swap.sql",
     "schemas/functions/duty_private/join_weekend_halves.sql",
+    "schemas/functions/duty_private/prune_duty_approvals.sql",
     "schemas/functions/duty_private/resolve_swap.sql",
     "schemas/functions/duty_private/restore_publication.sql",
     "schemas/functions/duty_private/review_member.sql",

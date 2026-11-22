@@ -1,4 +1,26 @@
+import {constraintLine, visibleNote} from './supabase/swaps.ts';
 type Translate = (en: string, he: string) => string;
+
+/** Who and when behind an availability refusal (#103): the database adds every conflict as
+ * [{member,day}] (never a note) after "unavailable-primary:" or "Availability conflict:". */
+export function availabilityConflicts(raw: string): {member: string; day: string}[] | null {
+  const found = /(?:unavailable-primary|Availability conflict): (\[[\s\S]*\])\s*$/.exec(raw);
+  if (!found) return null;
+  try {
+    const list: unknown = JSON.parse(found[1]);
+    return Array.isArray(list) && list.length && list.every(c => typeof c?.member === 'string' && typeof c?.day === 'string')
+      ? list.map(c => ({member: c.member as string, day: c.day as string})) : null;
+  } catch {return null;}
+}
+/** userMessage, with one line per conflict first for an availability refusal: "Avi marked 22 Dec
+ * as unavailable · doctor". The note shows only to its owner and admins. */
+export function explainedMessage(raw: string, t: Translate, context?: {me: string; admin: boolean; name: (id: string) => string;
+  note: (member: string, day: string) => string | undefined; day: (d: string) => string}): string {
+  const conflicts = context && availabilityConflicts(raw), lang = t('en', 'he') as 'en' | 'he';
+  if (!conflicts || !context) return userMessage(raw, t);
+  return [...conflicts.map(c => constraintLine({member: c.member, day: c.day, note: visibleNote(context.note(c.member, c.day), c.member, context)},
+    {me: context.me, name: context.name, day: context.day, lang})), userMessage(raw, t)].join('\n');
+}
 
 /** What every error or refusal says to the user, in English and Hebrew (decision
  * 2026-11-01): codes from the client libraries and the checked RPCs, and the RPCs'

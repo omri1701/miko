@@ -39,6 +39,8 @@ begin
  update public.duty_allocations set generation=jsonb_build_object('seed',p_seed,'sourceRevision',p_revision,'fingerprint',p_fingerprint,
   'savedAtMs',ctx->'actualAtMs','metrics',checked) where month=p_month and publication_id is null;
  update public.duty_months set generated=true where month=p_month;
+ -- Whoever this left off a date loses its availability approval (#103).
+ perform duty_private.prune_duty_approvals();
  update public.duty_workspace set revision=revision+1 where id;
  return duty_private.generation_context(p_month,(select revision from public.duty_workspace where id));
 end $$;

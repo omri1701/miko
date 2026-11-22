@@ -57,9 +57,10 @@ begin
   select current_publication_id into current_publication from public.duty_months where month=r.month;
   select * into a from public.duty_assignments where publication_id=current_publication and day=r.from_day and end_day=r.from_end_day;
   select * into b from public.duty_assignments where publication_id=current_publication and day=r.to_day and end_day=r.to_end_day;
-  -- Consent may precede an audited availability override, but never bypasses
-  -- active membership, emergency duplication, overlap, weekends or future dates.
-  perform duty_private.validate_swap(a.id,b.id,current_publication,p_action='accept' or length(reason)>0);
+  -- Availability never refuses a consented swap (#92, owner 2026-11-21): the admin's approval
+  -- is the override, no reason needed; the published duty is marked manager_override. Never
+  -- bypasses active membership, emergency duplication, overlap, weekends or future dates.
+  perform duty_private.validate_swap(a.id,b.id,current_publication,true);
  end if;
  if p_action='approve' then
   update public.duty_months set publication_sequence=publication_sequence+1 where month=r.month returning publication_sequence into next_version;
@@ -86,6 +87,10 @@ begin
   -- Both halves of a weekend on one person are one weekend again (decision 2026-11-07).
   joined:=duty_private.join_weekend_halves(publication,a.day);
   joined:=duty_private.join_weekend_halves(publication,b.day) or joined;
+  -- The admin's approval is the availability approval (owner 2026-11-21): each new holder's
+  -- unavailable dates on the swapped duties are approved for them. No lock; never asked again.
+  update public.duty_constraints c set duty_approved=true from (values(a.day,a.end_day,r.other_id),(b.day,b.end_day,r.requester_id)) x(day,end_day,who)
+  where c.kind='no' and c.member_id=x.who and c.day>=x.day and c.day<x.end_day;
  end if;
  next_status:=case p_action when 'accept' then case when (side='other' and (r.proposed_by is null or r.requester_accepted_at is not null))
    or (side='requester' and r.accepted_by is not null) then 'awaiting_admin' else 'awaiting_engineer' end
@@ -100,6 +105,8 @@ begin
   result_publication_id=publication,override_reason=case when p_action='approve' then reason else '' end where id=r.id;
  if publication is not null then
   update public.duty_months set current_publication_id=publication where month=r.month;
+  -- The two former holders' approvals on the swapped dates lapse (they are no longer on them).
+  perform duty_private.prune_duty_approvals();
   -- A joined weekend changed the month's calendar; the copied plan follows it.
   if joined then
    update public.duty_allocations set calendar_fingerprint=md5((select jsonb_agg(d-array['primary','secondary'] order by d->>'id')::text
