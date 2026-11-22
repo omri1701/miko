@@ -27,7 +27,7 @@ test('admin edits a published duty: Temporary by default, copyable summary, new 
   await dialog.getByLabel('Extra points').fill('0.5');
   await dialog.getByRole('button', {name: 'Review change'}).click();
   const review = page.getByRole('dialog', {name: 'Review and copy'});
-  const summary = 'Duty change (published schedule)\nDate: Tue 11/03/2026\nEngineer: Blair Birch → Casey Cedar\nPoints: 1 point → 1.5 points\nExtra: none → 0.5 points\nType: Temporary\nBalance: Blair Birch owes Casey Cedar 1 point';
+  const summary = 'Duty change (published schedule)\nDate: Tue 03/11/2026\nEngineer: Blair Birch → Casey Cedar\nPoints: 1 point → 1.5 points\nExtra: none → 0.5 points\nType: Temporary\nBalance: Blair Birch owes Casey Cedar 1 point';
   await expect(review.getByLabel('Summary')).toHaveValue(summary);
   await review.getByRole('button', {name: 'Copy summary'}).click();
   await expect(page.getByText('Summary copied.')).toBeVisible();
@@ -91,7 +91,7 @@ test('a combined weekend edits each date’s points in the weekend editor; engin
   await dialog.getByLabel('Saturday points').fill('1.5');
   await expect(dialog.getByRole('group', {name: 'Compensation'})).toHaveCount(0);
   await dialog.getByRole('button', {name: 'Review change'}).click();
-  await expect(page.getByLabel('Summary')).toHaveValue(/Date: Fri 11\/06\/2026 – Sat 11\/07\/2026\nWeekend: One weekend\nFri 11\/06\/2026: .* \(unchanged\) · 0.5 points\nSat 11\/07\/2026: .* \(unchanged\) · 0.5 points → 1.5 points\nBalance: No debt; the points count for whoever does each day$/);
+  await expect(page.getByLabel('Summary')).toHaveValue(/Date: Fri 06\/11\/2026 – Sat 07\/11\/2026\nWeekend: One weekend\nFri 06\/11\/2026: .* \(unchanged\) · 0.5 points\nSat 07\/11\/2026: .* \(unchanged\) · 0.5 points → 1.5 points\nBalance: No debt; the points count for whoever does each day$/);
   await page.getByRole('button', {name: 'Publish change'}).click();
   await expect(page.getByRole('dialog')).toBeHidden();
   expect(backend.calls.filter(c => c.name === 'duty_edit_published_weekend')[0].params).toMatchObject({p_friday: '2026-11-06', p_friday_extra: 0, p_saturday_extra: 1});

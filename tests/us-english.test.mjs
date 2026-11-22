@@ -39,3 +39,11 @@ test('rule 2: English dates are formatted en-US, never en-GB', () => {
     .map(({file, n, line}) => `${file}:${n}: ${line.trim().slice(0, 100)}`);
   assert.deepEqual(hits, []);
 });
+
+// Owner 2026-11-22: an English date with a year is numeric and day first ("03/11/2026", numericDate),
+// never "Nov 3, 2026"; month titles ("November 2026") have no day and stay.
+test('rule 3: English dates with a day and a year are not formatted with Intl', () => {
+  const hits = lines().filter(({line}) => line.includes('en-US') && /\bday:/.test(line) && /\byear:/.test(line))
+    .map(({file, n, line}) => `${file}:${n}: ${line.trim().slice(0, 100)}`);
+  assert.deepEqual(hits, []);
+});

@@ -10,6 +10,7 @@ import {getSupabase} from '@/lib/supabase/client';
 import {calendarStatus, rememberLink, rememberedLink, resetCalendar, setCalendarLanguage, type CalendarStatus} from '@/lib/supabase/calendar';
 import {feedUrl, googleUrl, webcalUrl} from '@/lib/calendar/links';
 import {userMessage} from '@/lib/messages';
+import {jerusalemNumericDate} from '@/lib/date-format';
 
 type Loaded = {status: CalendarStatus; token: string | null};
 export function CalendarSubscription({lang, memberId, readOnly}: {lang: 'en' | 'he'; memberId: string; readOnly: boolean}) {
@@ -56,7 +57,8 @@ export function CalendarSubscription({lang, memberId, readOnly}: {lang: 'en' | '
   }
 
   const url = loaded?.token ? feedUrl(window.location.origin, loaded.token) : '';
-  const since = loaded?.status ? new Intl.DateTimeFormat(lang === 'en' ? 'en-US' : 'he-IL', {day: 'numeric', month: 'short', year: 'numeric', timeZone: 'Asia/Jerusalem'}).format(new Date(loaded.status.createdAt)) : '';
+  const since = !loaded?.status ? '' : lang === 'en' ? jerusalemNumericDate(loaded.status.createdAt)
+    : new Intl.DateTimeFormat('he-IL', {day: 'numeric', month: 'short', year: 'numeric', timeZone: 'Asia/Jerusalem'}).format(new Date(loaded.status.createdAt));
   return <section className="calendar-subscription" aria-labelledby="calendar-subscription-title">
     <h3 id="calendar-subscription-title"><CalendarPlus aria-hidden="true"/>{t('Subscribe to my calendar', 'הרשמה ללוח השנה שלי')}</h3>
     <p className="muted-copy">{t('See your own published duties in Google or Apple Calendar. Swaps, edits and new months appear by themselves.', 'הכוננויות שפורסמו לך יופיעו ביומן Google או Apple. החלפות, עריכות וחודשים חדשים יתעדכנו מעצמם.')}</p>

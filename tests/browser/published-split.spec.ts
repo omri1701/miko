@@ -64,7 +64,7 @@ for (const lang of ['en', 'he'] as const) test(`split a published weekend: two d
   await both(page, `published-weekend-two-${lang}`);
   await dialog.getByRole('button', {name: t('Review change', 'בדיקת השינוי')}).click();
   const summary = page.getByLabel(t('Summary', 'סיכום'));
-  if (lang === 'en') await expect(summary).toHaveValue(`Duty change (published schedule)\nDate: Fri 11/06/2026 – Sat 11/07/2026\nWeekend: One weekend → Two days\nFri 11/06/2026: ${names[owner]} (unchanged) · 0.5 points\nSat 11/07/2026: ${names[owner]} → ${names[taker]} · 0.5 points → 1 point\nType: Temporary\nBalance Sat 11/07/2026: ${names[owner]} owes ${names[taker]} 0.5 points`);
+  if (lang === 'en') await expect(summary).toHaveValue(`Duty change (published schedule)\nDate: Fri 06/11/2026 – Sat 07/11/2026\nWeekend: One weekend → Two days\nFri 06/11/2026: ${names[owner]} (unchanged) · 0.5 points\nSat 07/11/2026: ${names[owner]} → ${names[taker]} · 0.5 points → 1 point\nType: Temporary\nBalance Sat 07/11/2026: ${names[owner]} owes ${names[taker]} 0.5 points`);
   else await expect(summary).toHaveValue(new RegExp(`${names[taker]} במקום ${names[owner]}`));
   await snapshot(page, `published-weekend-review-${lang}`);
   await page.getByRole('button', {name: t('Publish change', 'פרסום השינוי')}).click();
@@ -93,7 +93,7 @@ test('a split half joins back: Keep X / Keep Y, Permanent says no debt, one week
   await dialog.getByRole('button', {name: 'Permanent'}).click();
   await expect(dialog).toContainText('No debt. Each day goes to its new person for good.');
   await dialog.getByRole('button', {name: 'Review change'}).click();
-  await expect(page.getByLabel('Summary')).toHaveValue(/Weekend: Two days → One weekend\nFri 11\/13\/2026: Alex Atlas \(unchanged\) · 0.5 points\nSat 11\/14\/2026: Blair Birch → Alex Atlas · 0.5 points\nType: Permanent\nBalance Sat 11\/14\/2026: No debt$/);
+  await expect(page.getByLabel('Summary')).toHaveValue(/Weekend: Two days → One weekend\nFri 13\/11\/2026: Alex Atlas \(unchanged\) · 0.5 points\nSat 14\/11\/2026: Blair Birch → Alex Atlas · 0.5 points\nType: Permanent\nBalance Sat 14\/11\/2026: No debt$/);
   await page.getByRole('button', {name: 'Publish change'}).click();
   await expect(page.getByRole('dialog')).toBeHidden();
   expect(calls(backend)[0].params).toMatchObject({p_friday: '2026-11-13', p_friday_primary: ids.a, p_saturday_primary: ids.a, p_kind: 'permanent'});

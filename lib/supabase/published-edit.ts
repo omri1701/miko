@@ -64,8 +64,8 @@ export function editConflicts(raw:Snapshot,member:string,row:DutyRow){
  * Never includes availability notes; the override reason is the admin's own text. */
 export function editSummary(row:DutyRow,edit:PublishedEdit,name:(id:string)=>string,lang:'en'|'he',returning=false){
  const he=lang==='he',t=(en:string,hebrew:string)=>he?hebrew:en;
- // Fixed date text (English month/day/year, #113; Hebrew day/month/year), independent of the browser's date formatting.
- const date=(day:string)=>`${(he?['יום א׳','יום ב׳','יום ג׳','יום ד׳','יום ה׳','יום ו׳','שבת']:['Sun','Mon','Tue','Wed','Thu','Fri','Sat'])[dayOf(day)]} ${he?`${day.slice(8)}/${day.slice(5,7)}`:`${day.slice(5,7)}/${day.slice(8)}`}/${day.slice(0,4)}`;
+ // Fixed day/month/year text, independent of the browser's date formatting.
+ const date=(day:string)=>`${(he?['יום א׳','יום ב׳','יום ג׳','יום ד׳','יום ה׳','יום ו׳','שבת']:['Sun','Mon','Tue','Wed','Thu','Fri','Sat'])[dayOf(day)]} ${day.slice(8)}/${day.slice(5,7)}/${day.slice(0,4)}`;
  const last=addDays(row.end_day,-1),changed=edit.primary!==row.primary_id;
  const before=dutyPoints(row,row.extra_points,row.saturday_extra_points??0),after=dutyPoints(row,edit.extra,edit.saturdayExtra);
  const extraBefore=row.extra_points+(row.saturday_extra_points??0),extraAfter=edit.extra+edit.saturdayExtra;
@@ -142,7 +142,7 @@ export function weekendConflicts(raw:Snapshot,w:PublishedWeekend,edit:WeekendEdi
  * Permanent edit gives back to who held them before a Temporary change (H1). */
 export function weekendEditSummary(w:PublishedWeekend,edit:WeekendEdit,name:(id:string)=>string,lang:'en'|'he',returning:ReadonlySet<string>=new Set()){
  const he=lang==='he',t=(en:string,hebrew:string)=>he?hebrew:en;
- const date=(day:string)=>`${(he?['יום א׳','יום ב׳','יום ג׳','יום ד׳','יום ה׳','יום ו׳','שבת']:['Sun','Mon','Tue','Wed','Thu','Fri','Sat'])[dayOf(day)]} ${he?`${day.slice(8)}/${day.slice(5,7)}`:`${day.slice(5,7)}/${day.slice(8)}`}/${day.slice(0,4)}`;
+ const date=(day:string)=>`${(he?['יום א׳','יום ב׳','יום ג׳','יום ד׳','יום ה׳','יום ו׳','שבת']:['Sun','Mon','Tue','Wed','Thu','Fri','Sat'])[dayOf(day)]} ${day.slice(8)}/${day.slice(5,7)}/${day.slice(0,4)}`;
  const points=(n:number)=>he?`${n} ${n===1?'נקודה':'נקודות'}`:`${n} ${n===1?'point':'points'}`;
  const change=(a:string,b:string)=>he?`${b} במקום ${a}`:`${a} → ${b}`;
  const joined=edit.fridayPrimary===edit.saturdayPrimary,layout=(one:boolean)=>one?t('One weekend','סוף שבוע אחד'):t('Two days','שני ימים');

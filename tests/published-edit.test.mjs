@@ -67,9 +67,9 @@ test('availability conflicts name each unavailable date of the duty',()=>{
 test('the summary states dates, engineers, points, kind and who owes whom, in English and Hebrew',()=>{
  const tuesday=row('2026-11-03','2026-11-04');
  assert.equal(editSummary(tuesday,{primary:'b',extra:.5,saturdayExtra:0,kind:'temporary',overrideReason:''},name,'en'),
-  'Duty change (published schedule)\nDate: Tue 11/03/2026\nEngineer: Alex Atlas → Blair Birch\nPoints: 1 point → 1.5 points\nExtra: none → 0.5 points\nType: Temporary\nBalance: Alex Atlas owes Blair Birch 1 point');
+  'Duty change (published schedule)\nDate: Tue 03/11/2026\nEngineer: Alex Atlas → Blair Birch\nPoints: 1 point → 1.5 points\nExtra: none → 0.5 points\nType: Temporary\nBalance: Alex Atlas owes Blair Birch 1 point');
  const weekend=editSummary(row('2026-11-06','2026-11-08'),{primary:'b',extra:0,saturdayExtra:0,kind:'permanent',overrideReason:' Clinic '},name,'en');
- assert.match(weekend,/^Date: Fri 11\/06\/2026 – Sat 11\/07\/2026$/m);
+ assert.match(weekend,/^Date: Fri 06\/11\/2026 – Sat 07\/11\/2026$/m);
  assert.match(weekend,/^Points: 1 point$/m);assert.match(weekend,/^Extra: none$/m);
  assert.match(weekend,/^Type: Permanent\nBalance: No debt\nAvailability override: Clinic$/m);
  assert.match(editSummary(tuesday,{primary:'a',extra:1,saturdayExtra:0,kind:'temporary',overrideReason:'ignored'},name,'en'),

@@ -8,6 +8,7 @@ import {fromSnapshot} from '@/lib/supabase/snapshot';
 import {addDays,blocks,dates,dayOf,monthNext} from '@/lib/rota/engine';
 import {memberStyle} from '@/lib/theme/palette';
 import {userMessage} from '@/lib/messages';
+import {jerusalemNumericDateTime} from '@/lib/date-format';
 
 /** Published versions of a month (⋯ → Versions): pick one to preview, restore it as a draft or delete it. */
 export function PublicationHistory({remote,month,open,onOpenChange,lang}:{remote:TeamWorkspace;month:string;open:boolean;onOpenChange:(open:boolean)=>void;lang:'en'|'he'}){
@@ -29,7 +30,7 @@ export function PublicationHistory({remote,month,open,onOpenChange,lang}:{remote
  const replacement=versions.find(p=>p.id!==viewed?.id),restoreBlocked=!!viewed&&replanned.includes(viewed.id),
   deleteBlocked=!!viewed&&viewed.id===current&&!!replacement&&replanned.includes(replacement.id);
  async function confirm(){if(!action)return;try{if(action.kind==='restore')await remote.restore(action.id);else await remote.deleteVersion(action.id);setAction(null);setError('');if(action.kind==='restore')onOpenChange(false)}catch(e){setError(userMessage((e as Error).message,t))}}
- const when=(iso:string)=>new Date(iso).toLocaleString(lang==='en'?'en-US':'he-IL',{timeZone:'Asia/Jerusalem',dateStyle:'medium',timeStyle:'short',hourCycle:'h23'});
+ const when=(iso:string)=>lang==='en'?jerusalemNumericDateTime(iso):new Date(iso).toLocaleString('he-IL',{timeZone:'Asia/Jerusalem',dateStyle:'medium',timeStyle:'short'});
  return <Sheet open={open} onOpenChange={onOpenChange} lang={lang} desktop="center" size="lg" className="history-sheet" title={t('Versions','גרסאות')} description={t('Restoring makes a draft; publish it when ready.','שחזור יוצר טיוטה; מפרסמים כשמוכנים.')}
   footer={versions.length>0&&!remote.viewer&&<div className="sheet-actions">
    <Button variant="secondary" disabled={remote.readOnly||remote.saving||deleteBlocked} onClick={()=>{setAction({id:viewed.id,kind:'delete'});setError('')}}>{t('Delete version','מחיקת גרסה')}</Button>
