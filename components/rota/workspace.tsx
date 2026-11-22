@@ -179,11 +179,20 @@ export function RotaWorkspace({remote, lang, setLang}: {remote: TeamWorkspace; l
   // Constraints open for this Israel month and the next two, never for a past month or day (#111);
   // the database enforces the same rules. A tap on such a day says why (a toast).
   const constraintsLast = today ? constraintsLastMonth(today) : null;
-  const constraintsMonthLock = !today ? null : month < today.slice(0, 7) ? texts.monthClosed(month, lang) : constraintsLast && month > constraintsLast ? texts.monthNotOpen(month, lang) : null;
-  const constraintsLockDay = (day: string) => constraintsMonthLock ?? (today && day < today ? texts.dayPassed(lang) : null);
-  const constraintsClosed = !constraintsMonthLock && (isManager
-    ? monthDetails.status === 'published'
-    : (remote.snapshot?.months.find((m) => m.month === month)?.status === 'published' || monthDetails.deadline < today));
+  // Per calendar month, as the database decides: a neighbour month's days shown in the grid follow
+  // their own month (#105 rule 3).
+  // Past months are read-only for everyone; a member's month after the window is closed, while
+  // admins may edit any future month, as the database allows (#105).
+  const constraintsMonthLockFor = (m: string) => !today ? null : m < today.slice(0, 7) ? texts.monthClosed(m, lang) : !isManager && constraintsLast && m > constraintsLast ? texts.monthNotOpen(m, lang) : null;
+  const constraintsMonthLock = constraintsMonthLockFor(month);
+  const constraintsLockDay = (day: string) => constraintsMonthLockFor(day.slice(0, 7)) ?? (today && day < today ? texts.dayPassed(lang) : null);
+  const constraintsClosedFor = (m: string) => {
+    const details = state.months[m] ?? {deadline: addDays(m + '-01', -7), status: 'draft' as const};
+    return !constraintsMonthLockFor(m) && (isManager
+      ? details.status === 'published'
+      : (remote.snapshot?.months.find((x) => x.month === m)?.status === 'published' || details.deadline < today));
+  };
+  const constraintsClosed = constraintsClosedFor(month);
   const metrics = workspaceMetrics(state, month, duties);
   const locale = lang === 'en' ? 'en-GB' : 'he-IL';
   const fmt = (d: string, opts: Intl.DateTimeFormatOptions = {day: 'numeric', month: 'short'}) => new Date(d + 'T12:00:00Z').toLocaleDateString(locale, {...opts, timeZone: 'Asia/Jerusalem'});
@@ -486,7 +495,7 @@ export function RotaWorkspace({remote, lang, setLang}: {remote: TeamWorkspace; l
           </TabsContent>
           <TabsContent value="availability" data-settled={settled('availability')}>
             <WorkspaceAvailability state={state} month={month} monthLabel={monthLabel} onMonth={changeMonth} person={person} setPerson={setPerson} dateCells={dateCells} lang={lang} isManager={isManager} viewer={viewer} meId={meId}
-              constraintsClosed={constraintsClosed || remote.readOnly} deadline={monthDetails.deadline} t={t} saveConstraints={saveConstraints} schedule={scheduleFor} lastMonth={constraintsLast} lockDay={remote.readOnly ? undefined : constraintsLockDay} locked={!!constraintsMonthLock}/>
+              constraintsClosed={constraintsClosed || remote.readOnly} deadline={monthDetails.deadline} t={t} saveConstraints={saveConstraints} schedule={scheduleFor} lockDay={remote.readOnly ? undefined : constraintsLockDay} locked={!!constraintsMonthLock} closedDay={(day) => remote.readOnly || constraintsClosedFor(day.slice(0, 7))} today={today}/>
           </TabsContent>
           <TabsContent value="team" data-settled={settled('team')}>
             <WorkspaceTeam remote={remote} state={state} metrics={metrics} month={month} monthLabel={monthLabel} onMonth={changeMonth} meId={meId} isManager={isManager} lang={lang} t={t} update={update}/>

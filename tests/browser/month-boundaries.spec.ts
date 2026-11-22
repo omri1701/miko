@@ -1,4 +1,4 @@
-import {test,expect,ids,touchEvent, switchLanguage, editConstraintDay} from './fixtures';
+import {test,expect,ids,touchEvent, switchLanguage, editConstraintDay,dayTitle} from './fixtures';
 import {webkit,devices} from '@playwright/test';
 import {blocks,ownerMonth} from '../../lib/rota/engine';
 
@@ -64,7 +64,7 @@ for(const iphone of [false,true])for(const split of [false,true])for(const lang 
       await expect(days.first()).not.toHaveAttribute('data-gesture-key');
       await saturday.click();
       let dialog=page.getByRole('dialog');
-      await expect(dialog).toContainText(lang==='en'?'1 January':'1 בינואר');
+      await expect(dialog.getByRole('heading')).toHaveText(dayTitle('2028-01-01',lang));
       await dialog.locator('textarea').fill('Actual Saturday');
       await dialog.getByRole('button',{name:lang==='en'?'Save':'שמירה',exact:true}).click();
       await expect(dialog).toHaveCount(0);

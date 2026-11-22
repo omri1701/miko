@@ -23,4 +23,6 @@ export const texts = {
   monthClosed: (month: string, lang: Language) => lang === 'en' ? `${monthName(month, lang)} is closed` : `${monthName(month, lang)} כבר נסגר`,
   /** #111: a tap on a day of the current month that has passed (Israel time), or the database's refusal. */
   dayPassed: (lang: Language) => lang === 'en' ? 'This day has passed' : 'היום הזה כבר עבר',
+  /** #105 rule 6: the admins' first picker choice on Constraints, every member at once. */
+  everyone: (lang: Language) => lang === 'en' ? 'Everyone' : 'כולם',
 };

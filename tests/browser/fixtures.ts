@@ -604,14 +604,13 @@ export async function press(page: Page, x: number, y: number, mobile: boolean): 
 }
 /** Opens a Constraints day's editor. On a phone an unavailable day with a note shows the note
  * first (#95), so this goes through its Edit button. */
+/** A tap on a day opens its editor directly (#105 rule 5: one sheet). */
 export async function editConstraintDay(page: Page, day: ReturnType<Page['locator']>) {
-  const noted = await day.evaluate(e => e.classList.contains('no') && !!e.querySelector('.mobile-note-dot') && matchMedia('(max-width: 600px)').matches);
   await day.click();
-  if (!noted) return;
-  const sheet = page.locator('.constraint-note-sheet');
-  await sheet.getByRole('button', {name: /^(Edit|עריכה)$/}).click();
-  await expect(sheet).toHaveCount(0);
+  await expect(page.getByRole('dialog').locator('textarea')).toBeVisible();
 }
+/** A single day's sheet title (#105): "Wed 9 Dec" / its Hebrew form. */
+export const dayTitle = (day: string, lang: 'en' | 'he') => new Date(`${day}T12:00:00Z`).toLocaleDateString(lang === 'en' ? 'en-GB' : 'he-IL', {weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC'});
 export async function touchEvent(page: Page, type: string, x: number, y: number) {
   await page.evaluate(({type, x, y}) => {
     const target = document.elementFromPoint(x, y)!;

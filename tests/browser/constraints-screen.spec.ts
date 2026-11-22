@@ -39,11 +39,11 @@ for (const lang of ['en', 'he'] as const) test(`#94 rules 1-2: a sideways swipe 
   await expect(heading(page)).toHaveText(he ? 'נובמבר 2026' : 'November 2026');
 });
 
-test('#94 rule 1: a closed month (disabled day cells) still swipes', async ({page, openApp, backend}, info) => {
+test('#94 rule 1: a closed month (closed day cells) still swipes', async ({page, openApp, backend}, info) => {
   test.skip(info.project.name !== 'mobile', 'A finger swipe.');
   backend.raw.months[0].deadline = '2026-10-01';
   await openConstraints(page, openApp, false);
-  await expect(day(page, '2026-11-10')).toBeDisabled();
+  await expect(page.locator('.month-pane:not(.month-peek) .availability-day[data-date="2026-11-10"]')).toHaveAttribute('aria-disabled', 'true');
   const grid = (await page.locator('.constraint-editor .month-stage').boundingBox())!;
   const g = await press(page, grid.x + grid.width / 2, grid.y + 30, true);
   await g.move(-grid.width * .6);
@@ -99,39 +99,13 @@ test('#95 rule 1: on PC the grid uses the available width and height, with reada
   // The six weeks fill the window without pushing the grid past it.
   const grid = (await page.locator('.availability-grid').first().boundingBox())!;
   expect(grid.y + grid.height).toBeLessThanOrEqual(1000);
-  const note = day(page, '2026-11-04').locator('.availability-description');
+  const note = day(page, '2026-11-04').locator('.availability-note');
   await expect(note).toHaveText('Synthetic vacation');
   expect(await note.evaluate(e => e.scrollHeight <= e.clientHeight + 1)).toBe(true);
 });
 
-for (const lang of ['en', 'he'] as const) test(`#95 rule 2: on a phone, tapping an unavailable day with a note shows the whole note with Edit ${lang}`, async ({page, openApp, backend}, info) => {
-  test.skip(info.project.name !== 'mobile', 'Phones cut the note to a dot.');
-  const he = lang === 'he', long = 'Family wedding abroad, flying out early on the morning and back late at night — please do not schedule me';
-  backend.raw.constraints.push({member_id: ids.a, day: '2026-11-12', kind: 'no', note: long}, {member_id: ids.a, day: '2026-11-13', kind: 'prefer', note: 'Happy to cover'});
-  await openConstraints(page, openApp, he);
-  await day(page, '2026-11-12').tap();
-  const sheet = page.getByRole('dialog').filter({has: page.locator('.constraint-note-full')});
-  await expect(sheet).toBeVisible();
-  await expect(sheet.getByRole('heading')).toContainText('12');
-  await expect(sheet.locator('.constraint-note-full')).toHaveText(long);
-  // Read only: no availability choice until Edit.
-  await expect(sheet.getByRole('button', {name: he ? 'לא זמין' : 'Unavailable', exact: true})).toHaveCount(0);
-  await sheet.getByRole('button', {name: he ? 'עריכה' : 'Edit', exact: true}).click();
-  await expect(sheet).toHaveCount(0);
-  const editor = page.getByRole('dialog');
-  await expect(editor.getByRole('heading')).toContainText('12');
-  await expect(editor.getByRole('textbox')).toHaveValue(long);
-  await expect(editor.getByRole('button', {name: he ? 'לא זמין' : 'Unavailable', exact: true})).toHaveAttribute('aria-pressed', 'true');
-  await page.keyboard.press('Escape');
-  await expect(page.getByRole('dialog')).toHaveCount(0);
-  // Days without a note, and preferred days, still open the editor straight away.
-  for (const date of ['2026-11-10', '2026-11-13']) {
-    await day(page, date).tap();
-    await expect(page.getByRole('dialog').getByRole('textbox')).toBeVisible();
-    await page.keyboard.press('Escape');
-    await expect(page.getByRole('dialog')).toHaveCount(0);
-  }
-});
+// #95 rule 2 (a phone's separate read sheet) is replaced by #105 rule 5: one sheet, see
+// constraints-redesign.spec.ts.
 
 test('#95 rule 3: another engineer never sees someone else’s note', async ({page, openApp}) => {
   // Engineer B never receives A's note: no cell, label or sheet shows it.
@@ -143,13 +117,12 @@ test('#95 rule 3: another engineer never sees someone else’s note', async ({pa
   await expect(page.getByRole('dialog').getByRole('textbox')).toHaveValue('');
 });
 
-test('#95 rule 3: an admin still reads an engineer’s note, as today', async ({page, openApp}, info) => {
+test('#95 rule 3: an admin still reads an engineer’s note, as today', async ({page, openApp}) => {
   await openConstraints(page, openApp, false, 'admin');
   await choose(page.getByLabel('Engineer'), 'Alex Atlas');
   await expect(day(page, '2026-11-04')).toHaveClass(/\bno\b/);
   await day(page, '2026-11-04').click();
-  if (info.project.name === 'mobile') await expect(page.getByRole('dialog').locator('.constraint-note-full')).toHaveText('Synthetic vacation');
-  else await expect(page.getByRole('dialog').getByRole('textbox')).toHaveValue('Synthetic vacation');
+  await expect(page.getByRole('dialog').getByRole('textbox')).toHaveValue('Synthetic vacation');
 });
 
 type Box = {x: number; y: number; width: number; height: number};
@@ -208,35 +181,39 @@ test('#95 rule 5: the counts cover only the shown month and follow the month cha
 
 // #111: constraints only for this Israel month and the next two (October–December under NOW).
 const monthButton = (page: Page, he: boolean, next: boolean) => page.getByRole('button', {name: next ? (he ? 'חודש הבא' : 'Next month') : (he ? 'חודש קודם' : 'Previous month'), exact: true}).last();
-for (const lang of ['en', 'he'] as const) test(`#111 rules 1-2: the buttons and swipes stop at the third month ${lang}`, async ({page, openApp}, info) => {
+for (const lang of ['en', 'he'] as const) test(`#111 rules 1-2: everyone goes to any month; a member's month past the window is closed ${lang}`, async ({page, openApp}, info) => {
   const he = lang === 'he';
   await openConstraints(page, openApp, he);
   await monthButton(page, he, true).click();
   await expect(heading(page)).toHaveText(he ? 'דצמבר 2026' : 'December 2026');
-  // Rule 1: December is open; rule 2: there is no next month to go to.
+  // Rule 1: December is open. Rule 2 (#105): Next still goes on, to a closed January.
   await expect(day(page, '2026-12-10')).toBeEnabled();
-  await expect(monthButton(page, he, true)).toBeDisabled();
-  await expect(monthButton(page, he, false)).toBeEnabled();
+  await expect(monthButton(page, he, true)).toBeEnabled();
   if (info.project.name === 'mobile') {
     const toward = he ? 1 : -1;
-    // The grid only stretches: no January beside it, and it stays December.
+    // The grid swipe goes to January, with January beside it while dragging.
     const grid = (await page.locator('.constraint-editor .month-stage').boundingBox())!;
-    let g = await press(page, grid.x + grid.width / 2, grid.y + 30, true);
+    const g = await press(page, grid.x + grid.width / 2, grid.y + 30, true);
     await g.move(toward * grid.width * .3);
-    await expect(page.locator('.constraint-editor .month-peek')).toHaveCount(0);
+    await expect(page.locator('.constraint-editor .month-peek')).toHaveCount(1);
     await g.move(toward * grid.width * .7);
     await g.end();
-    await expect(heading(page)).toHaveText(he ? 'דצמבר 2026' : 'December 2026');
-    // The month name too.
+    // A tap right after a swipe is taken for its ghost click (700 ms); a person taps later.
+    await page.waitForTimeout(800);
+  } else await monthButton(page, he, true).click();
+  await expect(heading(page)).toHaveText(he ? 'ינואר 2027' : 'January 2027');
+  await expect(page.locator('.availability-screen .month-status')).toHaveText(he ? 'סגור' : 'Closed');
+  // January's own days are closed (the neighbour December days in its grid stay open, #105 rule 3).
+  await expect(page.locator('.month-pane:not(.month-peek) .availability-day[data-gesture-key^="2027-01"]')).toHaveCount(0);
+  await tapClosed(page, '2027-01-12', he ? 'ינואר עוד לא נפתח' : "January isn't open yet");
+  // And on, by the month name too on a phone.
+  if (info.project.name === 'mobile') {
     const name = (await page.locator('.availability-screen .month-heading').boundingBox())!;
-    g = await press(page, name.x + name.width / 2, name.y + name.height / 2, true);
-    await g.move(toward * 160);
-    await expect(page.locator('.availability-screen .month-name-peek')).toHaveCount(0);
+    const g = await press(page, name.x + name.width / 2, name.y + name.height / 2, true);
+    await g.move((he ? 1 : -1) * 160);
     await g.end();
-    await expect(heading(page)).toHaveText(he ? 'דצמבר 2026' : 'December 2026');
+    await expect(heading(page)).toHaveText(he ? 'פברואר 2027' : 'February 2027');
   }
-  await monthButton(page, he, false).click();
-  await expect(heading(page)).toHaveText(he ? 'נובמבר 2026' : 'November 2026');
 });
 
 /** A tap on a closed day: no editor, a short toast saying why (#111). */
@@ -259,11 +236,11 @@ for (const lang of ['en', 'he'] as const) test(`#111 rules 1 and 3: past months 
   await page.getByRole('button', {name: he ? 'חודש הבא' : 'Next month', exact: true}).last().click();
   await page.getByRole('button', {name: he ? 'חודש הבא' : 'Next month', exact: true}).last().click();
   await expect(page.locator('.month-name:visible')).toHaveText(he ? 'ינואר 2027' : 'January 2027');
-  // January, reached from Schedule, isn't open yet: read-only, Closed, and Next stays put.
+  // January, reached from Schedule, isn't open yet: read-only and Closed.
   await page.getByRole('tab', {name: tabName(he), exact: true}).click();
   await expect(heading(page)).toHaveText(he ? 'ינואר 2027' : 'January 2027');
   await expect(page.locator('.availability-screen .month-status')).toHaveText(he ? 'סגור' : 'Closed');
-  await expect(monthButton(page, he, true)).toBeDisabled();
+  await expect(monthButton(page, he, true)).toBeEnabled();
   await tapClosed(page, '2027-01-12', he ? 'ינואר עוד לא נפתח' : "January isn't open yet");
   // Back toward the window: December is open again.
   await monthButton(page, he, false).click();

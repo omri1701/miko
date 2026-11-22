@@ -1,4 +1,4 @@
-import {test, expect, ids, NOW, touchEvent, switchLanguage} from './fixtures';
+import {test, expect, ids, NOW, touchEvent, switchLanguage, dayTitle} from './fixtures';
 import type {Page} from '@playwright/test';
 
 const day = (page: Page, date: string) => page.locator(`.availability-day[data-gesture-key="2026-11-${date}"]`);
@@ -28,7 +28,7 @@ for (const width of [320, 375, 390, 430]) for (const lang of ['en', 'he'] as con
       await expect(hint).toHaveText(lang === 'en' ? '1 day selected' : 'נבחר יום אחד');
       expect(await positions()).toEqual(original);
       await touchEvent(page, 'touchmove', target.x, target.y);
-      const title = from === to ? (lang === 'en' ? '5 November' : '5 בנובמבר') : (lang === 'en' ? '5–9 November' : '5–9 בנובמבר');
+      const title = from === to ? dayTitle('2026-11-05', lang) : (lang === 'en' ? '5–9 November' : '5–9 בנובמבר');
       await expect(hint).toHaveText(from === to ? (lang === 'en' ? '1 day selected' : 'נבחר יום אחד') : (lang === 'en' ? '5 days selected' : 'נבחרו 5 ימים'));
       expect(await positions()).toEqual(original);
       await touchEvent(page, 'touchend', target.x, target.y);

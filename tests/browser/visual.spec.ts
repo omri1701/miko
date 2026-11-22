@@ -1,4 +1,4 @@
-import {test, expect, monthAction, duty, ids, targetReady, switchLanguage, choose} from './fixtures';
+import {test, expect, monthAction, duty, ids, targetReady, switchLanguage, choose, touchEvent, NOW} from './fixtures';
 import type {Page} from '@playwright/test';
 import {PROJECTS} from '../../lib/supabase/environment';
 import {existsSync} from 'node:fs';
@@ -298,6 +298,57 @@ for (const lang of ['en', 'he'] as const) test(`constraints at the last open mon
   await page.getByRole('tab', {name: lang === 'en' ? 'Availability' : 'אילוצים', exact: true}).click();
   await page.getByRole('button', {name: lang === 'en' ? 'Next month' : 'חודש הבא', exact: true}).last().click();
   await expect(page.locator('.availability-screen .month-name')).toHaveText(lang === 'en' ? 'December 2026' : 'דצמבר 2026');
-  await expect(page.getByRole('button', {name: lang === 'en' ? 'Next month' : 'חודש הבא', exact: true}).last()).toBeDisabled();
+  // Nobody is stopped from going on (#105); this is the window's last open month.
+  await expect(page.getByRole('button', {name: lang === 'en' ? 'Next month' : 'חודש הבא', exact: true}).last()).toBeEnabled();
   await snapshot(page, `constraints-last-month-${lang}`);
+});
+
+// #105 Constraints redesign: notes in the days, blocks, neighbour and passed days, the one sheet
+// (editor and read-only) and the admins' Everyone view with its day sheet.
+for (const lang of ['en', 'he'] as const) test(`constraints redesign ${lang}`, async ({page, openApp, backend}) => {
+  const he = lang === 'he', t = (en: string, hb: string) => he ? hb : en;
+  const add = (member_id: string, days: string[], kind: 'no' | 'prefer', note: string) => backend.raw.constraints.push(...days.map(day => ({member_id, day, kind, note})));
+  add(ids.admin, ['2026-10-05', '2026-10-06'], 'no', t('Army reserve', 'מילואים'));
+  add(ids.admin, ['2026-10-12', '2026-10-13', '2026-10-14', '2026-10-15', '2026-10-16'], 'no', t('Abroad with family', 'בחו״ל עם המשפחה'));
+  add(ids.admin, ['2026-10-21'], 'prefer', '');
+  add(ids.admin, ['2026-10-29', '2026-10-30', '2026-10-31', '2026-11-01', '2026-11-02'], 'no', t('Vacation in Greece', 'חופשה ביוון'));
+  add(ids.b, ['2026-11-04'], 'prefer', '');
+  add(ids.c, ['2026-11-04', '2026-11-05'], 'no', t('Exam', 'מבחן'));
+  add(ids.d, ['2026-11-04', '2026-11-18'], 'no', '');
+  add(ids.e, ['2026-11-18'], 'no', t('Wedding', 'חתונה'));
+  await openApp('admin');
+  if (he) await switchLanguage(page, 'he');
+  await page.getByRole('tab', {name: t('Availability', 'אילוצים'), exact: true}).click();
+  await page.getByRole('button', {name: t('Previous month', 'חודש קודם'), exact: true}).last().click();
+  await expect(page.locator('.availability-screen .month-name')).toHaveText(t('October 2026', 'אוקטובר 2026'));
+  await snapshot(page, `constraints-passed-${lang}`);
+  await page.locator('.month-pane:not(.month-peek) .availability-day[data-date="2026-10-05"]').click({force: true});
+  await expect(page.getByRole('dialog').locator('.constraint-state')).toBeVisible();
+  await snapshot(page, `constraints-read-only-${lang}`);
+  await page.keyboard.press('Escape');
+  await page.locator('.month-pane:not(.month-peek) .availability-day[data-date="2026-10-13"]').click();
+  await expect(page.getByRole('dialog').getByRole('textbox')).toBeVisible();
+  await snapshot(page, `constraints-editor-${lang}`);
+  await page.keyboard.press('Escape');
+  // A two-week selection while dragging: one unbroken outline.
+  const day = (d: string) => page.locator(`.month-pane:not(.month-peek) .availability-day[data-date="${d}"]`).boundingBox();
+  const [from, to] = [(await day('2026-10-21'))!, (await day('2026-10-28'))!];
+  const mobile = test.info().project.name === 'mobile';
+  if (mobile) {await touchEvent(page, 'touchstart', from.x + from.width / 2, from.y + from.height / 2); await page.waitForTimeout(350); await touchEvent(page, 'touchmove', to.x + to.width / 2, to.y + to.height / 2);}
+  else {await page.mouse.move(from.x + from.width / 2, from.y + from.height / 2); await page.mouse.down(); await page.waitForTimeout(350); await page.mouse.move(to.x + to.width / 2, to.y + to.height / 2, {steps: 8});}
+  await expect(page.locator('.month-pane:not(.month-peek) .date-selected')).toHaveCount(8);
+  await snapshot(page, `constraints-selection-${lang}`, true);
+  if (mobile) await touchEvent(page, 'touchend', to.x + to.width / 2, to.y + to.height / 2); else await page.mouse.up();
+  await page.keyboard.press('Escape');
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+  // The clock is pinned in tests, so the 700 ms ghost-click guard after a drag never runs out on
+  // its own: move the pinned time on a minute, as real time would.
+  await page.clock.setFixedTime(new Date(Date.parse(NOW) + 60_000));
+  await page.getByRole('button', {name: t('Next month', 'חודש הבא'), exact: true}).last().click();
+  await choose(page.locator('.availability-screen select'), t('Everyone', 'כולם'));
+  await expect(page.locator('.availability-who').first()).toBeVisible();
+  await snapshot(page, `constraints-everyone-${lang}`);
+  await page.locator('.month-pane:not(.month-peek) .availability-day[data-date="2026-11-04"]').click();
+  await expect(page.getByRole('dialog').locator('.everyone-person').first()).toBeVisible();
+  await snapshot(page, `constraints-everyone-day-${lang}`);
 });

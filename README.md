@@ -243,10 +243,21 @@ Draft / Published switch. A draft lists each availability conflict as a line (na
 a tap selects that day, and conflicting days are red; Publish waits until they are resolved. **Availability** is the grid with a due chip and, for admins, the
 member picker. Its grid is the Schedule calendar's own surface: the same panel, weekday row,
 columns and row heights (copied from that month's Schedule calendar, rendered hidden
-underneath), so switching tabs leaves every day box in place on PC and phones; notes show in
-the cells on PC. It swipes between months like the calendar (the chevrons slide it too). Constraints open for the current Israel month and the next two only: the
-chevrons and swipes stop at the third month, a later month (reached from Schedule) shows Closed,
-and the database refuses a member's write past that window; admins are not limited, as with deadlines. The
+underneath), so switching tabs leaves every day box in place on PC and phones. Each day shows
+its note (small and up to three lines on phones, two balanced lines on PC); a person's days in a
+row with the same kind and note draw as one block per week row with the note once (display only:
+the data stays per day). The neighbour month's days in the grid keep their colour and note with a
+lighter number; passed days are darker and keep a dimmed colour and their note; today has
+Schedule's circle and Fri/Sat are tinted. A tap opens one sheet: the editor with the whole note,
+or the same sheet read-only (kind and note, no buttons) for a day that can't be edited but has a
+constraint; with no constraint it shows the toast. Admins can pick **Everyone**: each day lists
+first names (unavailable in red, prefer duty in green, three lines then +N; PC adds the note),
+a tap lists that day's people with notes, and a tap on a person switches to them and opens that
+day's editor. It swipes between months like the calendar (the chevrons slide it too), to any
+month. Members enter constraints for the current Israel month and the next two only: a later
+month is closed (a tap says it isn't open yet) and the database refuses a member's write past
+that window; admins can edit any future month, as with deadlines. Past months and passed days
+are read-only for everyone. The
 Unavailable / Preferred counts sit under the grid and count only the shown month's days. **Team** shows this month's coverage, the ordered team (hold the grip to
 reorder, Up/Down on the keyboard), points and the live net balance; a tap opens the member
 sheet (points, balance, and for admins role, No weekends, Viewer, Active and colour), a swipe on a

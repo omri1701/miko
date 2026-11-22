@@ -27,3 +27,8 @@ test('#111: closed-day toasts and the database refusals use the approved texts, 
   assert.equal(userMessage('constraints-day-passed', en), 'This day has passed');
   assert.equal(userMessage('constraints-day-passed', he), 'היום הזה כבר עבר');
 });
+
+test('#105 rule 6: the admins\' Everyone choice uses the approved text', () => {
+  assert.equal(texts.everyone('en'), 'Everyone');
+  assert.equal(texts.everyone('he'), 'כולם');
+});
