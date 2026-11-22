@@ -93,7 +93,7 @@ export function useSwapActions(remote:TeamWorkspace,lang:'en'|'he'){
   decline:(r:SwapRequest)=>act(()=>remote.resolveSwap(r.id,'decline'),t('Declined','סורב')),
   openApprove:(r:SwapRequest)=>{setReview(r);return false},
   reject:(r:SwapRequest)=>act(()=>remote.resolveSwap(r.id,'reject'),t('Rejected','נדחה')),
-  cancel:(r:SwapRequest)=>act(()=>remote.resolveSwap(r.id,'cancel'),t('Request cancelled','הבקשה בוטלה')),
+  cancel:(r:SwapRequest)=>act(()=>remote.resolveSwap(r.id,'cancel'),t('Request canceled','הבקשה בוטלה')),
  };
 }
 export type SwapActions=ReturnType<typeof useSwapActions>;
@@ -113,7 +113,7 @@ export function SwapCard({r,swaps,remote,lang}:{r:SwapRequest;swaps:SwapActions;
  const waiting=swapWaitingOn(r),answerFor=swapAnswerFor(r,me,remote.isAdmin,temporary),incoming=answerFor!==null,admin=remote.isAdmin&&r.status==='awaiting_admin',pending=['awaiting_engineer','awaiting_admin'].includes(r.status);
  // Consent may precede an availability override, never a second weekend.
  const duties=incoming?swapDuties(raw,r):null,refused=duties?.source&&duties.target?swapProblem(raw,r.month,duties.source,duties.target,false):null;
- const status:[string,ChipTone]={awaiting_engineer:[t('Waiting for an answer','ממתינה לתשובה'),'info'],awaiting_admin:[t('Waiting for an admin','ממתינה למנהל'),'warn'],approved:[t('Approved','אושרה'),'ok'],declined:[t('Declined','סורבה'),'danger'],rejected:[t('Rejected','נדחתה'),'danger'],cancelled:[t('Cancelled','בוטלה'),'neutral'],invalidated:[t('No longer applies','כבר לא תקפה'),'neutral']}[r.status] as [string,ChipTone];
+ const status:[string,ChipTone]={awaiting_engineer:[t('Waiting for an answer','ממתינה לתשובה'),'info'],awaiting_admin:[t('Waiting for an admin','ממתינה למנהל'),'warn'],approved:[t('Approved','אושרה'),'ok'],declined:[t('Declined','סורבה'),'danger'],rejected:[t('Rejected','נדחתה'),'danger'],cancelled:[t('Canceled','בוטלה'),'neutral'],invalidated:[t('No longer applies','כבר לא תקפה'),'neutral']}[r.status] as [string,ChipTone];
  const you=(id:string)=>id===me?t('You','את/ה'):name(id).split(' ')[0];
  // Swipe toward the inline end to accept (approve), toward the start to decline (reject, cancel);
  // the same actions as the buttons, which stay for keyboard and screen readers.

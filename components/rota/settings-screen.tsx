@@ -78,8 +78,8 @@ export function SettingsScreen({remote, open, onOpenChange, lang, setLang, onExp
       <ListRow title={t('Theme', 'ערכת נושא')} trail={<Segmented size="sm" label={t('Theme', 'ערכת נושא')} value={preference} onChange={setPreference}
         options={[{value: 'auto', label: t('Auto', 'אוטומטי'), icon: <SunMoon/>}, {value: 'light', label: t('Light', 'בהיר'), icon: <Sun/>}, {value: 'dark', label: t('Dark', 'כהה'), icon: <Moon/>}]}/>}/>
       <div className="row row-column">
-        <span className="row-title">{t('My colour', 'הצבע שלי')}</span>
-        <div className="color-grid" role="radiogroup" aria-label={t('My colour', 'הצבע שלי')} aria-busy={colorBusy}>
+        <span className="row-title">{t('My color', 'הצבע שלי')}</span>
+        <div className="color-grid" role="radiogroup" aria-label={t('My color', 'הצבע שלי')} aria-busy={colorBusy}>
           {PALETTE.map(c => {
             const owner = taken.get(c.hex), selected = c.hex === current;
             return <button key={c.hex} type="button" role="radio" aria-checked={selected} disabled={remote.settingsReadOnly || colorBusy || (!!owner && !selected)}

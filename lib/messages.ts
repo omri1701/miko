@@ -129,7 +129,7 @@ const SENTENCES: readonly (readonly [RegExp, string, string])[] = [
   [/push-unsupported/, 'This browser can’t receive notifications. Use Chrome on Android, or Duty from the Home Screen on iPhone (iOS 16.4 or later).', 'הדפדפן הזה לא יכול לקבל התראות. יש להשתמש ב־Chrome באנדרואיד, או ב־Duty ממסך הבית באייפון (iOS 16.4 ומעלה).'],
   [/push-permission-denied/, 'Notifications weren’t allowed. Allow them for Duty in the browser or phone settings, then try again.', 'ההתראות לא אושרו. יש לאפשר אותן ל־Duty בהגדרות הדפדפן או הטלפון ולנסות שוב.'],
   [/Choose English or Hebrew/, 'Choose English or Hebrew.', 'יש לבחור עברית או אנגלית.'],
-  [/Choose a colour from the palette/, 'Choose a colour from the palette.', 'יש לבחור צבע מהפלטה.'],
+  [/Choose a colou?r from the palette/, 'Choose a color from the palette.', 'יש לבחור צבע מהפלטה.'],
   [/Invalid notification settings|Invalid notification time/, 'Those notification settings couldn’t be saved. Refresh, then try again.', 'לא ניתן היה לשמור את הגדרות ההתראות. יש לרענן ולנסות שוב.'],
   [/Could not load notification settings/, 'Couldn’t load your notification settings. Try again.', 'לא ניתן היה לטעון את הגדרות ההתראות. יש לנסות שוב.'],
   // Solver and validation internals: Generate didn't finish; nothing was saved.
@@ -175,7 +175,7 @@ const SENTENCES: readonly (readonly [RegExp, string, string])[] = [
   [/Keep at least one active admin/, 'Keep at least one active admin.', 'יש להשאיר לפחות מנהל פעיל אחד.'],
   [/Only the current counterpart can respond/, 'Only the person asked can answer this request.', 'רק האדם שנשאל יכול לענות לבקשה הזו.'],
   [/Only the requester can cancel|Only the person who started the request can cancel/, 'Only the person who started this request can cancel it.', 'רק מי שיזם את הבקשה הזו יכול לבטל אותה.'],
-  [/Request not found|This request is no longer pending/, 'This request was already answered or cancelled.', 'הבקשה הזו כבר נענתה או בוטלה.'],
+  [/Request not found|This request is no longer pending/, 'This request was already answered or canceled.', 'הבקשה הזו כבר נענתה או בוטלה.'],
   [/Review missing allocation publication lineage/, 'This month’s plan wasn’t saved with its publication. Reopen the month and confirm its plan again.', 'התוכנית של החודש לא נשמרה עם הפרסום שלו. יש לפתוח מחדש את החודש ולאשר שוב את התוכנית.'],
   [/Temporary member required/, 'Choose a temporary member.', 'יש לבחור חבר זמני.'],
   [/link-has-balance/, 'This sign-up already has balance entries. Approve or decline it instead.', 'להרשמה הזו כבר יש רישומים במאזן. אפשר לאשר או לדחות אותה במקום.'],

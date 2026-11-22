@@ -30,7 +30,7 @@ export function recentActivity(raw: Snapshot, me: string, admin: boolean, lang: 
     if (!involved) continue;
     const pair = `${name(r.requester_id)} ↔ ${name(r.other_id)} · ${shortDate(r.from_day, lang)} ↔ ${shortDate(r.to_day, lang)}`;
     if (r.resolved_at) {
-      const what = {approved: t('approved', 'אושרה'), declined: t('declined', 'סורבה'), rejected: t('rejected', 'נדחתה'), cancelled: t('cancelled', 'בוטלה'), invalidated: t('no longer applies', 'כבר לא תקפה'), awaiting_admin: t('accepted', 'התקבלה'), awaiting_engineer: t('updated', 'עודכנה')}[r.status];
+      const what = {approved: t('approved', 'אושרה'), declined: t('declined', 'סורבה'), rejected: t('rejected', 'נדחתה'), cancelled: t('canceled', 'בוטלה'), invalidated: t('no longer applies', 'כבר לא תקפה'), awaiting_admin: t('accepted', 'התקבלה'), awaiting_engineer: t('updated', 'עודכנה')}[r.status];
       events.push({id: `swap-${r.id}-done`, at: r.resolved_at, icon: 'swap', month: r.month, text: t(`Swap ${what}: ${pair}`, `החלפה ${what}: ${pair}`)});
     } else if (r.accepted_at) events.push({id: `swap-${r.id}-ok`, at: r.accepted_at, icon: 'swap', month: r.month, text: t(`Swap accepted, waiting for an admin: ${pair}`, `ההחלפה התקבלה וממתינה למנהל: ${pair}`)});
     events.push({id: `swap-${r.id}`, at: r.created_at, icon: 'swap', month: r.month, text: r.proposed_by ? t(`${name(r.proposed_by)} proposed a swap: ${pair}`, `${name(r.proposed_by)} הציע/ה החלפה: ${pair}`) : t(`${name(r.requester_id)} asked to swap: ${pair}`, `${name(r.requester_id)} ביקש/ה החלפה: ${pair}`)});

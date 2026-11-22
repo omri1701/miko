@@ -1,6 +1,7 @@
 // Notification text in the member's own language (decision 2026-11-06). The database
 // records only the kind and dates; the sender writes the words here, so they never
 // carry constraint notes, swap explanations or anything else private.
+import {weekdayDate} from '../date-format.ts';
 export type PushLanguage = 'en' | 'he';
 export const PUSH_KINDS = ['deadline_3', 'deadline_1', 'published', 'republished', 'edit', 'swap_new', 'swap_accepted', 'swap_awaiting_admin',
   'swap_declined', 'swap_rejected', 'swap_approved', 'remind_evening', 'remind_morning', 'member_waiting'] as const;
@@ -14,7 +15,7 @@ const locale = (lang: PushLanguage) => lang === 'he' ? 'he-IL' : 'en-GB';
 /** A date-only key in Israel, e.g. "Thu 12 Nov" / "יום ה׳, 12 בנוב׳". */
 export function pushDate(day: string | undefined, lang: PushLanguage) {
   if (!day || !DAY.test(day)) return '';
-  return new Date(day + 'T12:00:00Z').toLocaleDateString(locale(lang), {weekday: 'short', day: 'numeric', month: 'short', timeZone: 'Asia/Jerusalem'});
+  return weekdayDate(day, lang, 'short', 'Asia/Jerusalem');
 }
 export function pushMonth(month: string | undefined, lang: PushLanguage) {
   if (!month || !MONTH.test(month)) return '';

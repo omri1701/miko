@@ -11,7 +11,7 @@ import {Skeleton} from '@/components/ui/skeleton';
 import type {TeamWorkspace} from '@/hooks/use-team-workspace';
 import {useBalance} from '@/hooks/use-balance';
 import {addDays, calendarMonthLabel} from '@/lib/rota/calendar-dates';
-import {shortDate} from '@/lib/date-format';
+import {shortDate, weekdayDate} from '@/lib/date-format';
 import type {Language, Translate} from '@/components/rota/workspace-types';
 import {constraintsDue, dutyWhen, greeting, myUpcomingDuties, type MyDuty} from './home-data';
 import {SwapCard, type SwapActions} from '@/components/rota/swap-requests';
@@ -39,7 +39,7 @@ export function HomeScreen({remote, swaps, today, lang, t, onSchedule, onAvailab
   const approvals = admin ? (raw.swapRequests ?? []).filter(r => r.status === 'awaiting_admin').length : 0;
   const drafts = admin ? raw.months.filter(m => m.status === 'draft' && m.generated && m.month >= today.slice(0, 7)) : [];
   const todo = viewer ? 0 : pending + approvals + drafts.length;
-  const dateLine = new Date(today + 'T12:00:00Z').toLocaleDateString(lang === 'en' ? 'en-GB' : 'he-IL', {weekday: 'long', day: 'numeric', month: 'long', timeZone: 'UTC'});
+  const dateLine = weekdayDate(today, lang, 'long');
   // The balance is a display projection, read where it is shown (never at startup).
   // Shown at once from the last read while a newer revision loads (hooks/use-balance.ts).
   const balance = useBalance(remote);

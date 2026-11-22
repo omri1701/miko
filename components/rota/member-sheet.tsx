@@ -53,8 +53,8 @@ export function MemberSheet({member, open, onClose, lang, t, selfId, admin, savi
         <div className="row"><span className="row-body"><label className="row-title" htmlFor="member-active">{t('Active', 'פעיל')}</label>{p.id === selfId && <span className="row-subtitle">{t('You can’t deactivate yourself', 'אי אפשר להשבית את עצמך')}</span>}</span><span className="row-trail">
           <Switch id="member-active" disabled={saving || p.id === selfId} checked={p.active} aria-label={`${t('Active', 'פעיל')} ${p.name}`} onCheckedChange={v => onActive(v === true)}/></span></div>
         <div className="row row-column">
-          <span className="row-title">{t('Colour', 'צבע')}</span>
-          <div className="color-grid" role="radiogroup" aria-label={`${t('Colour', 'צבע')} ${p.name}`} aria-busy={colorBusy}>
+          <span className="row-title">{t('Color', 'צבע')}</span>
+          <div className="color-grid" role="radiogroup" aria-label={`${t('Color', 'צבע')} ${p.name}`} aria-busy={colorBusy}>
             {PALETTE.map(c => {
               const owner = taken.get(c.hex), selected = c.hex === current;
               return <button key={c.hex} type="button" role="radio" aria-checked={selected} disabled={saving || colorBusy || (!!owner && !selected)}

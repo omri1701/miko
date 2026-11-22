@@ -54,7 +54,7 @@ export function WorkspaceCalendar({state, calendarState, calendarBlocks, dateCel
   });
   return <CalendarSurface lang={lang} dir={mobile && lang === 'he' ? 'rtl' : 'ltr'} gridRef={preview ? undefined : dragContainer} gridClassName={'gesture-grid' + (picking ? ' picking' : '')} notices={notices}>
     <span id="published-swap-help" className="sr-only" aria-live="polite">
-      {requesting ? keyboardSource ? t('Choose the duty to swap with. Greyed days say why. Escape cancels.', 'בחרו את הכוננות להחלפה. ימים אפורים מסבירים למה. Escape לביטול.') : '' : pickingFrom ? t('Choose the duty to swap with. Escape cancels.', 'בחרו את הכוננות להחלפה. Escape לביטול.') : ''}
+      {requesting ? keyboardSource ? t('Choose the duty to swap with. Grayed days say why. Escape cancels.', 'בחרו את הכוננות להחלפה. ימים אפורים מסבירים למה. Escape לביטול.') : '' : pickingFrom ? t('Choose the duty to swap with. Escape cancels.', 'בחרו את הכוננות להחלפה. Escape לביטול.') : ''}
     </span>
     {cells.map(({date: d, period: b, combined}) => {
       const a = b ? calendarState.assignments[b.id] : undefined,

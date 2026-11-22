@@ -18,8 +18,10 @@ type Kind='no'|'prefer';
 /** The admins' "Everyone" choice in the picker (#105 rule 6). */
 export const EVERYONE='*';
 
-/** "Wed 9 Dec" / "יום ד׳, 9 בדצמ׳", the same in every browser engine. */
-export const dayTitle=weekdayDate;
+/** "Wed 9 Dec" / "יום ד׳, 9 בדצמ׳". */
+export function dayTitle(day:string,lang:'en'|'he'){
+ return weekdayDate(day,lang);
+}
 const firstName=(name:string)=>name.trim().split(/\s+/)[0]??name;
 
 /** Who has a constraint on each day, unavailable first (#105 rule 6). Admins only: members never
