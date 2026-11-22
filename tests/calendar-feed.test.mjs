@@ -69,6 +69,7 @@ test('duties are all-day events on their Israel dates, with exclusive ends and s
   assert.equal(weekday['DTSTART;VALUE=DATE'], '20261102'); assert.equal(weekday['DTEND;VALUE=DATE'], '20261103');
   assert.equal(weekend['DTSTART;VALUE=DATE'], '20261106'); assert.equal(weekend['DTEND;VALUE=DATE'], '20261108');
   assert.equal(weekday.SUMMARY, 'Duty'); assert.equal(weekend.SUMMARY, 'Weekend duty');
+  // Intentional leftover: UIDs keep the @duty-scheduler domain so subscribed calendars do not duplicate events.
   assert.equal(weekday.UID, `20261102-primary-${KEY}@duty-scheduler`);
   assert.equal(weekday.DTSTAMP, '20261030T080000Z');
   assert.match(weekend.DESCRIPTION, /^Fri 6 Nov 09:00 – Sun 8 Nov 09:00 \(Israel time\)\\n1 point\\nOpen MiKo: https:\/\/duty\.example\.test\/$/);

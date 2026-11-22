@@ -9,7 +9,7 @@ import {blocks,dayOf,monthNext,addDays} from '../../lib/rota/engine.ts';
 
 const env=await prepareLocal();
 assert.equal(env.SUPABASE_URL,'http://127.0.0.1:48321');
-const sql=query=>execFileSync('docker',['exec','-i','supabase_db_duty-scheduler-app','psql','-U','postgres','-qAt','-v','ON_ERROR_STOP=1'],{input:query,encoding:'utf8'}).trim();
+const sql=query=>execFileSync('docker',['exec','-i','supabase_db_miko-app','psql','-U','postgres','-qAt','-v','ON_ERROR_STOP=1'],{input:query,encoding:'utf8'}).trim();
 const clients=[];
 async function login(email) {
  const c=createClient(env.SUPABASE_URL,env.SUPABASE_PUBLISHABLE_KEY,{auth:{persistSession:false,autoRefreshToken:false}});

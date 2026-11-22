@@ -47,7 +47,7 @@ Validation:
   partials, cancellation, asset failure/restart, stale saves, cutoff while open
   and at save equality, missing owner drafts, scoped approval/reload, emergency
   preservation, narrow Hebrew layout, focus and 12/24-engineer timings.
-- Disposable `supabase_db_duty-scheduler` generation, concurrency and compensation
+- Disposable `supabase_db_miko` generation, concurrency and compensation
   parity suites passed: 350 exhaustive baseline cases, 71 SQL/core histories,
   20 graph comparisons, authority after lock waits and cutoff equality. No schema
   or migration changes were needed. A bounded QA review found no blocking issues.

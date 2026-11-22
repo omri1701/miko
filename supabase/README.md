@@ -34,7 +34,7 @@ singleton are installed by a migration on local AND remote databases.
 ```sh
 node scripts/database-baseline.mjs
 node scripts/database-baseline.mjs --check
-node scripts/database-baseline.mjs --verify-local supabase_db_duty-scheduler
+node scripts/database-baseline.mjs --verify-local supabase_db_miko
 ```
 
 Generation concatenates normalized UTF-8/LF sources in `baseline.json` order and

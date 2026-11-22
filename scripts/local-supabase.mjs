@@ -9,9 +9,9 @@ import {LOCAL_API_URL,connectionTarget,validatePublicKey} from '../lib/supabase/
 import {applyLocalPush,hasPushKeys,readEnvFile} from './push-local.mjs';
 
 /** The isolated LOCAL stack's database container (pnpm start:local, local:setup, local:reset). */
-export const LOCAL_CONTAINER='supabase_db_duty-scheduler-app';
+export const LOCAL_CONTAINER='supabase_db_miko-app';
 const root=resolve(import.meta.dirname,'..'),directory=resolve(root,'work/local-supabase'),container=LOCAL_CONTAINER;
-const STALE_STACK='The LOCAL stack still uses old ports 58320–58324. Stop it once (data is kept): pnpm dlx supabase@2.119.0 stop --project-id duty-scheduler-app, then rerun.';
+const STALE_STACK='The LOCAL stack still uses old ports 58320–58324. Stop it once (data is kept): pnpm dlx supabase@2.119.0 stop --project-id miko-app, then rerun.';
 export const LOCAL_PASSWORD='Duty-local-only-1701!';
 export const LOCAL_ACCOUNTS=[['admin@duty.local','Local Admin'],['engineer@duty.local','Local Engineer'],['pending@duty.local','Local Pending']];
 // Fictional temporary members, in seniority order, for a 12-engineer LOCAL team.
@@ -41,7 +41,7 @@ function cli(args,capture=false) {
 }
 export async function prepareLocal() {
   mkdirSync(resolve(directory,'supabase'),{recursive:true});
-  const config=readFileSync(resolve(root,'supabase/config.toml'),'utf8').replace('project_id = "duty-scheduler"','project_id = "duty-scheduler-app"').replaceAll('5432','4832');
+  const config=readFileSync(resolve(root,'supabase/config.toml'),'utf8').replace('project_id = "miko"','project_id = "miko-app"').replaceAll('5432','4832');
   writeFileSync(resolve(directory,'supabase/config.toml'),config);
   const manifestFile=resolve(directory,'migrations.json');
   const source=readdirSync(resolve(root,'supabase/migrations')).filter(f=>f.endsWith('.sql')).sort();
@@ -63,7 +63,7 @@ export async function prepareLocal() {
   // A stack started before the move out of Windows' dynamic port range keeps
   // its old ports; the CLI would report the new ones without restarting it.
   let ports='';
-  try {ports=execFileSync('docker',['ps','--filter','name=supabase_kong_duty-scheduler-app','--format','{{.Ports}}'],{encoding:'utf8',stdio:['ignore','pipe','ignore']});} catch {}
+  try {ports=execFileSync('docker',['ps','--filter','name=supabase_kong_miko-app','--format','{{.Ports}}'],{encoding:'utf8',stdio:['ignore','pipe','ignore']});} catch {}
   if (/:58321->/.test(ports)) throw Error(STALE_STACK);
   console.log('Starting isolated local Supabase Auth/API stack…');
   cli(['start','--exclude','logflare,vector,supavisor,edge-runtime,imgproxy,storage-api,realtime']);

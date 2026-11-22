@@ -247,12 +247,12 @@ Use the pinned CLI and database-only LOCAL setup in [Supabase setup](SUPABASE_SE
 Never pass a linked target or hosted connection string.
 
 ```sh
-node scripts/database-baseline.mjs --verify-local supabase_db_duty-scheduler
-node supabase/tests/generation.mjs supabase_db_duty-scheduler
-node supabase/tests/baseline-fit.mjs supabase_db_duty-scheduler
-node supabase/tests/generation-races.mjs supabase_db_duty-scheduler
-node supabase/tests/compensation-parity.mjs supabase_db_duty-scheduler
-node supabase/tests/monkey.mjs supabase_db_duty-scheduler 100 1   # steps, seed; resets the database at the end
+node scripts/database-baseline.mjs --verify-local supabase_db_miko
+node supabase/tests/generation.mjs supabase_db_miko
+node supabase/tests/baseline-fit.mjs supabase_db_miko
+node supabase/tests/generation-races.mjs supabase_db_miko
+node supabase/tests/compensation-parity.mjs supabase_db_miko
+node supabase/tests/monkey.mjs supabase_db_miko 100 1   # steps, seed; resets the database at the end
 ```
 
 `monkey.mjs` (decision 2026-11-01) drives random action sequences through the checked

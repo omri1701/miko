@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+// Intentional leftover: the printed steps name the hosted Vercel project "duty-scheduler", whose name is unchanged (hosted identifiers stay).
 // Web push setup (decision 2026-11-06).
 //   pnpm push:setup local   Sets up push on the app's isolated LOCAL stack (the one pnpm start:local
 //                           and pnpm local:reset use): keys and the shared secret in .env.local

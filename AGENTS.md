@@ -1,4 +1,4 @@
-# MiKo (Duty Scheduler)
+# MiKo
 
 Mobile-first English/Hebrew rota: React, TypeScript, Next.js App Router, Supabase.
 

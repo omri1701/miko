@@ -44,6 +44,7 @@ test('only the MiKo hosts resolve, each to its own environment; old and look-ali
   assert.throws(()=>resolveEnvironment(PROJECTS.dev,origin,origin),/do not match/);
  }
  // Retired and look-alike hosts are not hosted origins: old names, wrong scheme, a port, or a different name.
+ // Intentional leftover: the retired duty-scheduler-* hosts must stay rejected.
  for(const origin of ['https://duty-scheduler-prod.vercel.app','https://miko.vercel.app','http://miko-prod.vercel.app','https://miko-prod.vercel.app:8443','https://miko-preview.vercel.app','https://miko-prod.vercel.app.evil.example','https://xmiko-prod.vercel.app'])
   assert.throws(()=>resolveEnvironment(PROJECTS.prod,origin));
  for(const origin of ['https://duty-scheduler-dev.vercel.app','https://xmiko-dev.vercel.app'])
