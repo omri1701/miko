@@ -1,4 +1,4 @@
-import {test,expect,ids,touchEvent,NOW, switchLanguage, openDutySheet, monthAction} from './fixtures';
+import {test,expect,ids,touchEvent,NOW, switchLanguage, openDutySheet, monthAction, editConstraintDay, choose} from './fixtures';
 import type {Page,Locator} from '@playwright/test';
 
 const day=(page:Page,date:string)=>page.locator(`.availability-day[data-gesture-key="${date}"]`);
@@ -27,8 +27,8 @@ for(const lang of ['en','he'] as const){
   await page.clock.setFixedTime(new Date(Date.parse(NOW)+1000));
   // The same date is empty for the manager, and constrained with a note for Alex.
   await day(page,'2026-11-04').click();await expect(remove).toHaveCount(0);await page.keyboard.press('Escape');
-  await page.getByRole('combobox').click();await page.getByRole('option',{name:'Alex Atlas',exact:true}).click();
-  await day(page,'2026-11-04').click();await expect(remove).toBeVisible();await remove.click();
+  await choose(page.getByRole('combobox'), 'Alex Atlas');
+  await editConstraintDay(page,day(page,'2026-11-04'));await expect(remove).toBeVisible();await remove.click();
   const confirm=page.getByRole('alertdialog');
   const cancel=confirm.getByRole('button',{name:lang==='en'?'Cancel':'ביטול',exact:true});
   await expect(cancel).toBeVisible();await cancel.click();
@@ -51,7 +51,7 @@ for(const lang of ['en','he'] as const){
   // A cell opens the duty sheet; Edit opens the editor (decision 2026-11-06).
   await (await openDutySheet(page,'2026-11-04')).getByRole('button',{name:lang==='en'?'Edit':'עריכה',exact:true}).click();
   await expect(page.locator('.duty-dialog')).toBeVisible();
-  await page.getByRole('combobox').first().click();await page.getByRole('option',{name:/Alex Atlas/}).click();
+  await choose(page.getByRole('combobox').first(), /Alex Atlas/);
   const checkbox=page.locator('.duty-override [role=checkbox]'),label=page.locator('.duty-override'),save=page.locator('.duty-dialog .editor-actions button');
   await label.evaluate(el=>{el.style.maxWidth='145px'});
   const box=(await checkbox.boundingBox())!,labelBox=(await label.boundingBox())!;

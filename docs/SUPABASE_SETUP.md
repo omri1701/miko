@@ -55,9 +55,9 @@ count. Migration `20261029222841_member_palette_15.sql` appended `#dbb677`,
 Focused database verification (empty disposable LOCAL database only):
 
 ```powershell
-node scripts/database-baseline.mjs --verify-local supabase_db_duty-scheduler
-node supabase/tests/temporary-members.mjs supabase_db_duty-scheduler
-node supabase/tests/allocation-fit.mjs supabase_db_duty-scheduler
+node scripts/database-baseline.mjs --verify-local supabase_db_miko
+node supabase/tests/temporary-members.mjs supabase_db_miko
+node supabase/tests/allocation-fit.mjs supabase_db_miko
 ```
 
 `temporary-members.mjs` rolls back all fixtures, checks denied RPC/direct writes and private
@@ -67,7 +67,7 @@ and compensation. It creates no fake identities for temporary engineers.
 `allocation-fit.mjs` checks that the browser-fitted baseline for a lumpy holiday
 month is accepted by `duty_confirm_allocation` and the equal split is refused. Existing
 data upgrade preservation is also checked by `scripts/database-upgrade.mjs`.
-These commands never target the populated `duty-scheduler-app` database.
+These commands never target the populated `miko-app` database.
 
 Migration `20261106234300_kept_baseline_after_split.sql` (decision 2026-11-07) adds
 `duty_private.allocation_kept_baseline` (private, no role may execute it) and redefines
@@ -109,9 +109,36 @@ carry it as `weekendsFrom`, so the weekend rotation lets the member rejoin level
 member. Only the same checked RPC writes it. Focused checks (empty disposable LOCAL database only):
 
 ```powershell
-docker cp supabase/tests supabase_db_duty-scheduler:/tmp/duty-tests
-docker exec supabase_db_duty-scheduler psql -U postgres -q -v ON_ERROR_STOP=1 -f /tmp/duty-tests/non-weekend.sql
-node supabase/tests/generation.mjs supabase_db_duty-scheduler
+docker cp supabase/tests supabase_db_miko:/tmp/duty-tests
+docker exec supabase_db_miko psql -U postgres -q -v ON_ERROR_STOP=1 -f /tmp/duty-tests/non-weekend.sql
+node supabase/tests/generation.mjs supabase_db_miko
+```
+
+## Viewer members
+
+Migration `20261121235055_viewer_members.sql` (decisions 2026-11-20, #90) adds
+`duty_members.viewer` (default false, so nobody changes) and the admin-only checked RPC
+`duty_set_viewer(p_member, p_viewer, p_revision)`: approved, non-temporary members only,
+revision-checked, no direct table writes. A Viewer is still a member (`is_member()`), so they
+read the published schedule, but is never scheduled: generation facts mark them not eligible
+and leave them out of the seniority list, publishing refuses a Viewer as primary or emergency
+cover (`An active engineer is required`), swaps and published edits refuse them,
+`set_constraints` refuses constraints for them (`Viewers have no constraints`), and the ledger
+records them as inactive (`compensation_members`, trigger now on `viewer` too) so they get no
+points or debts. Becoming a Viewer works like deactivating: duties already scheduled stay,
+open swaps are invalidated (`duty_reconcile_member_swaps` now also fires on `viewer`).
+`duty_private.is_manager()` is false for a Viewer-admin, so every checked write refuses them;
+the new `duty_private.is_overseer()` (any approved, active admin, Viewer or not) replaces it in
+the admin read policies (allocations, assignments, ledger events and snapshots, constraints,
+members, publications, swaps) and in the read-only `balance` and `replanned_versions`.
+`assert_admin_remains` counts only admins who are not Viewers. Notifications: `push_enqueue`
+skips Viewers unless they are admins, and deadline reminders skip every Viewer. Focused checks
+(empty disposable LOCAL database only):
+
+```powershell
+docker cp supabase/tests supabase_db_miko:/tmp/duty-tests
+docker exec supabase_db_miko psql -U postgres -q -v ON_ERROR_STOP=1 -f /tmp/duty-tests/viewer.sql
+node --test tests/viewer.test.mjs
 ```
 
 ## Personal calendar feed
@@ -131,8 +158,8 @@ member IDs), or NULL for an unknown, reset, inactive, declined or temporary memb
 application function. Focused checks (empty disposable LOCAL database only):
 
 ```powershell
-docker cp supabase/tests supabase_db_duty-scheduler:/tmp/duty-tests
-docker exec supabase_db_duty-scheduler psql -U postgres -q -v ON_ERROR_STOP=1 -f /tmp/duty-tests/calendar-feed.sql
+docker cp supabase/tests supabase_db_miko:/tmp/duty-tests
+docker exec supabase_db_miko psql -U postgres -q -v ON_ERROR_STOP=1 -f /tmp/duty-tests/calendar-feed.sql
 node --test tests/calendar-feed.test.mjs
 ```
 
@@ -173,7 +200,7 @@ pnpm push:setup local
 ```
 
 For the isolated LOCAL stack that `pnpm start:local` and `pnpm local:reset` use (database container
-`supabase_db_duty-scheduler-app`), once its migrations are applied: adds `VAPID_PUBLIC_KEY`,
+`supabase_db_miko-app`), once its migrations are applied: adds `VAPID_PUBLIC_KEY`,
 `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT` and `DUTY_PUSH_SECRET` to the gitignored `.env.local` (existing
 values are kept), enables pg_net and pg_cron when absent, and writes the Vault secrets and the 15-minute
 job targeting `http://host.docker.internal:5173/api/push/dispatch`. It is idempotent, touches no
@@ -203,8 +230,8 @@ from a second account (for example a swap request).
 Focused checks (empty disposable LOCAL database only; the sending checks stub pg_net):
 
 ```powershell
-docker cp supabase/tests supabase_db_duty-scheduler:/tmp/duty-tests
-docker exec supabase_db_duty-scheduler psql -U postgres -q -v ON_ERROR_STOP=1 -f /tmp/duty-tests/push.sql
+docker cp supabase/tests supabase_db_miko:/tmp/duty-tests
+docker exec supabase_db_miko psql -U postgres -q -v ON_ERROR_STOP=1 -f /tmp/duty-tests/push.sql
 node --test tests/push.test.mjs
 pnpm exec playwright test settings.spec.ts
 ```
@@ -331,7 +358,7 @@ distinct callbacks and separate clients; keep localhost confined to Development.
 | `duty_members` | Profile, role FK, approval-status FK, active flag, seniority order and color (each member's own, through `duty_set_color`; admins through the team rows of `duty_save_schedule`). Deactivation retains history. |
 | `duty_workspace` | One revision counter for atomic saves and stale-edit detection. |
 | `duty_months` | Deadline, status FK, generated flag, current publication FK and monotonic version sequence. |
-| `duty_constraints` | Engineer/date, constraint-type FK and a private note. |
+| `duty_constraints` | Engineer/date, constraint-type FK, a private note and `duty_approved` (an admin approved that person on that date while on duty, #103). |
 | `duty_assignments` | Duty dates, primary/emergency member FKs, title, extra points, computed total points and publication FK. NULL publication means draft. |
 | `duty_publications` | Version ID, month FK, sequence number, publisher FK and timestamp. |
 | `duty_swap_requests` | Requester/consent/admin-visible requests, original slot snapshots/FKs, current counterpart, persisted consent (and the requester's own consent when an admin proposed the swap), proposing admin, resolution and override audit reason. |
@@ -507,12 +534,12 @@ open the ngrok phone link when it is configured (otherwise they run on the PC on
 | `pnpm local:reset` | **Discards only the isolated local app database**, replays the current branch and recreates synthetic accounts. Use after incompatible branch migration changes or to restore pending fixtures. |
 
 LOCAL requires Docker Desktop and the pinned CLI (`pnpm dlx supabase@2.119.0`).
-It uses ignored `work/local-supabase`, project `duty-scheduler-app`, ports
+It uses ignored `work/local-supabase`, project `miko-app`, ports
 48320–48324 (below Windows' dynamic/excluded range), and container
-`supabase_db_duty-scheduler-app`. A stack still running on the former ports
+`supabase_db_miko-app`. A stack still running on the former ports
 58320–58324 is refused; stop it once, keeping its data, with
-`pnpm dlx supabase@2.119.0 stop --project-id duty-scheduler-app`. This stack is separate
-from Quality's empty `duty-scheduler` SQL-test database. Auth/API/Studio/mail run;
+`pnpm dlx supabase@2.119.0 stop --project-id miko-app`. This stack is separate
+from Quality's empty `miko` SQL-test database. Auth/API/Studio/mail run;
 unneeded analytics, pooling, Realtime, Storage and Edge services are excluded.
 No hosted links, service-role keys, Google secrets or live data are copied.
 The disposable migration copy is refreshed from the current branch; migration
@@ -741,9 +768,31 @@ adds proposer visibility. Read-only `duty_swap_availability(p_from,p_to)` return
 same conflicts `validate_swap` refuses as `[{member,day}]`, never notes, and only to
 an approved admin or one of the two primaries. Members get emergency cover's conflicts
 with `member` NULL and only for a pair starting today or later. Only final
-approval copies the current publication into a new immutable version. Availability
-conflicts added after creation can be acknowledged at consent but require an
-explicit admin override reason at approval. Published swap requests retain their
+approval copies the current publication into a new immutable version. Since migration
+`20261120094825_swap_over_constraint.sql` (#92) a primary's own unavailability no longer
+refuses a request; emergency cover's still does. Since
+`20261121170542_swap_approve_without_reason.sql` (owner 2026-11-21) the admin's approval is
+the availability override: no typed reason (`override_reason` stays empty unless a client
+sends one), the published duties are marked `manager_override`, and constraints are never
+deleted. That migration also drops the short-lived `requester_waived_days`/`other_waived_days`
+columns. Published duty edits still require an override reason. Since
+`20261121190805_swap_approval_survives_republish.sql` (#103) the approval survives Reopen +
+Publish; `20261121215805_one_availability_approval.sql` (owner 2026-11-21) replaced its locks
+with one availability approval, `duty_constraints.duty_approved`: an admin approved that person
+on that unavailable date while they are on the duty covering it (open draft or current
+publication). The duty editor's box and a draft swap's approval (`save_schedule`'s
+`approve_unavailable`, kept only for someone on that date in the saved draft), an approved swap,
+a published edit with a reason and Publish anyway each set it; nothing creates a lock. Every
+check honors it: Publish (primaries and emergency cover; `manager_override` no longer counts),
+`generation_facts` (an approved date of the person on that duty is not a refusal, so Plan the
+month and its validators never ask again), `validate_swap` and `duty_swap_availability` (an
+approved cover date). It lapses when nobody keeps that person on that date
+(`prune_duty_approvals`, after saves, publishes, swaps and published edits); a newly marked
+unavailable date never has it, a note edit keeps it, and a weekend split or join keeps it.
+Publish refuses unapproved conflicts as `Availability conflict: [{member,day}]` (never notes);
+`publish_anyway` approves exactly that list, and a conflict missing from it is refused and listed
+again (no retryable SQLSTATE). Existing manager exceptions and Plan the month availability
+approvals were converted. Members read only their own constraints' flag. Published swap requests retain their
 weekend cap: a swap cannot increase an engineer's weekend count above one. Draft
 swaps can instead explicitly approve weekend exceptions in the manager dialog. Secondary
 cover, special date points/spans, draft rows/status and historical versions remain
@@ -872,18 +921,18 @@ Studio/Auth/API services. No hosted credentials or external `psql` client are ne
 
 ```powershell
 pnpm dlx supabase@2.119.0 db start
-node scripts/database-baseline.mjs --verify-local supabase_db_duty-scheduler
-docker cp supabase/tests supabase_db_duty-scheduler:/tmp/duty-tests
-docker cp supabase/archive supabase_db_duty-scheduler:/tmp/archive
-docker exec supabase_db_duty-scheduler psql -U postgres -q -v ON_ERROR_STOP=1 -f /tmp/duty-tests/access.sql
-docker exec supabase_db_duty-scheduler psql -U postgres -q -v ON_ERROR_STOP=1 -f /tmp/duty-tests/swaps.sql
-docker exec supabase_db_duty-scheduler psql -U postgres -q -v ON_ERROR_STOP=1 -f /tmp/duty-tests/swap-upgrade.sql
-node supabase/tests/first-admin.mjs supabase_db_duty-scheduler
-node supabase/tests/swap-races.mjs supabase_db_duty-scheduler
-node supabase/tests/lifecycle-races.mjs supabase_db_duty-scheduler
-node supabase/tests/lifecycle-upgrade.mjs supabase_db_duty-scheduler
-node supabase/tests/lifecycle-release.mjs supabase_db_duty-scheduler
-pnpm dlx supabase@2.119.0 stop --project-id duty-scheduler --no-backup
+node scripts/database-baseline.mjs --verify-local supabase_db_miko
+docker cp supabase/tests supabase_db_miko:/tmp/duty-tests
+docker cp supabase/archive supabase_db_miko:/tmp/archive
+docker exec supabase_db_miko psql -U postgres -q -v ON_ERROR_STOP=1 -f /tmp/duty-tests/access.sql
+docker exec supabase_db_miko psql -U postgres -q -v ON_ERROR_STOP=1 -f /tmp/duty-tests/swaps.sql
+docker exec supabase_db_miko psql -U postgres -q -v ON_ERROR_STOP=1 -f /tmp/duty-tests/swap-upgrade.sql
+node supabase/tests/first-admin.mjs supabase_db_miko
+node supabase/tests/swap-races.mjs supabase_db_miko
+node supabase/tests/lifecycle-races.mjs supabase_db_miko
+node supabase/tests/lifecycle-upgrade.mjs supabase_db_miko
+node supabase/tests/lifecycle-release.mjs supabase_db_miko
+pnpm dlx supabase@2.119.0 stop --project-id miko --no-backup
 ```
 
 These are LOCAL commands. Never pass `--linked`, a hosted URL or hosted credentials.

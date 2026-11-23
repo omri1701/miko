@@ -1,4 +1,4 @@
-import {test, expect, ids, NOW, touchEvent, switchLanguage} from './fixtures';
+import {test, expect, ids, NOW, touchEvent, switchLanguage, dayTitle} from './fixtures';
 import type {Page} from '@playwright/test';
 
 const day = (page: Page, date: string) => page.locator(`.availability-day[data-gesture-key="2026-11-${date}"]`);
@@ -28,7 +28,7 @@ for (const width of [320, 375, 390, 430]) for (const lang of ['en', 'he'] as con
       await expect(hint).toHaveText(lang === 'en' ? '1 day selected' : 'נבחר יום אחד');
       expect(await positions()).toEqual(original);
       await touchEvent(page, 'touchmove', target.x, target.y);
-      const title = from === to ? (lang === 'en' ? '5 November' : '5 בנובמבר') : (lang === 'en' ? '5–9 November' : '5–9 בנובמבר');
+      const title = from === to ? dayTitle('2026-11-05', lang) : (lang === 'en' ? '5–9 November' : '5–9 בנובמבר');
       await expect(hint).toHaveText(from === to ? (lang === 'en' ? '1 day selected' : 'נבחר יום אחד') : (lang === 'en' ? '5 days selected' : 'נבחרו 5 ימים'));
       expect(await positions()).toEqual(original);
       await touchEvent(page, 'touchend', target.x, target.y);
@@ -38,7 +38,8 @@ for (const width of [320, 375, 390, 430]) for (const lang of ['en', 'he'] as con
       await expect(hint).toContainText(lang === 'en' ? 'selected' : 'נבחר');
       expect(await positions()).toEqual(original);
       await expect(page.locator('.date-selected')).toHaveCount(from === to ? 1 : 5);
-      if (from !== to) await expect(sheet.locator('.constraint-range-help')).toHaveText(lang === 'en' ? 'Applies to all selected dates' : 'חל על כל התאריכים שנבחרו');
+      // Short labels only (owner, 2026-11-21): no helper line in the sheet.
+      await expect(sheet.locator('.constraint-range-help,.constraint-notes-help')).toHaveCount(0);
       const description = sheet.locator('textarea');
       await description.fill('Long description '.repeat(17));
       await description.focus();
@@ -83,7 +84,8 @@ test('bulk notes warn, allow confirmation cancellation, and replace deliberately
   const target = await hold(page, '05', '09');
   await touchEvent(page, 'touchmove', target.x, target.y);
   await touchEvent(page, 'touchend', target.x, target.y);
-  await expect(page.locator('.constraint-notes-help')).toContainText('existing descriptions will be cleared');
+  // The warning waits for the confirm popup (owner, 2026-11-21: no helper text on screens).
+  await expect(page.locator('.constraint-notes-help')).toHaveCount(0);
   await expect(page.getByRole('button', {name: 'Save', exact: true})).toBeEnabled();
   await page.getByRole('button', {name: 'Save', exact: true}).click();
   const confirmation = page.getByRole('alertdialog');

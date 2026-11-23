@@ -9,14 +9,29 @@ import {LOCAL_API_URL,connectionTarget,validatePublicKey} from '../lib/supabase/
 import {applyLocalPush,hasPushKeys,readEnvFile} from './push-local.mjs';
 
 /** The isolated LOCAL stack's database container (pnpm start:local, local:setup, local:reset). */
-export const LOCAL_CONTAINER='supabase_db_duty-scheduler-app';
+export const LOCAL_CONTAINER='supabase_db_miko-app';
 const root=resolve(import.meta.dirname,'..'),directory=resolve(root,'work/local-supabase'),container=LOCAL_CONTAINER;
-const STALE_STACK='The LOCAL stack still uses old ports 58320–58324. Stop it once (data is kept): pnpm dlx supabase@2.119.0 stop --project-id duty-scheduler-app, then rerun.';
+const STALE_STACK='The LOCAL stack still uses old ports 58320–58324. Stop it once (data is kept): pnpm dlx supabase@2.119.0 stop --project-id miko-app, then rerun.';
 export const LOCAL_PASSWORD='Duty-local-only-1701!';
 export const LOCAL_ACCOUNTS=[['admin@duty.local','Local Admin'],['engineer@duty.local','Local Engineer'],['pending@duty.local','Local Pending']];
 // Fictional temporary members, in seniority order, for a 12-engineer LOCAL team.
 export const LOCAL_TEMPORARY_MEMBERS=['Avi','Dana','Yossi','Noa','Eitan','Maya','Lior','Tamar','Omer','Shira'];
 export const missingTemporaryMembers=members=>LOCAL_TEMPORARY_MEMBERS.filter(name=>!members.some(m=>m.name===name));
+const shiftDay=(day,n)=>{const d=new Date(`${day}T12:00:00Z`);d.setUTCDate(d.getUTCDate()+n);return d.toISOString().slice(0,10);};
+/** #105 rule 8: passed constraints with notes to look at locally (a long note, and days in a row
+ * across the month edge), relative to the Israel day. Admins may write past days; members can't. */
+export function localPastConstraints(today,members){
+  const id=name=>members.find(m=>m.name===name)?.id;
+  const first=`${today.slice(0,7)}-01`;
+  return [
+    {member:id('Local Engineer'),days:[shiftDay(first,-2),shiftDay(first,-1),first,shiftDay(first,1)],kind:'no',note:'Vacation in Greece'},
+    {member:id('Local Engineer'),days:[shiftDay(today,-3)],kind:'no',note:'Doctor: yearly check-up in Tel Aviv, away the whole day and back late in the evening, so please keep this day free.'},
+    {member:id('Local Engineer'),days:[shiftDay(today,-6)],kind:'prefer',note:''},
+    {member:id('Local Admin'),days:[shiftDay(today,-5),shiftDay(today,-4)],kind:'no',note:'Army reserve'},
+    {member:id('Avi'),days:[shiftDay(today,-3)],kind:'no',note:'Dentist'},
+    {member:id('Dana'),days:[shiftDay(today,-3)],kind:'prefer',note:''},
+  ].filter(c=>c.member);
+}
 function cli(args,capture=false) {
   // pnpm scripts provide its executable path, avoiding shell quoting on Windows.
   if (!process.env.npm_execpath) throw Error('Run via pnpm local:setup or pnpm start:local.');
@@ -26,7 +41,7 @@ function cli(args,capture=false) {
 }
 export async function prepareLocal() {
   mkdirSync(resolve(directory,'supabase'),{recursive:true});
-  const config=readFileSync(resolve(root,'supabase/config.toml'),'utf8').replace('project_id = "duty-scheduler"','project_id = "duty-scheduler-app"').replaceAll('5432','4832');
+  const config=readFileSync(resolve(root,'supabase/config.toml'),'utf8').replace('project_id = "miko"','project_id = "miko-app"').replaceAll('5432','4832');
   writeFileSync(resolve(directory,'supabase/config.toml'),config);
   const manifestFile=resolve(directory,'migrations.json');
   const source=readdirSync(resolve(root,'supabase/migrations')).filter(f=>f.endsWith('.sql')).sort();
@@ -48,7 +63,7 @@ export async function prepareLocal() {
   // A stack started before the move out of Windows' dynamic port range keeps
   // its old ports; the CLI would report the new ones without restarting it.
   let ports='';
-  try {ports=execFileSync('docker',['ps','--filter','name=supabase_kong_duty-scheduler-app','--format','{{.Ports}}'],{encoding:'utf8',stdio:['ignore','pipe','ignore']});} catch {}
+  try {ports=execFileSync('docker',['ps','--filter','name=supabase_kong_miko-app','--format','{{.Ports}}'],{encoding:'utf8',stdio:['ignore','pipe','ignore']});} catch {}
   if (/:58321->/.test(ports)) throw Error(STALE_STACK);
   console.log('Starting isolated local Supabase Auth/API stack…');
   cli(['start','--exclude','logflare,vector,supavisor,edge-runtime,imgproxy,storage-api,realtime']);
@@ -95,6 +110,13 @@ export async function prepareLocal() {
       if(loaded.error)throw Error('Local admin workspace load failed.');
     }
     if(missingTemporaryMembers(loaded.data.members).length)throw Error('Local temporary members missing.');
+    const today=new Date().toLocaleDateString('en-CA',{timeZone:'Asia/Jerusalem'});
+    for(const c of localPastConstraints(today,loaded.data.members)){
+      const set=await users[0].client.rpc('duty_set_constraints',{p_member:c.member,p_days:c.days,p_kind:c.kind,p_note:c.note,p_revision:loaded.data.revision});
+      if(set.error)throw Error('Local past constraints failed.');
+      loaded=await users[0].client.rpc('duty_load');
+      if(loaded.error)throw Error('Local admin workspace load failed.');
+    }
   }
   for(const user of users){
     const loaded=await user.client.rpc('duty_load');

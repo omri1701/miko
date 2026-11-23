@@ -1,11 +1,13 @@
 import {addDays,dayOf,monthNext,dates} from './calendar-dates.ts';
 export {addDays,dayOf,monthNext,dates} from './calendar-dates.ts';
-export type Engineer = { id: string; name: string; color: string; active: boolean; role?: string; /** Skips weekends (an admin setting): placing them on one needs manager approval. */ noWeekends?: boolean };
+export type Engineer = { id: string; name: string; color: string; active: boolean; role?: string; /** Skips weekends (an admin setting): placing them on one needs manager approval. */ noWeekends?: boolean; /** A Viewer (#90): sees the schedule but is never scheduled, like an inactive member. */ viewer?: boolean };
+/** Can be scheduled: active and not a Viewer (#90). */
+export const takesDuties = (p: Engineer) => p.active && !p.viewer;
 export type Special = { id: string; title: string; start: string; end: string; extra: number };
 export type Duty = { id: string; start: string; end: string; points: number; kind: 'day'|'weekend'|'special'; title?: string; weekendId?: string; specialId?: string; /** Dates of this duty covered by a special range (a combined weekend may have one or both). */ specialDates?: string[] };
 export type Assignment = { primary: string; secondary?: string; locked?: boolean; override?: boolean };
 export type Constraints = Record<string, Record<string, 'no'|'prefer'>>;
-export type State = { team: Engineer[]; splitWeekends?: string[]; specials: Special[]; constraints: Constraints; constraintNotes?: Record<string, Record<string,string>>; assignments: Record<string, Assignment>; months: Record<string, { deadline: string; status: 'draft'|'published'; generated?: boolean }>; version: number };
+export type State = { team: Engineer[]; splitWeekends?: string[]; specials: Special[]; constraints: Constraints; constraintNotes?: Record<string, Record<string,string>>; dutyApproved?: Record<string, Record<string,true>>; assignments: Record<string, Assignment>; months: Record<string, { deadline: string; status: 'draft'|'published'; generated?: boolean }>; version: number };
 export const overlap=(a:{start:string;end:string},b:{start:string;end:string})=>a.start<b.end&&b.start<a.end;
 export const ownerMonth=(b:Duty)=>(b.weekendId??b.start).slice(0,7);
 export const specialAt=(specials:Special[],date:string)=>specials.find(s=>s.start<=date&&date<s.end);
@@ -106,12 +108,21 @@ export function migrate(s:State):State{
  return {...s,version:3,team:s.team.map((p,i)=>({...p,color:COLORS[i%COLORS.length]})),assignments,months:Object.fromEntries(Object.entries(s.months).map(([m,v])=>[m,{...v,status:'draft'}]))};
 }
 export const unavailable=(b:Duty,id:string,c:Constraints)=>dates(b.start,b.end).filter(d=>c[id]?.[d]==='no');
+/** Unavailable dates an admin has not approved for that person (owner 2026-11-21): one approval,
+ * from the duty editor, a swap, a published edit or Publish anyway, is never asked again. */
+export const unapproved=(b:Duty,id:string,s:Pick<State,'constraints'|'dutyApproved'>)=>unavailable(b,id,s.constraints).filter(d=>!s.dutyApproved?.[id]?.[d]);
+export function approveDates(s:State,pairs:{member:string;day:string}[]):State{
+ if(!pairs.length)return s;
+ const approved={...s.dutyApproved};
+ for(const {member,day} of pairs)approved[member]={...approved[member],[day]:true};
+ return {...s,dutyApproved:approved};
+}
 export const preferred=(b:Duty,id:string,c:Constraints)=>dates(b.start,b.end).some(d=>c[id]?.[d]==='prefer');
 export function allKnownBlocks(s:State):Duty[]{const map=new Map<string,Duty>();for(const m of Object.keys(s.months))for(const b of blocks(m,s.specials,s.splitWeekends))map.set(b.id,b);return [...map.values()].sort((a,b)=>a.start.localeCompare(b.start));}
 export function totals(s:State,bs:Duty[]){return Object.fromEntries(s.team.map(p=>[p.id,bs.reduce((v,b)=>v+(s.assignments[b.id]?.primary===p.id?b.points:0),0)]));}
 const distance=(a:string,b:string)=>Math.abs((Date.parse(a)-Date.parse(b))/86400000);
 export function generate(s:State,month:string,seed=1):{assignments:State['assignments'];warnings:string[]}{
- const team=s.team.filter(p=>p.active);if(!team.length)return{assignments:s.assignments,warnings:['no-team']};
+ const team=s.team.filter(takesDuties);if(!team.length)return{assignments:s.assignments,warnings:['no-team']};
  const bs=blocks(month,s.specials,s.splitWeekends),ids=new Set(bs.map(b=>b.id));
  const fixed=bs.filter(b=>ownerMonth(b)!==month);
  const free=bs.filter(b=>!fixed.includes(b));
@@ -197,9 +208,10 @@ export function swapDraft(s:State,month:string,from:string,to:string,allowOverri
  if(x.locked||y.locked)return{ok:false,reason:'locked'};
  if(x.primary===y.primary)return{ok:false,reason:'same-person'};
  if(y.primary===x.secondary||x.primary===y.secondary)return{ok:false,reason:'duplicate'};
- if([x.primary,y.primary,x.secondary,y.secondary].filter(Boolean).some(id=>!s.team.some(p=>p.id===id&&p.active)))return{ok:false,reason:'inactive'};
+ if([x.primary,y.primary,x.secondary,y.secondary].filter(Boolean).some(id=>!s.team.some(p=>p.id===id&&takesDuties(p))))return{ok:false,reason:'inactive'};
  const changed=[{duty:a,assignment:{...x,primary:y.primary}},{duty:b,assignment:{...y,primary:x.primary}}];
- const conflicts=changed.flatMap(({duty,assignment})=>[assignment.primary,assignment.secondary].filter((id):id is string=>!!id).flatMap(id=>unavailable(duty,id,s.constraints).map(date=>({person:id,date}))));
+ // Only the primaries move: emergency cover stays put, so its constraints are no swap conflict (#116; Publish still asks).
+ const conflicts=changed.flatMap(({duty,assignment})=>unapproved(duty,assignment.primary,s).map(date=>({person:assignment.primary,date})));
  const assignments={...s.assignments};for(const {duty,assignment} of changed)assignments[duty.id]=assignment;
  const counts=weekendCounts({...s,assignments},month),before=weekendCounts(s,month);
  const weekendConflicts=Object.keys(counts).filter(id=>counts[id]>1&&counts[id]>before[id]).map(person=>({person,count:counts[person],month}));

@@ -2,9 +2,10 @@ import {
   blocks,
   totals,
   allKnownBlocks,
-  unavailable,
+  unapproved,
   ownerMonth,
   normalizeWeekends,
+  takesDuties,
   type State,
   type Duty,
 } from './engine.ts';
@@ -13,17 +14,20 @@ import {calendarDates} from './calendar-dates.ts';
 // Workspace projections: scheduling rules remain in the React-free engine.
 export function workspaceMetrics(state: State, month: string, duties: Duty[]) {
   const owned = duties.filter((b) => ownerMonth(b) === month),
-    active = state.team.filter((p) => p.active),
+    active = state.team.filter(takesDuties),
     monthTotals = totals(state, owned),
     historyTotals = totals(state, allKnownBlocks(state));
   const assigned = owned.filter((b) => state.assignments[b.id]?.primary).length;
-  const conflicts = owned.filter((b) => {
+  // Who is on a date they marked unavailable, not yet approved: Publish lists each one.
+  const unavailableDays = owned.flatMap((b) => {
     const a = state.assignments[b.id];
-    return (
-      a &&
-      [a.primary, a.secondary].some((id) => id && unavailable(b, id, state.constraints).length) &&
-      !a.override
-    );
+    return [a?.primary, a?.secondary].flatMap((id) => id ? unapproved(b, id, state).map((day) => ({member: id, day})) : []);
+  }).sort((p, q) => p.day.localeCompare(q.day) || p.member.localeCompare(q.member));
+  const conflicts = owned.filter((b) => unavailableDays.some(({day}) => b.start <= day && day < b.end));
+  // Each person and day behind those conflicts, with its duty (#110 draft lines), in date order.
+  const conflictDays = unavailableDays.flatMap(({member, day}) => {
+    const duty = conflicts.find((b) => b.start <= day && day < b.end);
+    return duty ? [{person: member, date: day, duty}] : [];
   });
   const gaps = active.flatMap((p) => {
     const mine = owned.filter(
@@ -41,7 +45,7 @@ export function workspaceMetrics(state: State, month: string, duties: Duty[]) {
       .map((b) => ({ p, b }));
   });
 
-  return { owned, active, monthTotals, historyTotals, assigned, conflicts, gaps };
+  return { owned, active, monthTotals, historyTotals, assigned, conflicts, conflictDays, unavailableDays, gaps };
 }
 export type WorkspaceMetrics = ReturnType<typeof workspaceMetrics>;
 

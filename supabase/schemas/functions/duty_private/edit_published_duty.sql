@@ -27,7 +27,7 @@ begin
  if d.id is null or duty_private.duty_owner(d.day)<>m.month then raise exception 'Choose a duty in this published month'; end if;
  if d.day<(now() at time zone 'Asia/Jerusalem')::date then raise exception 'Choose duties starting today or later'; end if;
  if d.primary_id is null then raise exception 'This duty has no primary engineer'; end if;
- if p_primary is null or not exists(select 1 from public.duty_members where id=p_primary and active and status='approved') then raise exception 'Choose an active approved engineer'; end if;
+ if p_primary is null or not exists(select 1 from public.duty_members where id=p_primary and active and status='approved' and not viewer) then raise exception 'Choose an active approved engineer'; end if;
  if p_primary=d.secondary_id then raise exception 'A primary engineer cannot also be emergency cover'; end if;
  -- Half points stay exact; the table's own bounds apply to both dates.
  if p_extra_points is null or p_extra_points<0 or p_extra_points>20 or p_extra_points*2<>trunc(p_extra_points*2)
@@ -103,6 +103,12 @@ begin
   'intents',case when intent is null then '[]'::jsonb when jsonb_typeof(intent)='array' then intent else jsonb_build_array(intent) end,
   'reason','Published duty edit '||d.day||' ('||p_kind||')'||case when conflicts then '. Availability override: '||reason else '' end));
  update public.duty_months set current_publication_id=publication where month=m.month;
+ -- A reason is the availability approval (owner 2026-11-21): the new engineer's unavailable dates
+ -- on this duty are approved for them, so a reopened draft never asks again. The old one's lapse.
+ if changed and conflicts then
+  update public.duty_constraints c set duty_approved=true where c.kind='no' and c.member_id=p_primary and c.day>=d.day and c.day<d.end_day;
+ end if;
+ perform duty_private.prune_duty_approvals();
  -- New points, or a weekend joined again, change the month's calendar; the copied plan follows it.
  if p_extra_points<>d.extra_points or saturday<>d.saturday_extra_points or fri.id is not null then
   update public.duty_allocations set calendar_fingerprint=md5((select jsonb_agg(x-array['primary','secondary'] order by x->>'id')::text

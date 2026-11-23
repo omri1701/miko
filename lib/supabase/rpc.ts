@@ -32,6 +32,7 @@ export type Functions = {
   duty_set_color: Operation<Revision & {p_color: string}>;
   duty_set_role: Operation<Revision & {p_member: string; p_role: string}>;
   duty_set_no_weekends: Operation<Revision & {p_member: string; p_no_weekends: boolean}>;
+  duty_set_viewer: Operation<Revision & {p_member: string; p_viewer: boolean}>;
   duty_restore_publication: Operation<Revision & {p_publication: string}>;
   duty_cancel_draft: Operation<Revision & {p_month: string}>;
   duty_delete_publication: Operation<Revision & {p_publication: string}>;

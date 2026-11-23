@@ -1,4 +1,4 @@
-import {test, expect, monthAction, duty, ids, targetReady, switchLanguage} from './fixtures';
+import {test, expect, monthAction, duty, ids, targetReady, switchLanguage, choose, touchEvent, NOW} from './fixtures';
 import type {Page} from '@playwright/test';
 import {PROJECTS} from '../../lib/supabase/environment';
 import {existsSync} from 'node:fs';
@@ -8,17 +8,18 @@ import {existsSync} from 'node:fs';
 // Generate, non-weekend members and the calendar subscription states.
 test.beforeEach(({backend}) => {backend.url = PROJECTS.prod; backend.runtimeOrigin = 'https://miko-prod.vercel.app';});
 
-async function snapshot(page: Page, name: string, keepPointer = false) {
+/** `screen`: capture the viewport as it is (scrolled), not the full page. */
+async function snapshot(page: Page, name: string, keepPointer = false, screen = false) {
   test.info().annotations.push({type: 'visual-review', description: JSON.stringify({name: name + '.png', viewport: page.viewportSize(), language: await page.locator('html').getAttribute('lang')})});
   await page.evaluate(() => document.fonts.ready);
   if (!keepPointer) await page.mouse.move(0, 0);
   // With updateSnapshots:none Playwright reports missing references without an actual attachment. Retain the candidate explicitly for the review gallery.
   if (!existsSync(test.info().snapshotPath(name + '.png'))) {
     const path = test.info().outputPath(name + '-actual.png');
-    await page.screenshot({path, fullPage: true, animations: 'disabled', caret: 'hide'});
+    await page.screenshot({path, fullPage: !screen, animations: 'disabled', caret: 'hide'});
     await test.info().attach(name + '-actual.png', {path, contentType: 'image/png'});
   }
-  await expect.soft(page).toHaveScreenshot(name + '.png', {fullPage: true});
+  await expect.soft(page).toHaveScreenshot(name + '.png', {fullPage: !screen});
 }
 const schedule = async (page: Page, lang: 'en' | 'he') => {await page.getByRole('tab', {name: lang === 'en' ? 'Schedule' : 'לוח', exact: true}).click(); await expect(page.locator('.calendar-grid')).toBeVisible();};
 /** Opens a duty's sheet: a tap on PC, the day row on phones. */
@@ -72,14 +73,15 @@ for (const lang of ['en', 'he'] as const) test(`streak bars and locked holiday m
 });
 
 // Decision 2026-11-05: a day the server would refuse is greyed before the pick; usable days stay green.
+// #92: a date a primary marked unavailable is red instead, and stays pickable.
 for (const lang of ['en', 'he'] as const) test(`swap target hints ${lang}`, async ({page, openApp, backend}) => {
   backend.raw.constraints.push({member_id: ids.b, day: '2026-11-09', kind: 'no', note: 'Synthetic private note'});
   await openApp('a');
   if (lang === 'he') await switchLanguage(page, 'he');
   await schedule(page, lang);
   await pickSwap(page, '2026-11-09', '2026-11-05', lang);
-  await expect(duty(page, '2026-11-04')).toHaveClass(/swap-blocked/);
-  await expect(duty(page, '2026-11-03')).toHaveClass(/swap-blocked/);
+  await expect(duty(page, '2026-11-04')).toHaveClass(/swap-constrained/);
+  await expect(duty(page, '2026-11-03')).toHaveClass(/swap-constrained/);
   await expect(duty(page, '2026-11-05')).toHaveClass(/drag-target/);
   await snapshot(page, `swap-target-hints-${lang}`);
 });
@@ -106,7 +108,8 @@ for (const lang of ['en', 'he'] as const) test(`admin swap proposal, cards and a
   backend.raw.revision!++;
   await page.reload();
   if (lang === 'he') await switchLanguage(page, 'he');
-  await page.locator('[data-swap-card]').getByRole('button', {name: t('Approve', 'אישור'), exact: true}).click();
+  // The card shows Blair's conflict line, so its label warns (owner 2026-11-21).
+  await page.locator('[data-swap-card]').getByRole('button', {name: t('Approve anyway', 'לאשר בכל זאת'), exact: true}).click();
   await expect(page.getByRole('dialog').getByRole('alert')).toBeVisible();
   await snapshot(page, `admin-swap-approval-${lang}`);
 });
@@ -152,8 +155,7 @@ for (const lang of ['en', 'he'] as const) test(`published duty edit and summary 
   const t = (en: string, he: string) => lang === 'en' ? en : he;
   await openDuty(page, '2026-11-04');
   await page.getByRole('dialog').getByRole('button', {name: t('Edit', 'עריכה'), exact: true}).click();
-  await page.getByRole('combobox', {name: t('Engineer', 'מהנדס'), exact: true}).click();
-  await page.getByRole('option', {name: t('Alex Atlas · unavailable', 'Alex Atlas · לא זמין'), exact: true}).click();
+  await choose(page.getByRole('combobox', {name: t('Engineer', 'מהנדס'), exact: true}), t('Alex Atlas · unavailable', 'Alex Atlas · לא זמין'));
   await page.getByRole('checkbox', {name: t('Override availability as admin', 'חריגה מאילוץ כמנהל')}).check();
   await page.getByLabel(t('Required audit reason', 'נימוק חובה לתיעוד')).fill('Covering a family event');
   await snapshot(page, `published-edit-${lang}`);
@@ -268,4 +270,94 @@ for (const lang of ['en', 'he'] as const) test(`calendar subscription ${lang}`, 
   await section.getByRole('button', {name: he ? 'איפוס הקישור' : 'Reset link'}).click();
   await expect(section.getByRole('group')).toBeVisible();
   await snapshot(page, `calendar-subscription-reset-${lang}`);
+});
+
+// #110: a draft's availability conflicts as lines (name · date · note) and red days; #111: Constraints at its last month.
+for (const lang of ['en', 'he'] as const) test(`draft availability conflicts ${lang}`, async ({page, openApp, backend}) => {
+  for (const row of backend.raw.assignments.filter(r => r.publication_id === null)) {
+    if (row.day === '2026-11-04') row.primary_id = ids.a;
+    if (row.day === '2026-11-25') row.primary_id = ids.b;
+  }
+  backend.raw.constraints.push({member_id: ids.b, day: '2026-11-25', kind: 'no', note: ''});
+  await openApp();
+  if (lang === 'he') await switchLanguage(page, 'he');
+  await schedule(page, lang);
+  await expect(page.locator('[data-conflicts] .conflict-line')).toHaveCount(2);
+  await snapshot(page, `draft-conflicts-${lang}`);
+  await page.emulateMedia({colorScheme: 'dark'});
+  await snapshot(page, `draft-conflicts-dark-${lang}`);
+  await page.emulateMedia({colorScheme: 'light'});
+  // A tapped line selects its day.
+  await page.locator('[data-conflicts] .conflict-line').last().click();
+  await expect(duty(page, '2026-11-25')).toHaveClass(/\bselected-day\b/);
+  await expect(duty(page, '2026-11-25')).toBeInViewport();
+  // The tap scrolls the day into view on the next frame; capture once that scroll has settled
+  // (scrollY unchanged over a few frames), or the full-page capture catches it half-way.
+  await page.waitForFunction(() => new Promise(done => {
+    const y = window.scrollY; let frames = 0;
+    const step = () => {if (window.scrollY !== y) return done(false); if (++frames < 6) requestAnimationFrame(step); else done(y > 0);};
+    requestAnimationFrame(step);
+  }));
+  await snapshot(page, `draft-conflict-selected-${lang}`);
+});
+
+for (const lang of ['en', 'he'] as const) test(`constraints at the last open month ${lang}`, async ({page, openApp}) => {
+  await openApp('a');
+  if (lang === 'he') await switchLanguage(page, 'he');
+  await page.getByRole('tab', {name: lang === 'en' ? 'Availability' : 'אילוצים', exact: true}).click();
+  await page.getByRole('button', {name: lang === 'en' ? 'Next month' : 'חודש הבא', exact: true}).last().click();
+  await expect(page.locator('.availability-screen .month-name')).toHaveText(lang === 'en' ? 'December 2026' : 'דצמבר 2026');
+  // Nobody is stopped from going on (#105); this is the window's last open month.
+  await expect(page.getByRole('button', {name: lang === 'en' ? 'Next month' : 'חודש הבא', exact: true}).last()).toBeEnabled();
+  await snapshot(page, `constraints-last-month-${lang}`);
+});
+
+// #105 Constraints redesign: notes in the days, blocks, neighbour and passed days, the one sheet
+// (editor and read-only) and the admins' Everyone view with its day sheet.
+for (const lang of ['en', 'he'] as const) test(`constraints redesign ${lang}`, async ({page, openApp, backend}) => {
+  const he = lang === 'he', t = (en: string, hb: string) => he ? hb : en;
+  const add = (member_id: string, days: string[], kind: 'no' | 'prefer', note: string) => backend.raw.constraints.push(...days.map(day => ({member_id, day, kind, note})));
+  add(ids.admin, ['2026-10-05', '2026-10-06'], 'no', t('Army reserve', 'מילואים'));
+  add(ids.admin, ['2026-10-12', '2026-10-13', '2026-10-14', '2026-10-15', '2026-10-16'], 'no', t('Abroad with family', 'בחו״ל עם המשפחה'));
+  add(ids.admin, ['2026-10-21'], 'prefer', '');
+  add(ids.admin, ['2026-10-29', '2026-10-30', '2026-10-31', '2026-11-01', '2026-11-02'], 'no', t('Vacation in Greece', 'חופשה ביוון'));
+  add(ids.b, ['2026-11-04'], 'prefer', '');
+  add(ids.c, ['2026-11-04', '2026-11-05'], 'no', t('Exam', 'מבחן'));
+  add(ids.d, ['2026-11-04', '2026-11-18'], 'no', '');
+  add(ids.e, ['2026-11-18'], 'no', t('Wedding', 'חתונה'));
+  await openApp('admin');
+  if (he) await switchLanguage(page, 'he');
+  await page.getByRole('tab', {name: t('Availability', 'אילוצים'), exact: true}).click();
+  await page.getByRole('button', {name: t('Previous month', 'חודש קודם'), exact: true}).last().click();
+  await expect(page.locator('.availability-screen .month-name')).toHaveText(t('October 2026', 'אוקטובר 2026'));
+  await snapshot(page, `constraints-passed-${lang}`);
+  await page.locator('.month-pane:not(.month-peek) .availability-day[data-date="2026-10-05"]').click({force: true});
+  await expect(page.getByRole('dialog').locator('.constraint-state')).toBeVisible();
+  await snapshot(page, `constraints-read-only-${lang}`);
+  await page.keyboard.press('Escape');
+  await page.locator('.month-pane:not(.month-peek) .availability-day[data-date="2026-10-13"]').click();
+  await expect(page.getByRole('dialog').getByRole('textbox')).toBeVisible();
+  await snapshot(page, `constraints-editor-${lang}`);
+  await page.keyboard.press('Escape');
+  // A two-week selection while dragging: one unbroken outline.
+  const day = (d: string) => page.locator(`.month-pane:not(.month-peek) .availability-day[data-date="${d}"]`).boundingBox();
+  const [from, to] = [(await day('2026-10-21'))!, (await day('2026-10-28'))!];
+  const mobile = test.info().project.name === 'mobile';
+  if (mobile) {await touchEvent(page, 'touchstart', from.x + from.width / 2, from.y + from.height / 2); await page.waitForTimeout(350); await touchEvent(page, 'touchmove', to.x + to.width / 2, to.y + to.height / 2);}
+  else {await page.mouse.move(from.x + from.width / 2, from.y + from.height / 2); await page.mouse.down(); await page.waitForTimeout(350); await page.mouse.move(to.x + to.width / 2, to.y + to.height / 2, {steps: 8});}
+  await expect(page.locator('.month-pane:not(.month-peek) .date-selected')).toHaveCount(8);
+  await snapshot(page, `constraints-selection-${lang}`, true);
+  if (mobile) await touchEvent(page, 'touchend', to.x + to.width / 2, to.y + to.height / 2); else await page.mouse.up();
+  await page.keyboard.press('Escape');
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+  // The clock is pinned in tests, so the 700 ms ghost-click guard after a drag never runs out on
+  // its own: move the pinned time on a minute, as real time would.
+  await page.clock.setFixedTime(new Date(Date.parse(NOW) + 60_000));
+  await page.getByRole('button', {name: t('Next month', 'חודש הבא'), exact: true}).last().click();
+  await choose(page.locator('.availability-screen select'), t('Everyone', 'כולם'));
+  await expect(page.locator('.availability-who').first()).toBeVisible();
+  await snapshot(page, `constraints-everyone-${lang}`);
+  await page.locator('.month-pane:not(.month-peek) .availability-day[data-date="2026-11-04"]').click();
+  await expect(page.getByRole('dialog').locator('.everyone-person').first()).toBeVisible();
+  await snapshot(page, `constraints-everyone-day-${lang}`);
 });

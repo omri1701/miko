@@ -3,7 +3,7 @@
 // It answers with one outcome per delivery, which the database records
 // (duty_private.push_settle). Only explicit refusals are retried, so nothing repeats.
 import {timingSafeEqual} from 'node:crypto';
-import {PUSH_KINDS, pushText, type PushKind, type PushLanguage, type PushParams} from './messages.ts';
+import {PUSH_KINDS, pushLink, pushText, type PushKind, type PushLanguage, type PushParams} from './messages.ts';
 import {BASE64URL_KEY, supportedPushEndpoint} from './endpoint.ts';
 
 export type DispatchMessage = {id: string; endpoint: string; keys: {p256dh: string; auth: string}; lang: PushLanguage; kind: PushKind;
@@ -33,6 +33,7 @@ function params(value: unknown): PushParams | null {
   for (const key of ['version', 'count'] as const) if (Number.isSafeInteger(p[key]) && (p[key] as number) > 0) out[key] = p[key] as number;
   if (p.role === 'primary' || p.role === 'secondary') out.role = p.role;
   if (typeof p.name === 'string') out.name = p.name.slice(0, 80);
+  if (typeof p.request === 'string' && p.request.length <= 64) out.request = p.request;
   return out;
 }
 
@@ -62,9 +63,10 @@ export function outcome(status: number | undefined): Outcome {
   return 'rejected';
 }
 
-/** The notification the service worker shows (public/sw.js). */
+/** The notification the service worker shows (public/sw.js); it opens the exact screen (issue #89). */
 export function payload(message: DispatchMessage) {
-  return JSON.stringify({...pushText(message.kind, message.params, message.lang), url: message.url, tag: message.tag, lang: message.lang});
+  const url = pushLink(message.kind, message.params, message.url);
+  return JSON.stringify({...pushText(message.kind, message.params, message.lang), url: URL_PATTERN.test(url) ? url : message.url, tag: message.tag, lang: message.lang});
 }
 
 /** The push service's reason for a refusal, safe to return and log: Apple and Mozilla answer

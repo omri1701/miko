@@ -4,18 +4,20 @@ import {expect,type Page} from '@playwright/test';
 // Schedule, Availability and Team each carry a .month-title (decision 2026-11-06); the Schedule
 // panel stays mounted but hidden behind the other tabs, so only the visible title counts.
 const visibleTitle=(page:Page)=>page.locator('.app-shell:not(.startup-skeleton) .month-title:visible');
-export async function assertMonthNavigation(page: Page) {
+/** `limit`: this is the last month the screen goes to (Constraints, #111), so Next is disabled. */
+export async function assertMonthNavigation(page: Page, limit=false) {
   const heading=visibleTitle(page);
   await expect(heading).toBeVisible();
   const buttons=heading.getByRole('button');
   await expect(buttons).toHaveCount(2);
-  for(const button of await buttons.all()) {
-    await expect(button).toBeEnabled();
+  for(const [i,button] of (await buttons.all()).entries()) {
+    if(limit&&i===1)await expect(button).toBeDisabled();
+    else await expect(button).toBeEnabled();
     await expect(button).toBeInViewport({ratio:1});
     expect(await button.evaluate(el=>{
       const r=el.getBoundingClientRect(),hit=document.elementFromPoint(r.x+r.width/2,r.y+r.height/2);
       return {width:r.width,height:r.height,hit:!!hit&&el.contains(hit)};
-    }), 'navigation must have unobstructed 44px targets').toMatchObject({hit:true});
+    }), 'navigation must have unobstructed 44px targets').toMatchObject({hit:!(limit&&i===1)});
     const r=(await button.boundingBox())!;
     expect(r.width).toBeGreaterThanOrEqual(44);
     expect(r.height).toBeGreaterThanOrEqual(44);
@@ -23,7 +25,8 @@ export async function assertMonthNavigation(page: Page) {
   return (await heading.locator('h2').textContent())!.replace(/\s+/g,' ').trim();
 }
 
-export async function traverseMonths(page:Page, count=24) {
+/** `limited`: the screen stops `count` months ahead (Constraints, #111). */
+export async function traverseMonths(page:Page, count=24, limited=false) {
   const start=await assertMonthNavigation(page),labels=[start];
   const title=visibleTitle(page).locator('h2'),buttons=visibleTitle(page).locator('button');
   for(const direction of [1,-1]) for(let i=0;i<count;i++) {
@@ -32,7 +35,7 @@ export async function traverseMonths(page:Page, count=24) {
     if(i===0){await button.focus();await button.press(direction===1?'Enter':'Space');}
     else await button.click();
     await expect(title).not.toHaveText(before);
-    const label=await assertMonthNavigation(page);
+    const label=await assertMonthNavigation(page,limited&&direction===1&&i===count-1);
     if(direction===1){expect(labels).not.toContain(label);labels.push(label);}
   }
   await expect(title).toHaveText(start);

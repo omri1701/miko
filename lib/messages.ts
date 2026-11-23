@@ -1,4 +1,27 @@
+import {texts} from './texts.ts';
+import {constraintLine, visibleNote} from './supabase/swaps.ts';
 type Translate = (en: string, he: string) => string;
+
+/** Who and when behind an availability refusal (#103): the database adds every conflict as
+ * [{member,day}] (never a note) after "unavailable-primary:" or "Availability conflict:". */
+export function availabilityConflicts(raw: string): {member: string; day: string}[] | null {
+  const found = /(?:unavailable-primary|Availability conflict): (\[[\s\S]*\])\s*$/.exec(raw);
+  if (!found) return null;
+  try {
+    const list: unknown = JSON.parse(found[1]);
+    return Array.isArray(list) && list.length && list.every(c => typeof c?.member === 'string' && typeof c?.day === 'string')
+      ? list.map(c => ({member: c.member as string, day: c.day as string})) : null;
+  } catch {return null;}
+}
+/** userMessage, with one line per conflict first for an availability refusal: "Avi marked 22 Dec
+ * as unavailable · doctor". The note shows only to its owner and admins. */
+export function explainedMessage(raw: string, t: Translate, context?: {me: string; admin: boolean; name: (id: string) => string;
+  note: (member: string, day: string) => string | undefined; day: (d: string) => string}): string {
+  const conflicts = context && availabilityConflicts(raw), lang = t('en', 'he') as 'en' | 'he';
+  if (!conflicts || !context) return userMessage(raw, t);
+  return [...conflicts.map(c => constraintLine({member: c.member, day: c.day, note: visibleNote(context.note(c.member, c.day), c.member, context)},
+    {me: context.me, name: context.name, day: context.day, lang})), userMessage(raw, t)].join('\n');
+}
 
 /** What every error or refusal says to the user, in English and Hebrew (decision
  * 2026-11-01): codes from the client libraries and the checked RPCs, and the RPCs'
@@ -36,6 +59,10 @@ export function userMessage(raw: string, t: Translate): string {
   if (/review-existing-reservation-normalization/.test(message)) return t('This plan would change a debt another month already repays, so it can’t be booked. Undo the last change, or change that month first.', 'התוכנית הייתה משנה חוב שחודש אחר כבר מחזיר, ולכן לא ניתן לרשום אותה. אפשר לבטל את השינוי האחרון, או לשנות קודם את החודש ההוא.');
   if (/review-circular-route/.test(message)) return t('A point someone lent comes back to them, so this plan can’t be booked. Undo the last change.', 'נקודה שמישהו העביר חוזרת אליו, ולכן לא ניתן לרשום את התוכנית. אפשר לבטל את השינוי האחרון.');
   // A published month's plan is replaced from the ledger without its own entries, unless (decision 2026-11-01):
+  // Constraints outside the open window (#111): approved texts in lib/texts.ts.
+  const notOpen = /constraints-window-closed:(\d{4}-\d{2})/.exec(message)?.[1];
+  if (notOpen) return texts.monthNotOpen(notOpen, t('en', 'he') as 'en' | 'he');
+  if (/constraints-day-passed/.test(message)) return texts.dayPassed(t('en', 'he') as 'en' | 'he');
   const later = /review-replan-later:(\d{4}-\d{2})/.exec(message)?.[1];
   if (later) {
     const name = (lang: string) => new Date(`${later}-15T00:00:00Z`).toLocaleString(lang, {month: 'long', year: 'numeric', timeZone: 'UTC'});
@@ -102,7 +129,7 @@ const SENTENCES: readonly (readonly [RegExp, string, string])[] = [
   [/push-unsupported/, 'This browser can’t receive notifications. Use Chrome on Android, or Duty from the Home Screen on iPhone (iOS 16.4 or later).', 'הדפדפן הזה לא יכול לקבל התראות. יש להשתמש ב־Chrome באנדרואיד, או ב־Duty ממסך הבית באייפון (iOS 16.4 ומעלה).'],
   [/push-permission-denied/, 'Notifications weren’t allowed. Allow them for Duty in the browser or phone settings, then try again.', 'ההתראות לא אושרו. יש לאפשר אותן ל־Duty בהגדרות הדפדפן או הטלפון ולנסות שוב.'],
   [/Choose English or Hebrew/, 'Choose English or Hebrew.', 'יש לבחור עברית או אנגלית.'],
-  [/Choose a colour from the palette/, 'Choose a colour from the palette.', 'יש לבחור צבע מהפלטה.'],
+  [/Choose a colou?r from the palette/, 'Choose a color from the palette.', 'יש לבחור צבע מהפלטה.'],
   [/Invalid notification settings|Invalid notification time/, 'Those notification settings couldn’t be saved. Refresh, then try again.', 'לא ניתן היה לשמור את הגדרות ההתראות. יש לרענן ולנסות שוב.'],
   [/Could not load notification settings/, 'Couldn’t load your notification settings. Try again.', 'לא ניתן היה לטעון את הגדרות ההתראות. יש לנסות שוב.'],
   // Solver and validation internals: Generate didn't finish; nothing was saved.
@@ -128,6 +155,9 @@ const SENTENCES: readonly (readonly [RegExp, string, string])[] = [
   [/An open month draft is required|Duty requires its owning month draft|Edit duties in their owning month/, 'Edit this month’s draft first: open the month, then try again.', 'יש לערוך קודם את טיוטת החודש: לפתוח את החודש ולנסות שוב.'],
   [/Choose whether this member takes weekends/, 'Choose whether this member takes weekends.', 'יש לבחור אם החבר הזה עושה סופי שבוע.'],
   [/Approve this member first/, 'Approve this member first.', 'יש לאשר קודם את החבר הזה.'],
+  [/Choose whether this member is a Viewer/, 'Choose whether this member is a Viewer.', 'יש לבחור אם החבר הזה צופה.'],
+  [/A temporary member cannot be a Viewer/, 'A temporary member can’t be a Viewer.', 'חבר צוות זמני לא יכול להיות צופה.'],
+  [/Viewers have no constraints/, 'Viewers don’t add constraints.', 'צופים לא מוסיפים אילוצים.'],
   [/Calendar changed\. Confirm allocation again/, 'The month’s calendar changed. Confirm the plan again.', 'לוח החודש השתנה. יש לאשר שוב את התוכנית.'],
   [/Choose duties in the same current publication|Choose duties owned by the same published month/, 'Choose two duties from the same published month.', 'יש לבחור שתי כוננויות מאותו חודש שפורסם.'],
   [/Choose duties starting today or later/, 'Choose duties from today on.', 'יש לבחור כוננויות מהיום והלאה.'],
@@ -145,7 +175,7 @@ const SENTENCES: readonly (readonly [RegExp, string, string])[] = [
   [/Keep at least one active admin/, 'Keep at least one active admin.', 'יש להשאיר לפחות מנהל פעיל אחד.'],
   [/Only the current counterpart can respond/, 'Only the person asked can answer this request.', 'רק האדם שנשאל יכול לענות לבקשה הזו.'],
   [/Only the requester can cancel|Only the person who started the request can cancel/, 'Only the person who started this request can cancel it.', 'רק מי שיזם את הבקשה הזו יכול לבטל אותה.'],
-  [/Request not found|This request is no longer pending/, 'This request was already answered or cancelled.', 'הבקשה הזו כבר נענתה או בוטלה.'],
+  [/Request not found|This request is no longer pending/, 'This request was already answered or canceled.', 'הבקשה הזו כבר נענתה או בוטלה.'],
   [/Review missing allocation publication lineage/, 'This month’s plan wasn’t saved with its publication. Reopen the month and confirm its plan again.', 'התוכנית של החודש לא נשמרה עם הפרסום שלו. יש לפתוח מחדש את החודש ולאשר שוב את התוכנית.'],
   [/Temporary member required/, 'Choose a temporary member.', 'יש לבחור חבר זמני.'],
   [/link-has-balance/, 'This sign-up already has balance entries. Approve or decline it instead.', 'להרשמה הזו כבר יש רישומים במאזן. אפשר לאשר או לדחות אותה במקום.'],

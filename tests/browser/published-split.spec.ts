@@ -1,4 +1,4 @@
-import {test, expect, ids, duty, switchLanguage, openDutySheet, type Backend} from './fixtures';
+import {test, expect, ids, duty, switchLanguage, openDutySheet, type Backend, choose} from './fixtures';
 import type {Page} from '@playwright/test';
 import {existsSync} from 'node:fs';
 
@@ -56,8 +56,7 @@ for (const lang of ['en', 'he'] as const) test(`split a published weekend: two d
   await page.keyboard.press(lang === 'en' ? 'ArrowRight' : 'ArrowLeft');
   await expect(dialog.getByRole('radio', {name: t('Two days', 'שני ימים')})).toHaveAttribute('aria-checked', 'true');
   await expect(dialog.locator('.day-card')).toHaveCount(2);
-  await dialog.getByRole('combobox', {name: t('Saturday primary engineer', 'מהנדס ראשי ביום שבת')}).click();
-  await page.getByRole('option', {name: names[taker]}).click();
+  await choose(dialog.getByRole('combobox', {name: t('Saturday primary engineer', 'מהנדס ראשי ביום שבת')}), names[taker]);
   await dialog.getByLabel(t('Saturday points', 'נקודות ביום שבת')).fill('1');
   await expect(dialog.getByRole('group', {name: t('Compensation', 'פיצוי')})).toBeVisible();
   if (lang === 'en') await expect(dialog).toContainText(`${names[owner]} owes ${names[taker]} 0.5 points (7 Nov), repaid in later months.`);

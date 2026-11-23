@@ -3,6 +3,7 @@
 // Duties are all-day events on their Israel calendar dates (a duty runs 09:00 to the next
 // day's 09:00 in Asia/Jerusalem, which the description says), so no time-zone conversion
 // can move a duty to the wrong day. DTEND is exclusive, like the duty row's end_day.
+import {weekdayDate} from '../date-format.ts';
 
 export type FeedLanguage = 'en' | 'he';
 export type FeedDuty = {day: string; endDay: string; role: 'primary' | 'emergency'; title: string; points: number | null; publishedAt: string};
@@ -74,7 +75,7 @@ const LABELS = {
 } as const;
 
 function handover(day: string, language: FeedLanguage) {
-  return new Intl.DateTimeFormat(LABELS[language].locale, {weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC'}).format(new Date(time(day)));
+  return weekdayDate(day, language);
 }
 
 /** One VEVENT's content lines. The UID (its @duty-scheduler domain kept through the MiKo rename) is stable for the same member, start date and role,

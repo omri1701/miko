@@ -115,20 +115,20 @@ test('Team keeps the last known balances on screen while a newer one loads', asy
   await expect(net).toHaveText('+2');
 });
 
-for (const scheme of ['light', 'dark'] as const) test(`menu and picker highlights are readable in ${scheme}`, async ({page, openApp}) => {
+// The picker is a native select: its list is the system's, following the theme through
+// color-scheme, with no custom option colours; the closed field stays readable.
+for (const scheme of ['light', 'dark'] as const) test(`the picker follows the ${scheme} theme and stays readable`, async ({page, openApp}) => {
   await page.emulateMedia({colorScheme: scheme});
   await openApp();
   await tab(page, 'Availability');
-  await page.getByRole('combobox', {name: 'Engineer'}).click();
-  const option = page.getByRole('option').nth(1);
-  await option.hover();
-  await expect(option).toHaveAttribute('data-highlighted', '');
-  const ratio = await option.evaluate(el => {
+  const picker = page.getByRole('combobox', {name: 'Engineer'});
+  await expect(picker).toHaveCSS('color-scheme', scheme);
+  for (const option of await picker.locator('option').all()) expect(await option.getAttribute('style')).toBeNull();
+  const ratio = await picker.evaluate(el => {
     const rgb = (value: string) => value.match(/[\d.]+/g)!.slice(0, 3).map(Number);
     const lum = ([r, g, b]: number[]) => {const c = [r, g, b].map(v => {v /= 255; return v <= .03928 ? v / 12.92 : ((v + .055) / 1.055) ** 2.4;}); return .2126 * c[0] + .7152 * c[1] + .0722 * c[2];};
     const css = getComputedStyle(el), [a, b] = [lum(rgb(css.color)), lum(rgb(css.backgroundColor))];
     return (Math.max(a, b) + .05) / (Math.min(a, b) + .05);
   });
   expect(ratio).toBeGreaterThanOrEqual(7);
-  await page.keyboard.press('Escape');
 });

@@ -91,13 +91,24 @@ begin
  reset role;
  if before_rows is distinct from (select jsonb_agg(to_jsonb(a) order by day) from public.duty_assignments a where publication_id=pub) then raise exception 'Request/cancel/reject mutated publication'; end if;
 
- -- Request-time unavailability is checked without exposing private notes.
+ -- #92: a requester may ask for a date they marked unavailable; the constraint stays.
+ -- #116: emergency cover's unavailability doesn't refuse it either (the cover doesn't move).
  insert into public.duty_constraints values(engineer_id,'2099-10-06','no','Private');
  perform set_config('request.jwt.claim.sub',engineer_id::text,true); set local role authenticated;
  select revision into rev from public.duty_workspace;
- begin perform public.duty_request_swap(from_id,to_id,'',rev); raise exception 'Unavailable request accepted'; exception when raise_exception then if sqlerrm='Unavailable request accepted' then raise; end if; end;
+ perform public.duty_request_swap(from_id,to_id,'',rev);
+ select id into request_id from public.duty_swap_requests where status='awaiting_engineer';
+ select revision into rev from public.duty_workspace; perform public.duty_resolve_swap(request_id,'cancel',rev);
+ reset role;
+ if not exists(select 1 from public.duty_constraints where member_id=engineer_id and day='2099-10-06' and note='Private') then raise exception 'Request removed the constraint'; end if;
+ delete from public.duty_constraints; insert into public.duty_constraints values(cover_id,'2099-10-06','no','Cover private');
+ set local role authenticated; select revision into rev from public.duty_workspace;
+ perform public.duty_request_swap(from_id,to_id,'',rev);
+ select id into request_id from public.duty_swap_requests where status='awaiting_engineer';
+ if request_id is null then raise exception 'Cover conflict refused a request'; end if;
+ select revision into rev from public.duty_workspace; perform public.duty_resolve_swap(request_id,'cancel',rev);
  reset role; delete from public.duty_constraints;
- set local role authenticated; perform public.duty_request_swap(from_id,to_id,'Approve me',rev);
+ set local role authenticated; select revision into rev from public.duty_workspace; perform public.duty_request_swap(from_id,to_id,'Approve me',rev);
  select id into request_id from public.duty_swap_requests where status='awaiting_engineer';
  -- Another pending request will become stale when this publication is superseded.
  perform set_config('request.jwt.claim.sub',other_id::text,true);
@@ -114,14 +125,14 @@ begin
  exception when raise_exception then if sqlerrm<>'An engineer is no longer active and approved' then raise; end if; end;
  reset role; update public.duty_members set active=true where id=cover_id;
  set local role authenticated;
- begin perform public.duty_resolve_swap(request_id,'approve',rev); raise exception 'Unavailable approval accepted'; exception when raise_exception then if sqlerrm='Unavailable approval accepted' then raise; end if; end;
- perform public.duty_resolve_swap(request_id,'approve',rev,'Explicit availability exception');
+ -- Owner 2026-11-21: approval over a constraint needs no typed reason; approving is the override.
+ perform public.duty_resolve_swap(request_id,'approve',rev);
  select current_publication_id into new_pub from public.duty_months where month='2099-10';
  if new_pub=pub or (select version from public.duty_publications where id=new_pub)<>2 then raise exception 'Approval did not create a new version'; end if;
  if (select status from public.duty_months where month='2099-10')<>'draft' then raise exception 'Approval published unrelated draft'; end if;
  if (select primary_id from public.duty_assignments where publication_id=new_pub and day='2099-10-05')<>other_id
   or (select primary_id from public.duty_assignments where publication_id=new_pub and day='2099-10-06')<>engineer_id then raise exception 'Primaries not exchanged'; end if;
- if (select override_reason from public.duty_swap_requests where id=request_id)<>'Explicit availability exception' then raise exception 'Override not audited'; end if;
+ if (select status||'|'||override_reason||'|'||resolved_by from public.duty_swap_requests where id=request_id)<>'approved||'||admin_id then raise exception 'Approval not recorded'; end if;
  if (select manager_override from public.duty_assignments where publication_id=new_pub and day='2099-10-05')
   or not (select manager_override from public.duty_assignments where publication_id=new_pub and day='2099-10-06') then raise exception 'Override must apply only to conflicting dates'; end if;
  begin perform public.duty_resolve_swap(competing,'approve',rev); raise exception 'Concurrent stale revision accepted'; exception when sqlstate 'PT409' then null; end;
@@ -312,6 +323,7 @@ reset role;
 create function pg_temp.slot(p_day date) returns uuid language sql as $$
  select a.id from public.duty_assignments a join public.duty_months m on m.current_publication_id=a.publication_id
  where m.month='2098-03' and a.day=p_day$$;
+create function pg_temp.pub() returns uuid language sql as $$select current_publication_id from public.duty_months where month='2098-03'$$;
 create function pg_temp.act(p_user uuid) returns bigint language plpgsql as $$
 begin perform set_config('request.jwt.claim.sub',p_user::text,true); return (select revision from public.duty_workspace); end $$;
 create function pg_temp.republish(p_owners jsonb,p_by uuid) returns void language plpgsql as $$
@@ -356,15 +368,16 @@ begin
  rev:=pg_temp.act(boss);
  if public.duty_swap_availability(pg_temp.slot('2098-03-03'),pg_temp.slot('2098-03-02'))::text like '%Secret%'
   or public.duty_swap_availability(pg_temp.slot('2098-03-03'),pg_temp.slot('2098-03-02'))<>result then raise exception 'Admin availability wrong'; end if;
- -- Emergency cover is named to admins only; members get past pairs refused.
+ -- #116: a swap never moves the emergency cover, so the cover's own unavailable day is no
+ -- conflict for anyone (and never names the cover). Members get past pairs refused.
  reset role; update public.duty_assignments set secondary_id=z where publication_id=pub and day='2098-03-03';
  insert into public.duty_constraints values(z,'2098-03-03','no','Cover note');
  insert into public.duty_assignments(publication_id,day,end_day,primary_id) values(pub,'2000-01-03','2000-01-04',y);
  set local role authenticated;
- if public.duty_swap_availability(pg_temp.slot('2098-03-02'),pg_temp.slot('2098-03-03'))->1<>jsonb_build_object('member',z,'day','2098-03-03') then raise exception 'Admin cannot see cover conflict'; end if;
+ if public.duty_swap_availability(pg_temp.slot('2098-03-02'),pg_temp.slot('2098-03-03'))<>result then raise exception 'Cover conflict shown to an admin'; end if;
  perform pg_temp.act(x);
- if public.duty_swap_availability(pg_temp.slot('2098-03-02'),pg_temp.slot('2098-03-03'))<>result||jsonb_build_array(jsonb_build_object('member',null,'day','2098-03-03'))
-  or public.duty_swap_availability(pg_temp.slot('2098-03-02'),pg_temp.slot('2098-03-03'))::text like '%'||z||'%' then raise exception 'Cover identity leaked to a member'; end if;
+ if public.duty_swap_availability(pg_temp.slot('2098-03-02'),pg_temp.slot('2098-03-03'))<>result
+  or public.duty_swap_availability(pg_temp.slot('2098-03-02'),pg_temp.slot('2098-03-03'))::text like '%'||z||'%' then raise exception 'Cover conflict shown to a member'; end if;
  perform pg_temp.act(y);
  begin perform public.duty_swap_availability(pg_temp.slot('2000-01-03'),pg_temp.slot('2098-03-02')); raise exception 'Member read a past pair';
  exception when raise_exception then if sqlerrm<>'Choose duties starting today or later' then raise; end if; end;
@@ -372,8 +385,10 @@ begin
  delete from public.duty_assignments where publication_id=pub and day='2000-01-03'; delete from public.duty_constraints where member_id=z;
  rev:=pg_temp.act(boss); set local role authenticated;
  if public.duty_swap_availability(pg_temp.slot('2098-03-04'),pg_temp.slot('2098-03-05'))<>'[]'::jsonb then raise exception 'Unrelated conflict reported'; end if;
- begin perform public.duty_request_swap(pg_temp.slot('2098-03-02'),pg_temp.slot('2098-03-03'),'',rev); raise exception 'Unavailable proposal sent';
- exception when raise_exception then if sqlerrm<>'Availability conflict. An admin must explicitly override with a reason.' then raise; end if; end;
+ -- #92: a counterpart's constraint no longer blocks a proposal.
+ perform public.duty_request_swap(pg_temp.slot('2098-03-02'),pg_temp.slot('2098-03-03'),'',rev);
+ select id into req from public.duty_swap_requests where month='2098-03' and status='awaiting_engineer';
+ rev:=pg_temp.act(boss); perform public.duty_resolve_swap(req,'cancel',rev); set local role authenticated;
  reset role; set local role anon;
  begin perform public.duty_swap_availability(pg_temp.slot('2098-03-02'),pg_temp.slot('2098-03-03')); raise exception 'Anon read availability'; exception when insufficient_privilege then null; end;
  reset role; delete from public.duty_constraints;
@@ -414,11 +429,9 @@ begin
  reset role;
  if (select jsonb_agg(to_jsonb(a) order by day) from public.duty_assignments a where publication_id=(select current_publication_id from public.duty_months where month='2098-03'))<>history
   then raise exception 'Assignments changed before final approval'; end if;
- -- A conflict added after consent still needs the audited admin override.
+ -- A conflict added after consent: the approval is the override; a reason a client sends is still kept.
  insert into public.duty_constraints values(x,'2098-03-03','no','Late private note');
  rev:=pg_temp.act(boss); set local role authenticated;
- begin perform public.duty_resolve_swap(req,'approve',rev); raise exception 'Late conflict approved without reason';
- exception when raise_exception then if sqlerrm<>'Availability conflict. An admin must explicitly override with a reason.' then raise; end if; end;
  perform public.duty_resolve_swap(req,'approve',rev,'Recorded in the external system');
  select current_publication_id into live from public.duty_months where month='2098-03';
  if live=pub or (select primary_id from public.duty_assignments where publication_id=live and day='2098-03-02')<>y
@@ -430,6 +443,14 @@ begin
  rev:=pg_temp.act(boss); set local role authenticated;
  if not exists(select 1 from public.duty_swap_requests where id=req) then raise exception 'Proposer lost resolved history'; end if;
 
+ -- #116: both duties' covers are unavailable on their own days. The swap doesn't move them, so
+ -- request, consent and approval need no override; each row keeps its own cover approval.
+ reset role;
+ update public.duty_assignments set secondary_id=y,manager_override=false where publication_id=pg_temp.pub() and day='2098-03-04';
+ update public.duty_assignments set secondary_id=x,manager_override=true where publication_id=pg_temp.pub() and day='2098-03-05';
+ insert into public.duty_constraints values(y,'2098-03-04','no','Cover away'),(x,'2098-03-05','no','Cover away');
+ rev:=pg_temp.act(boss); set local role authenticated;
+ if public.duty_swap_availability(pg_temp.slot('2098-03-04'),pg_temp.slot('2098-03-05'))<>'[]'::jsonb then raise exception 'Cover conflicts reported'; end if;
  -- Admin as a party: either order normalizes to the admin's side; only the other member is asked.
  perform public.duty_request_swap(pg_temp.slot('2098-03-04'),pg_temp.slot('2098-03-05'),'',rev);
  select id into req from public.duty_swap_requests where month='2098-03' and status='awaiting_engineer';
@@ -444,6 +465,14 @@ begin
  if (select status from public.duty_swap_requests where id=req)<>'awaiting_admin' then raise exception 'Admin party swap skipped final approval'; end if;
  perform public.duty_resolve_swap(req,'approve',rev);
  if (select status from public.duty_swap_requests where id=req)<>'approved' then raise exception 'Admin party approval failed'; end if;
+ if not exists(select 1 from public.duty_assignments where publication_id=pg_temp.pub() and day='2098-03-04' and primary_id=boss and secondary_id=y and not manager_override)
+  or not exists(select 1 from public.duty_assignments where publication_id=pg_temp.pub() and day='2098-03-05' and primary_id=z and secondary_id=x and manager_override)
+  then raise exception 'Swap changed the covers or their approvals'; end if;
+ if (select override_reason from public.duty_swap_requests where id=req)<>'' then raise exception 'Cover-only swap recorded an override'; end if;
+ reset role;
+ update public.duty_assignments set secondary_id=null,manager_override=false where publication_id=pg_temp.pub() and day in ('2098-03-04','2098-03-05');
+ delete from public.duty_constraints;
+ rev:=pg_temp.act(boss); set local role authenticated;
 
  -- Reject, cancel and decline at the consent stage, including an engineer's own request.
  rev:=pg_temp.act(z); perform public.duty_request_swap(pg_temp.slot('2098-03-05'),pg_temp.slot('2098-03-02'),'',rev);
@@ -584,5 +613,54 @@ begin
  exception when raise_exception then if sqlerrm<>'This request is no longer pending' then raise; end if; end;
 end $$;
 select 'PASS: admin-proposed swaps need both members and an explicit admin approval; admin parties are asked once; availability names who and when, never the note; consent covers counterpart and points; weighted swaps and swap-backs post once; admins answer for temporary members only; deactivation never leaves a swap waiting' as result;
+-- #92 (owner decisions 2026-11-20/21): a member may take a date they marked unavailable; the
+-- admin approves without a reason (approving is the override); the constraints stay.
+reset role;
+do $$
+declare boss uuid:=gen_random_uuid(); p uuid:=gen_random_uuid(); q uuid:=gen_random_uuid();
+ pub uuid; live uuid; req uuid; rev bigint;
+begin
+ delete from public.duty_constraints;
+ insert into auth.users(id,email,email_confirmed_at,is_anonymous,aud,role)
+ select id,id||'@example.invalid',now(),false,'authenticated','authenticated' from unnest(array[boss,p,q]) id;
+ insert into public.duty_members(id,email,name,role,status,active)
+ values(boss,boss||'@example.invalid','Consent admin','admin','approved',true),(p,p||'@example.invalid','Peleg','engineer','approved',true),
+ (q,q||'@example.invalid','Quinn','engineer','approved',true);
+ insert into public.duty_months(month,deadline,status,publication_sequence) values('2097-06','2097-05-25','published',1);
+ insert into public.duty_publications(month,version,published_by) values('2097-06',1,boss) returning id into pub;
+ update public.duty_months set current_publication_id=pub where month='2097-06';
+ insert into public.duty_assignments(publication_id,day,end_day,primary_id,secondary_id)
+ values(pub,'2097-06-02','2097-06-03',p,null),(pub,'2097-06-03','2097-06-04',q,boss);
+ -- Each takes the other's date, both marked unavailable; emergency cover too.
+ insert into public.duty_constraints values(q,'2097-06-02','no','Quinn secret'),(p,'2097-06-03','no','Peleg secret');
+ rev:=pg_temp.act(p); set local role authenticated;
+ perform public.duty_request_swap((select id from public.duty_assignments where publication_id=pub and day='2097-06-02'),
+  (select id from public.duty_assignments where publication_id=pub and day='2097-06-03'),'',rev);
+ select id into req from public.duty_swap_requests where month='2097-06' and status='awaiting_engineer';
+ rev:=pg_temp.act(boss);
+ begin perform public.duty_resolve_swap(req,'approve',rev); raise exception 'Approved before the constrained member accepted';
+ exception when raise_exception then if sqlerrm<>'Both engineers must accept before admin review' then raise; end if; end;
+ rev:=pg_temp.act(q); perform public.duty_resolve_swap(req,'accept',rev);
+ -- Emergency cover's unavailability, added after both accepted, is overridden by the approval too.
+ reset role; insert into public.duty_constraints values(boss,'2097-06-03','no','Cover secret');
+ rev:=pg_temp.act(boss); set local role authenticated;
+ perform public.duty_resolve_swap(req,'approve',rev);
+ select current_publication_id into live from public.duty_months where month='2097-06';
+ if (select status||override_reason from public.duty_swap_requests where id=req)<>'approved' then raise exception 'Swap not approved without a reason'; end if;
+ if (select primary_id from public.duty_assignments where publication_id=live and day='2097-06-02')<>q
+  or (select primary_id from public.duty_assignments where publication_id=live and day='2097-06-03')<>p then raise exception 'Swap not published'; end if;
+ if not (select bool_and(manager_override) from public.duty_assignments where publication_id=live and day in ('2097-06-02','2097-06-03'))
+  then raise exception 'Published duties not marked as availability overrides'; end if;
+ reset role;
+ if (select count(*) from public.duty_constraints where (member_id,day,note) in ((q,'2097-06-02','Quinn secret'),(p,'2097-06-03','Peleg secret'),(boss,'2097-06-03','Cover secret')))<>3
+  then raise exception 'Approving removed a constraint'; end if;
+ -- Published duty edits keep their required reason.
+ insert into public.duty_constraints values(p,'2097-06-02','no','Peleg edit');
+ rev:=pg_temp.act(boss); set local role authenticated;
+ begin perform public.duty_edit_published_duty(live,'2097-06-02',p,0,0,'temporary',rev,''); raise exception 'Edit over a constraint without reason';
+ exception when raise_exception then if sqlerrm not like 'Availability conflict%' then raise; end if; end;
+ reset role;
+end $$;
+select 'PASS: a member may take a date they marked unavailable; the admin approves without a reason and the duties are marked as overrides; constraints stay; published edits still need a reason' as result;
 rollback;
 \ir swap-today.sql

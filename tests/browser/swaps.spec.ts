@@ -22,7 +22,7 @@ test('published drag and keyboard request cancellation do not edit duties', asyn
   await tab(page, 'Home');
   await expect(page.locator('[data-swap-card]').getByText('Waiting for an answer', {exact: true})).toBeVisible();
   await page.getByRole('button', {name: 'Cancel request'}).click();
-  await expect(page.getByText('Request cancelled', {exact: true})).toBeVisible();
+  await expect(page.getByText('Request canceled', {exact: true})).toBeVisible();
   expect(status(backend)).toBe('cancelled');
   expect(backend.raw.assignments.find(d => d.day === '2026-11-02' && d.publication_id)!.primary_id).toBe(ids.a);
 });
@@ -33,7 +33,9 @@ test('a swap the server would refuse is greyed with its reason before the pick',
   for (const d of backend.raw.assignments.filter(d => d.day === '2026-11-13')) d.primary_id = ids.a;
   await openApp('a');
   await (await openDutySheet(page, '2026-11-02')).getByRole('button', {name: 'Swap', exact: true}).click();
-  await expect(duty(page, '2026-11-05')).toHaveAttribute('title', 'You can’t take 5 Nov');
+  // #92: your own unavailability is red but pickable; a second weekend stays grey.
+  await expect(duty(page, '2026-11-05')).toHaveAttribute('title', 'You marked 5 Nov as unavailable');
+  await expect(duty(page, '2026-11-05')).toHaveClass(/swap-constrained/);
   await expect(duty(page, '2026-11-06')).toHaveAttribute('title', 'This would give you a second weekend');
   await duty(page, '2026-11-06').click({force: true});
   await expect(page.locator('[data-sonner-toast]').filter({hasText: 'This would give you a second weekend'})).toBeVisible();
@@ -65,10 +67,9 @@ test('consent gates admin review; rejection, approval and invalidation update ea
     await tab(b, 'Home'); await b.getByRole('button', {name: 'Accept', exact: true}).click();
     const draft = structuredClone(backend.raw.assignments.filter(d => d.publication_id === null));
     await admin.reload(); await admin.getByRole('button', {name: 'Approve', exact: true}).click();
-    await admin.getByRole('checkbox', {name: 'Explicitly override availability conflicts'}).check();
-    await expect(admin.getByRole('button', {name: 'Approve & publish'})).toBeDisabled();
-    await admin.getByLabel('Required audit reason').fill('Synthetic manager audit reason');
-    await admin.getByRole('button', {name: 'Approve & publish'}).click();
+    // Owner 2026-11-21: a conflict is approved as is, without a typed reason.
+    await expect(admin.getByRole('dialog').getByRole('checkbox')).toHaveCount(0);
+    await admin.getByRole('button', {name: /^(Approve anyway|Approve & publish)$/}).click();
     await expect(admin.getByRole('dialog')).toBeHidden();
     await page.reload(); expect(status(backend)).toBe('approved'); await tab(page, 'Schedule');
     await expect(duty(page, '2026-11-02')).toHaveAccessibleName(/Blair Birch/);

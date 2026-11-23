@@ -13,6 +13,9 @@ REVOKE ALL ON FUNCTION duty_private.duty_owner(p_day date) FROM PUBLIC, anon, au
 REVOKE ALL ON FUNCTION duty_private.is_manager() FROM PUBLIC, anon, authenticated, service_role;
 GRANT ALL ON FUNCTION duty_private.is_manager() TO authenticated;
 
+REVOKE ALL ON FUNCTION duty_private.is_overseer() FROM PUBLIC, anon, authenticated, service_role;
+GRANT ALL ON FUNCTION duty_private.is_overseer() TO authenticated;
+
 REVOKE ALL ON FUNCTION duty_private.is_member() FROM PUBLIC, anon, authenticated, service_role;
 GRANT ALL ON FUNCTION duty_private.is_member() TO authenticated;
 
@@ -231,6 +234,7 @@ REVOKE ALL ON FUNCTION public.duty_edit_published_weekend(uuid, date, uuid, nume
 GRANT EXECUTE ON FUNCTION public.duty_edit_published_weekend(uuid, date, uuid, numeric, uuid, numeric, text, bigint, text) TO authenticated;
 
 REVOKE ALL ON FUNCTION duty_private.join_weekend_halves(uuid, date) FROM PUBLIC, anon, authenticated, service_role;
+REVOKE ALL ON FUNCTION duty_private.prune_duty_approvals() FROM PUBLIC, anon, authenticated, service_role;
 
 REVOKE ALL ON FUNCTION duty_private.swap_availability(p_from uuid, p_to uuid) FROM PUBLIC, anon, authenticated, service_role;
 GRANT EXECUTE ON FUNCTION duty_private.swap_availability(p_from uuid, p_to uuid) TO authenticated;
@@ -255,6 +259,12 @@ GRANT EXECUTE ON FUNCTION duty_private.set_no_weekends(uuid, boolean, bigint) TO
 
 REVOKE ALL ON FUNCTION public.duty_set_no_weekends(uuid, boolean, bigint) FROM PUBLIC, anon, authenticated, service_role;
 GRANT EXECUTE ON FUNCTION public.duty_set_no_weekends(uuid, boolean, bigint) TO authenticated;
+
+REVOKE ALL ON FUNCTION duty_private.set_viewer(uuid, boolean, bigint) FROM PUBLIC, anon, authenticated, service_role;
+GRANT EXECUTE ON FUNCTION duty_private.set_viewer(uuid, boolean, bigint) TO authenticated;
+
+REVOKE ALL ON FUNCTION public.duty_set_viewer(uuid, boolean, bigint) FROM PUBLIC, anon, authenticated, service_role;
+GRANT EXECUTE ON FUNCTION public.duty_set_viewer(uuid, boolean, bigint) TO authenticated;
 
 -- Personal calendar feed (decision 2026-11-06). The feed lookup is the only application
 -- function the anonymous role may execute: calendar apps cannot sign in, so the route

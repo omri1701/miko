@@ -81,6 +81,7 @@ export function TeamList({balance=null,name=id=>id,team,revision,monthTotals,his
      <span className="team-tags">
       {roleLabel(p)&&<Chip size="sm" tone={temporaryIds.includes(p.id)?'neutral':'brand'}>{roleLabel(p)}</Chip>}
       {noWeekendIds.includes(p.id)&&<Chip size="sm" tone="neutral">{t('No weekends','ללא סופ״ש')}</Chip>}
+      {p.viewer&&<Chip size="sm" tone="neutral">{t('Viewer','צופה')}</Chip>}
       {i===group.length-1&&p.active&&group.length>1&&<span className="team-newest">{t('Newest','החדש ביותר')}</span>}
      </span>
     </div>

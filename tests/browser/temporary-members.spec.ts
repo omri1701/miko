@@ -1,4 +1,4 @@
-import {test,expect,ids,MONTH,duty, switchLanguage} from './fixtures';
+import {test,expect,ids,MONTH,duty, switchLanguage, choose} from './fixtures';
 import {validateGeneration} from '../../lib/scheduling/validate';
 import {readGenerationContext} from '../../lib/supabase/generation';
 
@@ -51,8 +51,7 @@ test('admin creates 12 temporary engineers, edits constraints/order/status and s
  await swipe('Deactivate');await expect(firstRow).toHaveClass(/inactive/);
  await swipe('Activate');await expect(firstRow).not.toHaveClass(/inactive/);
  await page.getByRole('tab',{name:'Availability',exact:true}).click();
- await page.getByRole('combobox',{name:'Engineer',exact:true}).click();
- await page.getByRole('option',{name:'Renamed Engineer',exact:true}).click();
+ await choose(page.getByRole('combobox',{name:'Engineer',exact:true}), 'Renamed Engineer');
  await page.getByRole('button',{name:/^5 Nov.*Available/}).click();
  await page.getByLabel('Description (optional)').fill('Private temporary absence');
  await page.getByRole('button',{name:'Save',exact:true}).click();

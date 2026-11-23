@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { useHoldDrag } from '@/hooks/use-hold-drag';
 import { useMobileLayout } from '@/hooks/use-mobile-layout';
-import { publishedSwapDuties, eligibleSwapTarget, swapTargetBlock, swapBlockText, type SwapBlock, type SwapConflict } from '@/lib/supabase/swaps';
+import { publishedSwapDuties, eligibleSwapTarget, swapTargetBlock, swapBlockText, swapTargetWarning, swapWarningText, visibleNote, type SwapBlock, type SwapConflict } from '@/lib/supabase/swaps';
 import { ownerMonth, swapDraft, type State, type Duty } from '@/lib/rota/engine';
 import { shortDate } from '@/lib/date-format';
 import type { TeamWorkspace } from '@/hooks/use-team-workspace';
@@ -75,7 +75,7 @@ export function useCalendarInteractions({
     }
     if (!eligible(from, to)) return undefined;
     const found = from === source ? conflicts(b.id) : undefined;
-    return found ? swapTargetBlock(remote.snapshot!, month, a!, b, found) : 'pending';
+    return found ? swapTargetBlock(remote.snapshot!, month, a!, b) : 'pending';
   }
   const requestTarget = (from: string, to: string) => eligible(from, to) && swapBlock(from, to) === null;
   const draftTarget = (from: string, to: string) => {
@@ -83,16 +83,27 @@ export function useCalendarInteractions({
     // Policy exceptions open manager review; structural failures remain invalid.
     return result.ok || result.reason === 'availability' || result.reason === 'weekend-limit' || result.reason === 'no-weekends';
   };
-  function blockText(block: SwapBlock, from: string) {
+  function blockText(block: SwapBlock) {
     const members = remote.snapshot!.members;
-    return swapBlockText(block, { me: meId, lang, sourceOwner: publishedDuty(from)?.primary_id ?? null,
-      name: (id) => members.find((m) => m.id === id)?.name ?? (lang === 'he' ? 'חבר צוות' : 'A team member'),
-      day: (d) => shortDate(d, lang) });
+    return swapBlockText(block, { me: meId, lang, name: (id) => memberName(members, id), day: (d) => shortDate(d, lang) });
   }
+  // The note shows only to its owner and to admins (members' snapshots hold only their own).
+  const noteOf = (member: string, day: string) => visibleNote(remote.snapshot!.constraints
+    .find((c) => c.member_id === member && c.day === day && c.kind === 'no')?.note, member, { me: meId, admin: remote.isAdmin });
+  const memberName = (members: { id: string; name: string }[], id: string) =>
+    members.find((m) => m.id === id)?.name ?? (lang === 'he' ? 'חבר צוות' : 'A team member');
+  /** Red but still pickable (#92): a primary marked one of the target's dates unavailable. Shown
+   * only for a target the server accepts; their consent waives it, the constraint stays. */
+  const swapWarning = (from: string, to: string) => {
+    if (swapBlock(from, to) !== null) return null;
+    const warning = swapTargetWarning(publishedDuty(from)!, publishedDuty(to)!, conflicts(publishedDuty(to)!.id) ?? []);
+    return warning && swapWarningText(warning, { me: meId, lang, name: (id) => memberName(remote.snapshot!.members, id), day: (d) => shortDate(d, lang),
+      note: noteOf(warning.person, warning.day) });
+  };
   /** The reason a target is greyed, for its tooltip and accessible name. */
   const swapHint = (from: string, to: string) => {
     const block = swapBlock(from, to);
-    return block && block !== 'pending' ? blockText(block, from) : null;
+    return block && block !== 'pending' ? blockText(block) : null;
   };
   /** Announces why a target is greyed; true when it was. */
   function explainBlock(from: string, to: string) {
@@ -100,7 +111,7 @@ export function useCalendarInteractions({
     // Still checking: nothing happens yet, so nothing is picked before it is known.
     if (block === 'pending') return true;
     if (!block) return false;
-    toast.info(blockText(block, from), { id: 'swap-block' });
+    toast.info(blockText(block), { id: 'swap-block' });
     return true;
   }
   function finishCalendarSwap(from: string, to: string) {
@@ -187,7 +198,7 @@ export function useCalendarInteractions({
     const { from, to } = pendingDrop;
     setPendingDrop(null);
     if (dropBlock === null) finishCalendarSwap(from, to);
-    else if (dropBlock) setRefusedDrop({ text: blockText(dropBlock, from) });
+    else if (dropBlock) setRefusedDrop({ text: blockText(dropBlock) });
   }
   useEffect(() => {
     if (!refusedDrop || toldDrop.current === refusedDrop) return;
@@ -233,6 +244,7 @@ export function useCalendarInteractions({
     requestTarget,
     swapBlock,
     swapHint,
+    swapWarning,
     dragContainer,
     ignoreDragClick,
     selectCalendarDuty,

@@ -58,7 +58,7 @@ Never run hosted `db push`, reset, seeds or history repair from a feature checko
 Verify the Vercel **Preview** variables and any feature-branch overrides contain
 only the Development URL/publishable key. `.env.local` is excluded from uploads;
 manual Preview uses Vercel's Preview configuration, not the local file. From a
-clean feature checkout, use the standard CLI (PowerShell):
+clean feature checkout, use the standard CLI (PowerShell). The hosted Vercel project is still named `duty-scheduler` (hosted identifiers are unchanged):
 
 ```powershell
 $featureBranch = git branch --show-current

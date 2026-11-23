@@ -1,4 +1,4 @@
-import {test, expect, duty, touchEvent, ids, NOW, switchLanguage} from './fixtures';
+import {test, expect, duty, touchEvent, ids, NOW, switchLanguage, editConstraintDay} from './fixtures';
 import type {Page} from '@playwright/test';
 
 // Tabs (decision 2026-11-06): Home · Schedule · Availability · Team.
@@ -28,22 +28,25 @@ test('navigation follows horizontal touch, commits on release and respects RTL a
   expect(backend.calls.filter(c => c.name === 'duty_save_schedule')).toEqual([]);
 });
 
-test('mobile cells have only note dots and outside taps discard local edits', async ({page, openApp}, info) => {
+test('mobile cells write the note in the day and outside taps discard local edits', async ({page, openApp}, info) => {
   test.skip(info.project.name !== 'mobile', 'Phone sheet.');
   await openApp('a');
   await tab(page, 2).click();
   const noted = page.locator('.availability-day[data-gesture-key="2026-11-04"]');
   await expect(page.locator('.availability-day .availability-marker')).toHaveCount(0);
-  await expect(noted.locator('.mobile-note-dot')).toHaveCount(1);
-  await expect(page.locator('.availability-day[data-gesture-key="2026-11-05"] .mobile-note-dot')).toHaveCount(0);
-  const cell = (await noted.boundingBox())!, number = (await noted.locator('strong').boundingBox())!;
+  // #105 rule 1: the note itself, not a dot.
+  await expect(noted.locator('.availability-note')).toHaveText('Synthetic vacation');
+  await expect(page.locator('.mobile-note-dot')).toHaveCount(0);
+  await expect(page.locator('.availability-day[data-gesture-key="2026-11-05"] .availability-note')).toHaveCount(0);
+  const cell = (await noted.boundingBox())!, number = (await noted.locator('.day-number').boundingBox())!;
   expect(Math.abs(number.x + number.width / 2 - cell.x - cell.width / 2)).toBeLessThan(1);
-  expect(Math.abs(number.y + number.height / 2 - cell.y - cell.height / 2)).toBeLessThan(1);
-  await noted.click();
+  // The date sits at the top, as on the Schedule calendar (#95).
+  expect(number.y - cell.y).toBeLessThan(12);
+  await editConstraintDay(page, noted);
   await page.getByLabel('Description (optional)').fill('Unsaved edit');
   await page.mouse.click(5, 5);
   await expect(page.getByRole('dialog')).toBeHidden();
-  await noted.click();
+  await editConstraintDay(page, noted);
   await expect(page.getByLabel('Description (optional)')).toHaveValue('Synthetic vacation');
   await page.keyboard.press('Escape');
   await expect(noted).toBeFocused();

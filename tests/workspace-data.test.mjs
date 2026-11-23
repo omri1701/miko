@@ -40,19 +40,38 @@ test('coverage and monthly points exclude weekends owned by the previous Friday 
   assert.equal(august.historyTotals.e0, 1);
 });
 
-test('coverage warnings include emergency constraints and respect manager overrides', () => {
+test('coverage warnings include emergency constraints and respect admin approvals', () => {
   const state = publishedMonths();
   state.assignments = {
     '2026-08-03': {primary: 'e0', secondary: 'e1'},
     '2026-08-04': {primary: 'e0', override: true},
     '2026-08-05': {primary: 'e0'},
+    '2026-08-06': {primary: 'e2'},
   };
-  state.constraints = {e0: {'2026-08-04': 'no'}, e1: {'2026-08-03': 'no'}};
+  // One approval per person and date (owner 2026-11-21); the old override flag alone is not one.
+  state.constraints = {e0: {'2026-08-04': 'no', '2026-08-05': 'no'}, e1: {'2026-08-03': 'no'}, e2: {'2026-08-06': 'no'}};
+  state.dutyApproved = {e0: {'2026-08-05': true}, e1: {'2026-08-06': true}};
   const metrics = workspaceMetrics(state, '2026-08', blocks('2026-08', []));
-  assert.equal(metrics.assigned, 3);
-  assert.deepEqual(metrics.conflicts.map(duty => duty.id), ['2026-08-03']);
+  assert.equal(metrics.assigned, 4);
+  assert.deepEqual(metrics.conflicts.map(duty => duty.id), ['2026-08-03', '2026-08-04', '2026-08-06']);
+  assert.deepEqual(metrics.unavailableDays, [{member: 'e1', day: '2026-08-03'}, {member: 'e0', day: '2026-08-04'}, {member: 'e2', day: '2026-08-06'}]);
   assert.deepEqual(metrics.gaps.filter(({p}) => p.id === 'e0').map(({b}) => b.id),
     ['2026-08-04', '2026-08-05']);
+});
+
+test('#110 rule 1: each draft conflict names the person and the day, in date order, approvals excluded', () => {
+  const state = publishedMonths();
+  state.assignments = {
+    '2026-08-07': {primary: 'e2'},
+    '2026-08-03': {primary: 'e0', secondary: 'e1'},
+    '2026-08-04': {primary: 'e0'},
+  };
+  state.constraints = {e0: {'2026-08-04': 'no', '2026-08-03': 'prefer'}, e1: {'2026-08-03': 'no'}, e2: {'2026-08-08': 'no', '2026-08-07': 'no'}};
+  // An admin's approval of that person on that date (#103) leaves no line.
+  state.dutyApproved = {e0: {'2026-08-04': true}};
+  const metrics = workspaceMetrics(state, '2026-08', blocks('2026-08', []));
+  assert.deepEqual(metrics.conflictDays.map(({person, date, duty}) => [person, date, duty.id]),
+    [['e1', '2026-08-03', '2026-08-03'], ['e2', '2026-08-07', '2026-08-07'], ['e2', '2026-08-08', '2026-08-07']]);
 });
 
 test('editing a boundary weekend reopens only its owning month', () => {

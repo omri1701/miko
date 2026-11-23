@@ -13,8 +13,10 @@
  --brand: #090442; --brand-strong: #1b1470; --brand-soft: #e9e8f6; --brand-ink: #090442; --brand-fg: #090442; --on-brand: #ffffff; --brand-tint: #dddbf1; --cyan: #19f2f7; --lime: var(--cyan); --on-ink-action: var(--cyan);
  --brand-edge: 0 0 0 0 transparent; --brand-edge-soft: 0 0 0 0 transparent; --glow: #19f2f7; --hover: #e9ecf0; --shimmer: rgba(255,255,255,.7); --cell: #edf0f3; --cell-ink: #2f3338;
  --danger: #c0291f; --danger-soft: #fde7e4; --warn: #8f5200; --warn-soft: #fff1dc; --ok: #1f7a45; --ok-soft: #e3f4e9; --info: #2b66c9; --info-soft: #e6effc;
- --cal-weekend: #eceff4; --cal-special: #fff3d6; --cal-today: var(--brand);
+ --cal-weekend: #eceff4; --cal-special: #fff3d6; --cal-today: var(--brand); --cal-past: #e6e8eb;
  --radius-s: 10px; --radius: 14px; --radius-l: 20px; --radius-xl: 28px;
+ /* Concentric corners (see .nested below): a container's radius, the even gap its nested boxes keep, the smallest inner radius. */
+ --outer-r: var(--radius-l); --outer-gap: 8px; --nest-min-r: 6px;
  --shadow-card: 0 1px 2px rgba(16,24,40,.04), 0 2px 10px rgba(16,24,40,.05); --shadow-pop: 0 12px 40px rgba(16,24,40,.16); --shadow-sheet: 0 -10px 40px rgba(16,24,40,.18); --shadow-bar: 0 6px 24px rgba(16,24,40,.14); --hero-glow-mix: 55%; --shadow-hero: 0 12px 26px -12px color-mix(in srgb,var(--hero-glow,var(--glow)) var(--hero-glow-mix),transparent), 0 1px 2px rgba(16,24,40,.06);
  --glass: rgba(255,255,255,.72); --glass-line: rgba(255,255,255,.6); --glass-thumb: rgba(9,4,66,.1);
  --font: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans Hebrew", "Noto Sans", sans-serif;
@@ -35,7 +37,7 @@
  --brand: #090442; --brand-strong: #17106a; --brand-soft: #0e0a4d; --brand-ink: #9cf8fb; --brand-fg: #19f2f7; --on-brand: #ffffff; --brand-tint: #15105a; --cyan: #19f2f7; --lime: var(--cyan); --on-ink-action: #090442;
  --brand-edge: 0 0 0 1px rgba(238,242,255,.82), 0 0 14px -1px rgba(25,242,247,.34); --brand-edge-soft: 0 0 0 1px rgba(238,242,255,.3), 0 0 10px -2px rgba(25,242,247,.22); --glow: #19f2f7; --hover: #38383d; --shimmer: rgba(255,255,255,.07); --cell: #2a2a2d; --cell-ink: #e4e5e8;
  --danger: #ff6b5e; --danger-soft: #3a1d1a; --warn: #f0b35a; --warn-soft: #3a2c14; --ok: #5fd08f; --ok-soft: #153224; --info: #7fb0ff; --info-soft: #182a45;
- --cal-weekend: #26262a; --cal-special: #332b17; --cal-today: var(--brand);
+ --cal-weekend: #26262a; --cal-special: #332b17; --cal-today: var(--brand); --cal-past: #111113;
  --shadow-card: 0 1px 2px rgba(0,0,0,.4), 0 2px 10px rgba(0,0,0,.3); --shadow-pop: 0 12px 40px rgba(0,0,0,.6); --shadow-sheet: 0 -10px 40px rgba(0,0,0,.6); --shadow-bar: 0 6px 24px rgba(0,0,0,.5); --hero-glow-mix: 38%; --shadow-hero: 0 12px 26px -12px color-mix(in srgb,var(--hero-glow,var(--glow)) var(--hero-glow-mix),transparent), 0 1px 2px rgba(0,0,0,.4);
  --glass: rgba(28,28,30,.7); --glass-line: rgba(255,255,255,.08); --glass-thumb: rgba(255,255,255,.1);
 }
@@ -151,8 +153,15 @@ textarea{resize:vertical;min-height:76px}
 @media(hover:hover){.danger-action:hover:not(:disabled){background:color-mix(in srgb,var(--danger) 85%,#000)!important}}
 
 /* ---------- cards, rows, chips ---------- */
-.card{background:var(--surface);border-radius:var(--radius-l);box-shadow:var(--shadow-card);padding:16px;min-width:0}
+.card{--outer-r:var(--radius-l);background:var(--surface);border-radius:var(--radius-l);box-shadow:var(--shadow-card);padding:16px;min-width:0}
 .card-inset{padding:0;overflow:hidden}
+/* Concentric corners (Apple style): a box nested in a rounded container keeps one even gap to its
+   edges and rounds to the container's radius minus that gap, so the curves run parallel. A container
+   sets --outer-r (its radius) and, when its items sit on its padding, --outer-gap (that padding).
+   A new nested box gets class .nested or joins this list. Round shapes (pills, avatars, switches)
+   and controls (buttons, fields, icon tiles) keep their own corners. */
+:where(.nested,.note-line,.conflict-lines,.conflict-line,.time-wheels,.menu [role=menuitem],.seg-thumb,.seg-item,.segmented button,.plan-kind button,.allocation-details li,.split-row,.keep-option,.emergency-editor){
+ --nested-r:max(var(--nest-min-r),calc(var(--outer-r) - var(--outer-gap)));border-radius:var(--nested-r)}
 .card[data-tone=brand]{background:linear-gradient(135deg,var(--brand) 0%,var(--brand-strong) 100%);color:#fff}
 :root[data-theme=dark] .card[data-tone=brand]{box-shadow:var(--brand-edge)}
 .card[data-tone=soft]{background:var(--surface-2);box-shadow:none}
@@ -219,10 +228,10 @@ textarea{resize:vertical;min-height:76px}
 [dir=rtl] .switch-thumb{transform:translateX(-2px)}
 [dir=rtl] .switch[data-state=checked] .switch-thumb{transform:translateX(-22px)}
 /* Segmented control with a sliding thumb. */
-.seg{position:relative;display:grid;grid-template-columns:repeat(var(--seg-count),minmax(0,1fr));padding:3px;border-radius:12px;background:var(--surface-3);gap:0;isolation:isolate}
-.seg-thumb{position:absolute;top:3px;bottom:3px;inset-inline-start:calc(3px + var(--seg-index)*(100% - 6px)/var(--seg-count));width:calc((100% - 6px)/var(--seg-count));border-radius:9px;background:var(--surface);box-shadow:0 1px 4px rgba(16,24,40,.15);transition:inset-inline-start var(--dur) var(--spring);z-index:0}
+.seg{--outer-r:12px;--outer-gap:3px;position:relative;display:grid;grid-template-columns:repeat(var(--seg-count),minmax(0,1fr));padding:3px;border-radius:12px;background:var(--surface-3);gap:0;isolation:isolate}
+.seg-thumb{position:absolute;top:3px;bottom:3px;inset-inline-start:calc(3px + var(--seg-index)*(100% - 6px)/var(--seg-count));width:calc((100% - 6px)/var(--seg-count));background:var(--surface);box-shadow:0 1px 4px rgba(16,24,40,.15);transition:inset-inline-start var(--dur) var(--spring);z-index:0}
 :root[data-theme=dark] .seg-thumb{background:var(--surface-2);box-shadow:0 1px 4px rgba(0,0,0,.5)}
-.seg-item{position:relative;z-index:1;display:inline-flex;align-items:center;justify-content:center;gap:6px;min-height:38px;padding:0 10px;border-radius:9px;font-size:14px;font-weight:600;color:var(--ink-3);transition:color var(--dur) var(--ease);white-space:nowrap}
+.seg-item{position:relative;z-index:1;display:inline-flex;align-items:center;justify-content:center;gap:6px;min-height:38px;padding:0 10px;font-size:14px;font-weight:600;color:var(--ink-3);transition:color var(--dur) var(--ease);white-space:nowrap}
 .seg-item svg{width:16px;height:16px}
 .seg-item.selected{color:var(--ink)}
 .seg-item:disabled{opacity:.45}
@@ -230,8 +239,8 @@ textarea{resize:vertical;min-height:76px}
 .seg-sm .seg-item svg{width:15px;height:15px}
 
 /* ---------- menus, popovers, toasts ---------- */
-.menu{z-index:70;min-width:220px;max-width:min(320px,calc(100vw - 24px));padding:6px;border-radius:14px;background:var(--surface);color:var(--ink);box-shadow:var(--shadow-pop),0 0 0 1px var(--line);font-size:15px}
-.menu [role=menuitem]{display:flex;align-items:center;gap:12px;min-height:44px;padding:8px 12px;border-radius:9px;outline:none;cursor:pointer;white-space:nowrap}
+.menu{--outer-r:14px;--outer-gap:6px;z-index:70;min-width:220px;max-width:min(320px,calc(100vw - 24px));padding:6px;border-radius:14px;background:var(--surface);color:var(--ink);box-shadow:var(--shadow-pop),0 0 0 1px var(--line);font-size:15px}
+.menu [role=menuitem]{display:flex;align-items:center;gap:12px;min-height:44px;padding:8px 12px;outline:none;cursor:pointer;white-space:nowrap}
 .menu [role=menuitem] svg{width:18px;height:18px;color:var(--ink-3)}
 .menu [data-highlighted]{background:var(--hover);color:var(--ink)}
 .menu [data-disabled]{opacity:.45;cursor:default}
@@ -249,13 +258,15 @@ textarea{resize:vertical;min-height:76px}
 .bell-when{font-size:12px;color:var(--ink-3);white-space:nowrap}
 [data-sonner-toaster]{--mobile-offset-bottom:calc(88px + var(--sab))!important;font-family:var(--font)!important}
 [data-sonner-toast]{border-radius:14px!important;font-size:14px!important}
-[data-slot=select-content]{z-index:70;border-radius:14px;box-shadow:var(--shadow-pop),0 0 0 1px var(--line);border:0}
-[data-slot=select-item]{min-height:40px;border-radius:9px;font-size:15px;color:var(--ink);transition:background 120ms var(--ease)}
-[data-slot=select-item][data-highlighted],[data-slot=select-item]:focus{background:var(--hover)!important;color:var(--ink)!important}
-[data-slot=select-item][data-state=checked]{font-weight:650;color:var(--brand-ink)}
-:root[data-theme=dark] [data-slot=select-item][data-state=checked]{color:var(--brand-strong)}
-[data-slot=select-item] [data-slot=select-item-indicator] svg{color:var(--brand-fg)!important}
-[data-slot=select-trigger]{min-height:44px;border-radius:12px;border-color:var(--line-strong);background:var(--surface);font-size:15px}
+/* #103: an availability refusal names each conflict on its own line. */
+[data-sonner-toast] [data-title],.message-lines{white-space:pre-line}
+/* Pickers are native <select>s: iPhone shows its own menu, Windows its own list, and the list follows
+   the theme through color-scheme. Only the closed field is styled, like the text fields; options keep
+   the system's colours. */
+select.picker{appearance:none;-webkit-appearance:none;width:auto;border:1px solid var(--line-strong);border-radius:12px;background:var(--surface) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%238e8e93' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E") no-repeat right 12px center;padding:0 38px 0 12px;color:var(--ink);font:inherit;font-weight:400;text-overflow:ellipsis;white-space:nowrap;overflow:hidden;cursor:pointer;color-scheme:inherit}
+[dir=rtl] select.picker{background-position:left 12px center;padding:0 12px 0 38px}
+select.picker:focus-visible{outline:3px solid color-mix(in srgb,var(--brand-fg) 45%,transparent);outline-offset:0;border-color:var(--brand-fg)}
+select.picker:disabled{opacity:.5;cursor:default}
 .picker{min-width:160px!important;height:44px!important;font-size:15px!important;max-width:260px}
 [data-slot=checkbox]{width:22px;height:22px;border-radius:7px;border-color:var(--line-strong)}
 
@@ -388,8 +399,13 @@ textarea{resize:vertical;min-height:76px}
 .month-actions .seg{padding:3px;min-height:44px}
 .month-actions .seg-item{min-height:38px}
 .review-dot{position:absolute;top:8px;inset-inline-end:10px;width:8px;height:8px;border-radius:50%;background:var(--warn);box-shadow:0 0 0 2px var(--surface)}
-.note-line{display:flex;flex-wrap:wrap;align-items:center;gap:4px 10px;padding:10px 14px;margin:0 0 10px;border-radius:12px;background:var(--warn-soft);color:var(--warn);font-size:13px;line-height:1.45}
+.note-line{display:flex;flex-wrap:wrap;align-items:center;gap:4px 10px;padding:10px 14px;margin:0 0 10px;background:var(--warn-soft);color:var(--warn);font-size:13px;line-height:1.45}
 .note-line[data-tone=danger]{background:var(--danger-soft);color:var(--danger)}
+.conflict-lines{list-style:none;display:flex;flex-direction:column;gap:2px;margin:0 0 10px;padding:4px;background:var(--danger-soft)}
+.conflict-lines>li{--outer-r:var(--nested-r);--outer-gap:4px}
+.conflict-line{display:block;width:100%;overflow-wrap:anywhere;min-height:40px;padding:6px 10px;border:0;background:transparent;color:var(--danger);font:inherit;font-size:13px;line-height:1.4;text-align:start;cursor:pointer}
+@media(hover:hover){.conflict-line:hover{background:color-mix(in srgb,var(--danger) 10%,transparent)}}
+.conflict-line:focus-visible{outline:2px solid var(--danger);outline-offset:-2px}
 .note-card{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 16px;margin:8px 0 12px;border-radius:14px;background:var(--danger-soft);color:var(--danger);font-size:14px}
 .month-stage{position:relative;overflow:hidden;margin:0 -2px;padding:2px}
 @media(max-width:600px){
@@ -405,7 +421,9 @@ textarea{resize:vertical;min-height:76px}
 @media(min-width:601px) and (max-width:1199px){.month-title h2{font-size:21px}.month-primary{min-width:112px}}
 
 /* ---------- calendar ---------- */
-.calendar-panel{background:var(--surface);border-radius:var(--radius-l);box-shadow:var(--shadow-card);overflow:hidden}
+.calendar-panel{--outer-r:var(--radius-l);background:var(--surface);border-radius:var(--radius-l);box-shadow:var(--shadow-card);overflow:hidden}
+/* Draft notices under the calendar keep one even gap to the card's sides, bottom and the grid (concentric corners). */
+.calendar-panel>:is(.note-line,.conflict-lines){margin:var(--outer-gap)}
 .calendar-weekdays,.calendar-grid{display:grid;grid-template-columns:repeat(7,minmax(0,1fr))}
 .calendar-weekdays{border-bottom:1px solid var(--line)}
 .calendar-weekdays span{padding:10px 8px;color:var(--ink-3);font-size:12px;font-weight:600;text-align:center;text-transform:uppercase;letter-spacing:.04em}
@@ -415,7 +433,7 @@ textarea{resize:vertical;min-height:76px}
 .calendar-grid{--calendar-cell-min-height:108px;--calendar-day-inset:8px}
 .day-cell{position:relative;min-height:var(--calendar-cell-min-height);min-width:0;display:flex;flex-direction:column;gap:6px;padding:8px var(--calendar-day-inset) 10px;text-align:start;background:var(--surface);border:0;border-inline-end:1px solid var(--line);border-bottom:1px solid var(--line);color:var(--ink);transition:background 140ms ease,box-shadow 140ms ease}
 .day-cell:nth-child(7n){border-inline-end:0}
-.day-cell:hover:not(:disabled){background:var(--surface-2)}
+@media(hover:hover){.day-cell:hover:not(:disabled){background:var(--surface-2)}}
 .day-cell.weekend{background:var(--cal-weekend)}
 .day-cell.special{background:var(--cal-special)}
 .day-cell.outside{opacity:.45}
@@ -425,6 +443,11 @@ textarea{resize:vertical;min-height:76px}
 .day-cell.selected-day{box-shadow:inset 0 0 0 2px var(--brand-fg)}
 .day-cell.mine{background:color-mix(in srgb,var(--brand-soft) 55%,var(--surface))}
 .day-cell.mine.weekend{background:color-mix(in srgb,var(--brand-soft) 65%,var(--cal-weekend))}
+/* A draft day that clashes with someone's availability (#110). */
+.calendar-grid .day-cell.conflict-day{background:var(--danger-soft);box-shadow:inset 0 0 0 2px color-mix(in srgb,var(--danger) 65%,transparent)}
+@media(hover:hover){.calendar-grid .day-cell.conflict-day:hover:not(:disabled){background:var(--danger-soft);box-shadow:inset 0 0 0 2px color-mix(in srgb,var(--danger) 65%,transparent)}}
+.calendar-grid .day-cell.conflict-day .day-number{color:var(--danger)}
+.calendar-grid .day-cell.conflict-day.selected-day{box-shadow:inset 0 0 0 2px var(--brand-fg)}
 .date-line{display:flex;gap:4px;align-items:center;min-height:22px}
 .day-number{font-size:14px;font-weight:600;color:var(--ink-2);font-variant-numeric:tabular-nums;line-height:22px}
 .current-date{position:relative;color:#fff;isolation:isolate;font-weight:700}
@@ -466,6 +489,9 @@ textarea{resize:vertical;min-height:76px}
 @media(prefers-reduced-motion:no-preference){.calendar-grid .drag-target.checking{animation:checking-pulse 900ms ease-in-out infinite}@keyframes checking-pulse{50%{opacity:.72}}}
 .calendar-grid .swap-blocked{background:var(--surface-2)!important;cursor:not-allowed}
 .calendar-grid .swap-blocked .assignment-chip{filter:grayscale(1);opacity:.4}
+/* #92: a primary marked this date unavailable. Red, yet still pickable (their consent waives it). */
+.calendar-grid .swap-constrained{background:var(--danger-soft)!important}
+.calendar-grid .drag-target.swap-constrained{box-shadow:inset 0 0 0 3px var(--danger)}
 .calendar-grid.picking .day-cell:not(.drag-target):not(.drag-source):not(.swap-blocked) .assignment-chip{opacity:.9}
 .mobile-drag-layer{position:fixed;inset:0;z-index:45;pointer-events:none!important;display:block!important;border:0!important;margin:0!important;padding:0!important}
 .mobile-drag-layer *{pointer-events:none!important}
@@ -525,46 +551,88 @@ textarea{resize:vertical;min-height:76px}
 .duty-chips{display:flex;flex-wrap:wrap;gap:6px}
 
 /* ---------- availability ---------- */
-.availability-screen{display:flex;flex-direction:column;gap:12px}
-.availability-summary{display:flex;gap:8px;padding:0 2px}
-.constraint-editor{background:var(--surface);border-radius:var(--radius-l);box-shadow:var(--shadow-card);padding:14px}
-.availability-tools{display:flex;align-items:center;min-height:20px;margin-bottom:10px;padding:0 4px}
-.gesture-hint{font-size:13px;color:var(--ink-3);margin:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex:1}
-.mobile-availability-legend{display:none}
-.mobile-availability-weekdays{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));margin-bottom:6px;font-size:11px;font-weight:600;color:var(--ink-3);text-align:center;text-transform:uppercase;letter-spacing:.04em}
-[dir=rtl] .mobile-availability-weekdays{text-transform:none;letter-spacing:0;font-size:12px}
-.availability-grid{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:6px}
-.availability-day{position:relative;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;min-height:56px;padding:8px 2px;border-radius:12px;background:var(--cell);color:var(--cell-ink);border:0;touch-action:pan-y;transition:background 100ms ease,box-shadow 100ms ease,transform 100ms ease}
-.availability-day strong{font-size:16px;font-weight:600;font-variant-numeric:tabular-nums;color:inherit}
-.availability-weekday,.availability-description{display:none}
-.availability-day.outside{visibility:hidden;pointer-events:none}
-.availability-day.no{background:var(--danger-soft);color:var(--danger)}
-.availability-day.prefer{background:var(--ok-soft);color:var(--ok)}
-.availability-day.date-selected{box-shadow:inset 0 0 0 2px var(--brand-fg)}
-.availability-day.date-selected.no{box-shadow:inset 0 0 0 2px var(--danger)}
-.availability-day.date-selected.prefer{box-shadow:inset 0 0 0 2px var(--ok)}
-.availability-day:disabled:not(.outside){opacity:.62}
-.constraint-editor .availability-grid.gesture-active .availability-day{transition:none}
-.mobile-note-dot{display:block;position:absolute;top:6px;inset-inline-end:6px;width:4px;height:4px;border-radius:50%;background:currentColor}
-.availability-marker{display:none}
-@media(min-width:601px){
- .availability-grid{gap:8px}
- .availability-day{min-height:76px;gap:4px}
- .availability-day strong{font-size:20px}
- .availability-description{display:block;font-size:12px;line-height:1.3;overflow-wrap:anywhere;text-align:center;padding:0 4px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;color:inherit;opacity:.8}
- .availability-screen{max-width:900px}
+/* The grid is the Schedule calendar's surface (#95): nothing sits between the month bar and it,
+   and its rows copy the hidden Schedule calendar underneath, so every day box keeps its spot. */
+.availability-screen{display:flex;flex-direction:column}
+.availability-layers{display:grid}
+.availability-layers>*{grid-area:1/1;min-width:0}
+.schedule-ghost{visibility:hidden;pointer-events:none}
+.availability-layers .availability-grid{grid-template-rows:var(--schedule-rows,none)}
+/* #105: the note sits in the day; a person's days in a row with the same kind and note are one
+   block (no divider inside, the note once per week row, centred across it); the neighbour month's
+   days keep their colour and note with a lighter number; passed days are darker and keep a dimmed
+   colour; no text is dimmed with opacity. Hover only where a pointer hovers (rule 7a), and a
+   month change never fades a cell's background (rule 7c: cells are keyed per month). */
+.availability-day{overflow:visible;touch-action:pan-y;transition:none}
+.availability-grid .availability-day.outside{opacity:1}
+.availability-grid .availability-day.outside .day-number{color:var(--ink-4);font-weight:500}
+/* A day that can't be edited (passed, or its month closed or not open yet) is dark: darker box,
+   gray number, its constraint's colour dimmed and its note still shown (#105). */
+.availability-grid .availability-day.locked-day{background:var(--cal-past)}
+.availability-grid .availability-day.locked-day .day-number{color:var(--ink-4);font-weight:500}
+.availability-grid .availability-day.no{background:var(--danger-soft);color:var(--danger)}
+.availability-grid .availability-day.prefer{background:var(--ok-soft);color:var(--ok)}
+.availability-grid .availability-day:is(.no,.prefer):not(.locked-day):not(.outside) .day-number{color:inherit}
+.availability-grid .availability-day.locked-day.no{background:color-mix(in srgb,var(--danger-soft) 55%,var(--cal-past));color:color-mix(in srgb,var(--danger) 72%,var(--ink-3))}
+.availability-grid .availability-day.locked-day.prefer{background:color-mix(in srgb,var(--ok-soft) 55%,var(--cal-past));color:color-mix(in srgb,var(--ok) 72%,var(--ink-3))}
+.availability-grid .availability-day.joins-next{border-inline-end-color:transparent}
+@media(hover:hover){
+ .availability-grid .availability-day.no:not(.locked-day):not(.date-selected):hover{background:color-mix(in srgb,var(--danger) 16%,var(--surface))}
+ .availability-grid .availability-day.prefer:not(.locked-day):not(.date-selected):hover{background:color-mix(in srgb,var(--ok) 16%,var(--surface))}
+ .availability-grid .availability-day.locked-day:hover{background:var(--cal-past)}
+ .availability-grid .availability-day.locked-day.no:hover{background:color-mix(in srgb,var(--danger-soft) 55%,var(--cal-past))}
+ .availability-grid .availability-day.locked-day.prefer:hover{background:color-mix(in srgb,var(--ok-soft) 55%,var(--cal-past))}
 }
+/* A selection: a light brand tint and one continuous 2px outline (.selection-box, drawn per cell
+   toward unselected neighbours over the cell's dividers, so no gaps; the component sets the sides). */
+.availability-grid .availability-day.date-selected{background:color-mix(in srgb,var(--brand-fg) 13%,var(--surface))}
+.availability-grid .availability-day.date-selected.no{background:color-mix(in srgb,var(--brand-fg) 10%,var(--danger-soft))}
+.availability-grid .availability-day.date-selected.prefer{background:color-mix(in srgb,var(--brand-fg) 10%,var(--ok-soft))}
+.selection-box{position:absolute;inset-block-start:0;inset-inline-start:0;bottom:-1px;border:0 solid var(--brand-fg);pointer-events:none;z-index:2}
+.availability-day.locked-day{cursor:default}
+/* The note across its block's part of the week row (--span days), above the next cells, never
+   taking their taps. Phone: small, up to three lines. PC: display type, two balanced lines. */
+.availability-note{position:relative;z-index:1;pointer-events:none;align-self:flex-start;width:calc(var(--span,1)*100% + (var(--span,1) - 1)*(2*var(--calendar-day-inset) + 1px));font-size:11px;font-weight:600;line-height:1.2;text-align:center;color:inherit;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;overflow-wrap:anywhere}
+/* Everyone (rule 6): first names, unavailable in red, prefer duty in green; PC adds the note. */
+.availability-who{display:block;font-size:11px;font-weight:600;line-height:1.25;text-align:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.availability-who.no{color:var(--danger)}.availability-who.prefer{color:var(--ok)}.availability-who.more{color:var(--ink-3)}
+.availability-who i{font-style:normal;font-weight:450}
+.everyone-grid .day-cell{gap:2px}
+@media(min-width:601px){
+ .availability-note{font-family:"Segoe UI Variable Display","SF Pro Display",var(--font);font-size:16px;letter-spacing:-.1px;line-height:1.25;text-wrap:balance;-webkit-line-clamp:2;margin-block:auto;transform:translateY(-12px)}
+ .availability-who{font-family:"Segoe UI Variable Display","SF Pro Display",var(--font);font-size:14.5px;line-height:1.4;text-align:start}
+}
+@media(max-width:600px){.availability-who i{display:none}}
+/* The read-only sheet (rule 5) and Everyone's day sheet (rule 6). */
+.constraint-state{display:flex;align-items:center;gap:8px;margin:0;font-size:15px;font-weight:650;color:var(--danger)}
+.constraint-state.prefer{color:var(--ok)}
+.constraint-state i{width:9px;height:9px;border-radius:50%;background:currentColor}
+.availability-dialog textarea{overflow:hidden;resize:none}
+.everyone-group h3{font-size:13px;font-weight:650;margin:0 0 4px;color:var(--danger)}
+.everyone-group.prefer h3{color:var(--ok)}
+.everyone-group li+li{border-top:1px solid var(--line)}
+.everyone-person{display:flex;align-items:center;gap:12px;width:100%;min-height:52px;padding:8px 0;text-align:start}
+.everyone-person b{display:block;font-size:15px;font-weight:600;color:var(--ink)}
+.everyone-person small{display:block;font-size:13px;color:var(--ink-3);overflow-wrap:anywhere}
+@media(hover:hover){.everyone-person:hover b{color:var(--brand-ink)}}
+.availability-tools{display:flex;align-items:center;flex-wrap:wrap;gap:8px;min-height:24px;margin-top:12px;padding:0 2px}
+.availability-summary{display:flex;gap:8px}
+.gesture-hint{font-size:13px;color:var(--ink-3);margin:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex:1;text-align:end}
+.constraint-note-full{margin:0;font-size:16px;line-height:1.5;white-space:pre-wrap;overflow-wrap:anywhere;color:var(--ink)}
 .constraint-choices{display:grid;grid-template-columns:1fr 1fr;gap:8px}
 .constraint-choices button{min-height:48px;border-radius:12px;background:var(--surface-2);color:var(--ink-2);font-size:15px;font-weight:600;transition:background 120ms,color 120ms}
 .constraint-choices .chosen.no{background:var(--danger-soft);color:var(--danger);box-shadow:inset 0 0 0 2px var(--danger)}
 .constraint-choices .chosen.prefer{background:var(--ok-soft);color:var(--ok);box-shadow:inset 0 0 0 2px var(--ok)}
 .constraint-notes-help,.constraint-range-help{font-size:13px;line-height:1.4;color:var(--ink-3)}
 .constraint-notes-help{color:var(--warn)}
-.editor-dialog .remove-constraint{color:var(--danger);box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--danger) 40%,transparent);min-height:44px}
+/* An editor sheet's actions are the app's main pill (like Publish/Reopen), label centred; removing
+   is a plain red text button under them (#105). */
+.remove-constraint{color:var(--danger)!important;background:transparent!important;box-shadow:none!important;min-height:40px;border-radius:999px;margin-top:-4px}
+@media(hover:hover){.remove-constraint:hover:not(:disabled){background:color-mix(in srgb,var(--danger) 8%,transparent)!important}}
 .editor-actions{display:flex;gap:10px}
-.editor-actions>button{flex:1;min-height:46px;white-space:normal;height:auto}
+.editor-actions>button{flex:1;min-height:50px;white-space:normal;height:auto;border-radius:999px;justify-content:center;text-align:center}
 .field-label{display:flex;flex-direction:column;gap:6px;font-size:13px;font-weight:600;color:var(--ink-3)}
-.field-label input,.field-label textarea,.field-label [data-slot=select-trigger]{font-weight:400;color:var(--ink)}
+.field-label input,.field-label textarea,.field-label select{font-weight:400;color:var(--ink)}
 .check-label{display:flex;align-items:center;gap:10px;font-size:15px;min-height:44px;cursor:pointer}
 .form-pair{display:grid;grid-template-columns:1fr 1fr;gap:12px}
 .form-pair>*{min-width:0}
@@ -572,7 +640,7 @@ textarea{resize:vertical;min-height:76px}
 .warning-note{padding:12px 14px;background:var(--warn-soft);border-radius:12px;font-size:14px;color:var(--warn);line-height:1.45}
 .warning-note p{margin:4px 0}
 .inline-note{display:flex;align-items:center;gap:10px;padding:12px 14px;background:var(--surface-2);border-radius:12px;font-size:14px;color:var(--ink-3);flex-wrap:wrap}
-.emergency-editor{border-radius:12px;padding:10px 12px;background:var(--surface-2);font-size:14px;color:var(--ink-2)}
+.emergency-editor{padding:10px 12px;background:var(--surface-2);font-size:14px;color:var(--ink-2)}
 .emergency-editor summary{cursor:pointer;min-height:28px;font-weight:600}
 .emergency-editor>div{display:grid;gap:12px;padding-top:12px}
 .duty-lock-toggle{color:var(--ink-3)}
@@ -707,7 +775,7 @@ textarea{resize:vertical;min-height:76px}
 .settings-sign-out{padding:26px 0 8px}
 .settings-section{min-width:0}
 /* Reminder-time wheels (components/rota/time-wheel.tsx): native scroll-snap, a centre band, faded edges. */
-.time-wheels{--wheel-row:44px;position:relative;display:flex;justify-content:center;gap:2px;height:calc(var(--wheel-row)*5);margin:0 12px 12px;padding:0 16px;border-radius:16px;background:var(--surface-2);direction:ltr;overflow:hidden;animation:time-wheels-in .22s ease-out}
+.time-wheels{--wheel-row:44px;position:relative;display:flex;justify-content:center;gap:2px;height:calc(var(--wheel-row)*5);margin:0 var(--outer-gap) var(--outer-gap);padding:0 16px;background:var(--surface-2);direction:ltr;overflow:hidden;animation:time-wheels-in .22s ease-out}
 .time-wheels::before{content:'';position:absolute;inset-inline:12px;top:calc(50% - var(--wheel-row)/2);height:var(--wheel-row);border-radius:11px;background:var(--surface);box-shadow:0 0 0 1px var(--line);pointer-events:none}
 @keyframes time-wheels-in{from{opacity:0;transform:translateY(-4px)}}
 .time-wheel-frame{position:relative;width:76px;height:100%;border-radius:12px}
@@ -732,20 +800,22 @@ textarea{resize:vertical;min-height:76px}
 /* ---------- swap requests, history, published edit ---------- */
 .swap-cards{display:flex;flex-direction:column;gap:10px}
 .swap-card{background:var(--surface);border-radius:var(--radius-l);box-shadow:var(--shadow-card);padding:14px 16px;display:flex;flex-direction:column;gap:12px}
-.swap-card-head{display:flex;align-items:flex-start;gap:12px}
+.swap-card-head{display:flex;align-items:center;gap:12px}
+.swap-card-title{flex:1;min-width:0;font-size:15px;font-weight:600}
 .swap-card-icon{display:inline-grid;place-items:center;width:34px;height:34px;border-radius:10px;background:var(--surface-3);color:var(--ink-2);flex-shrink:0}
 .swap-card-icon svg{width:18px;height:18px}
 .swap-card-icon[data-tone=info]{background:var(--info-soft);color:var(--info)}.swap-card-icon[data-tone=warn]{background:var(--warn-soft);color:var(--warn)}
-.swap-card-text{flex:1;min-width:0;display:flex;flex-direction:column;gap:4px;font-size:14px}
-.swap-card-text strong{font-size:15px;font-weight:600}
+.swap-card-text{min-width:0;display:flex;flex-direction:column;gap:4px;font-size:14px;margin-top:-4px}
 .swap-card-text small{font-size:12px;color:var(--ink-3)}
 .swap-card-pair{display:flex;flex-wrap:wrap;align-items:center;gap:6px;color:var(--ink-2);font-size:13px}
 .swap-party{display:inline-flex;align-items:center;gap:6px;white-space:nowrap}
 .swap-arrow{color:var(--ink-4);padding:0 2px}
 .swap-refused{color:var(--warn)!important}
-.swap-status{flex-shrink:0;align-self:flex-start}
+.swap-unavailable{color:var(--danger)!important}
+.swap-status{flex-shrink:0}
 .swap-card-actions{display:flex;flex-wrap:wrap;gap:8px}
-.swap-conflicts{margin:6px 0;padding-inline-start:18px;list-style:disc}
+.swap-conflicts{margin:4px 0 0;padding:0;list-style:none}
+.swap-conflicts li+li{margin-top:2px}
 
 .swap-review{display:grid;gap:10px}
 .swap-conflicts ul{margin:6px 0;padding-inline-start:20px;list-style:disc}
@@ -768,8 +838,8 @@ textarea{resize:vertical;min-height:76px}
 .history-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
 .published-edit-dialog input[type=number]{width:100%}
 .published-edit-kind{display:grid;gap:8px}
-.segmented{display:flex;background:var(--surface-3);padding:3px;border-radius:12px;gap:2px}
-.segmented button{flex:1;border-radius:9px;font-size:14px;font-weight:600;padding:8px 12px;color:var(--ink-3);min-height:40px}
+.segmented{--outer-r:12px;--outer-gap:3px;display:flex;background:var(--surface-3);padding:3px;border-radius:12px;gap:2px}
+.segmented button{flex:1;font-size:14px;font-weight:600;padding:8px 12px;color:var(--ink-3);min-height:40px}
 .segmented .selected{background:var(--surface);color:var(--ink);box-shadow:0 1px 4px rgba(16,24,40,.15)}
 .editor-dialog .published-edit-summary{white-space:pre-wrap;font-size:14px;line-height:1.55;max-height:none;resize:none;background:var(--surface-2);color:var(--ink)}
 .special-summary{display:flex;flex-direction:column;gap:4px;background:var(--warn-soft);border-radius:12px;padding:14px;color:var(--warn)}
@@ -855,7 +925,7 @@ textarea{resize:vertical;min-height:76px}
 /* ---------- motion ---------- */
 @media(prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important;scroll-behavior:auto!important}.hero-track{scroll-snap-type:none}}
 /* Keep editable text legible through inherited font shorthands, portals and phone landscape. */
-@media(max-width:600px),(pointer:coarse){input,textarea,select,[contenteditable]:not([contenteditable=false]),[data-slot=select-trigger]{font-size:max(16px,1rem)!important}}
+@media(max-width:600px),(pointer:coarse){input,textarea,select,[contenteditable]:not([contenteditable=false]){font-size:max(16px,1rem)!important}}
 
 /* ---------- owner review 2026-11-07: refresh, sidebar, month heading, motion ---------- */
 /* The logo is the refresh button (same box as the plain logo, so nothing moves). */
@@ -929,7 +999,6 @@ textarea{resize:vertical;min-height:76px}
 [dir=rtl] .swap-slot[data-leaving]{animation-name:fly-off-rtl}
 @keyframes fly-off{to{transform:translateX(110%) rotate(3deg);opacity:0}}@keyframes fly-off-rtl{to{transform:translateX(-110%) rotate(-3deg);opacity:0}}
 @media(prefers-reduced-motion:no-preference){
- [data-slot=tabs-content][data-state=active]{animation:tab-in 200ms var(--ease)}
  .app-shell:not(.startup-skeleton) .home>*,.team-list>.team-row:not(.mobile-drag-preview),.team-list>.team-group,.swap-cards>.swap-slot:not([data-leaving]),.bell-list>li,.settings-sheet .sheet-body>*{animation:fade-up 280ms var(--ease) both}
  .home>:nth-child(2),.team-list>:nth-child(2),.swap-cards>:nth-child(2),.bell-list>:nth-child(2),.settings-sheet .sheet-body>:nth-child(2){animation-delay:30ms}
  .home>:nth-child(3),.team-list>:nth-child(3),.swap-cards>:nth-child(3),.bell-list>:nth-child(3),.settings-sheet .sheet-body>:nth-child(3){animation-delay:60ms}
@@ -939,7 +1008,8 @@ textarea{resize:vertical;min-height:76px}
  .home>:nth-child(n+7),.team-list>:nth-child(n+7),.swap-cards>:nth-child(n+7),.bell-list>:nth-child(n+7),.settings-sheet .sheet-body>:nth-child(n+7){animation-delay:180ms}
  .value-changed{animation:value-flash 300ms var(--spring)}
 }
-@keyframes tab-in{from{opacity:0}}
+/* Switching tabs shows the screen as it is (#115): the entrance plays once, for the screen the app opens on. */
+.app-shell [data-settled][data-slot=tabs-content] :is(.home>*,.hero,.team-list>.team-row,.team-list>.team-group,.swap-cards>.swap-slot:not([data-leaving])){animation:none}
 @keyframes value-flash{from{transform:scale(1.25);opacity:.4}}
 /* Theme switches cross-fade (hooks/use-theme.ts wraps the change in a view transition). */
 ::view-transition-old(root),::view-transition-new(root){animation-duration:240ms;animation-timing-function:ease}
@@ -979,16 +1049,16 @@ textarea{resize:vertical;min-height:76px}
 
 /* Weekend editor (duty-editor.tsx, decision 2026-11-07): one card or two day cards in one sheet. */
 .day-cards{display:flex;flex-direction:column;gap:12px}
-.day-card{display:flex;flex-direction:column;gap:12px;padding:14px;border-radius:var(--radius);background:var(--surface);box-shadow:inset 0 0 0 1px var(--line)}
+.day-card{--outer-r:var(--radius-l);--outer-gap:12px;display:flex;flex-direction:column;gap:12px;padding:12px;border-radius:var(--radius-l);background:var(--surface);box-shadow:inset 0 0 0 1px var(--line)}
 .day-card-head{display:flex;align-items:center;justify-content:space-between;gap:10px;min-height:32px}
 .day-card-title{display:inline-flex;align-items:center;gap:8px;font-size:15px;font-weight:600;color:var(--ink)}
 .day-card .picker{max-width:none;width:100%}
 .day-card .emergency-editor{background:var(--surface-2)}
 .weekend-layout{flex-shrink:0}
-.split-row{display:flex;align-items:center;justify-content:space-between;gap:10px;min-height:44px;padding:6px 6px 6px 14px;border-radius:12px;background:var(--surface-2);font-size:14px;color:var(--ink-2)}
+.split-row{display:flex;align-items:center;justify-content:space-between;gap:10px;min-height:44px;padding:6px 6px 6px 14px;background:var(--surface-2);font-size:14px;color:var(--ink-2)}
 [dir=rtl] .split-row{padding:6px 14px 6px 6px}
 .keep-choice{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
-.keep-option{display:flex;align-items:center;gap:10px;min-width:0;min-height:56px;padding:10px 12px;border-radius:12px;background:var(--surface-2);text-align:start;transition:transform 160ms var(--spring),background var(--dur) var(--ease)}
+.keep-option{display:flex;align-items:center;gap:10px;min-width:0;min-height:56px;padding:10px 12px;background:var(--surface-2);text-align:start;transition:transform 160ms var(--spring),background var(--dur) var(--ease)}
 .keep-option>span:last-child{display:flex;flex-direction:column;min-width:0}
 .keep-option strong{font-size:14px;color:var(--ink);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .keep-option small{font-size:12px;color:var(--ink-3)}

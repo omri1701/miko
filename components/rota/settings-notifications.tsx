@@ -43,7 +43,7 @@ export function NotificationSettingsPanel({remote, lang, open}: {remote: TeamWor
     document.addEventListener('keydown', onKey);
     return () => document.removeEventListener('keydown', onKey);
   }, [openTime]);
-  const readOnly = remote.readOnly, personal = remote.personal, vapid = useRef<string | null>(null);
+  const readOnly = remote.settingsReadOnly, personal = remote.personal, vapid = useRef<string | null>(null);
   const [wasOpen, setWasOpen] = useState(false);
   // Each opening starts without the last visit's messages.
   if (wasOpen !== open) {setWasOpen(open); if (open) {setError(''); setNote('');}}

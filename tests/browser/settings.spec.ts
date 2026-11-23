@@ -25,7 +25,7 @@ for (const lang of ['en', 'he'] as const) test(`settings screen sections and lan
   await expect(sheet.getByRole('button', {name: lang === 'en' ? 'Enable' : 'הפעלה', exact: true})).toBeEnabled();
   // Theme follows the device until chosen here; the member's colour is one radio group.
   await expect(sheet.getByRole('radio', {name: lang === 'en' ? 'Auto' : 'אוטומטי', exact: true})).toBeChecked();
-  await expect(sheet.getByRole('radiogroup', {name: lang === 'en' ? 'My colour' : 'הצבע שלי'})).toBeVisible();
+  await expect(sheet.getByRole('radiogroup', {name: lang === 'en' ? 'My color' : 'הצבע שלי'})).toBeVisible();
   // The sheet fits the screen: no sideways scrolling on a phone.
   expect(await sheet.evaluate(element => element.scrollWidth <= element.clientWidth + 1)).toBe(true);
   // Choosing the other language applies it at once and saves it on the member.
