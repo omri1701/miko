@@ -55,9 +55,9 @@ count. Migration `20261029222841_member_palette_15.sql` appended `#dbb677`,
 Focused database verification (empty disposable LOCAL database only):
 
 ```powershell
-node scripts/database-baseline.mjs --verify-local supabase_db_duty-scheduler
-node supabase/tests/temporary-members.mjs supabase_db_duty-scheduler
-node supabase/tests/allocation-fit.mjs supabase_db_duty-scheduler
+node scripts/database-baseline.mjs --verify-local supabase_db_miko
+node supabase/tests/temporary-members.mjs supabase_db_miko
+node supabase/tests/allocation-fit.mjs supabase_db_miko
 ```
 
 `temporary-members.mjs` rolls back all fixtures, checks denied RPC/direct writes and private
@@ -67,7 +67,7 @@ and compensation. It creates no fake identities for temporary engineers.
 `allocation-fit.mjs` checks that the browser-fitted baseline for a lumpy holiday
 month is accepted by `duty_confirm_allocation` and the equal split is refused. Existing
 data upgrade preservation is also checked by `scripts/database-upgrade.mjs`.
-These commands never target the populated `duty-scheduler-app` database.
+These commands never target the populated `miko-app` database.
 
 Migration `20261106234300_kept_baseline_after_split.sql` (decision 2026-11-07) adds
 `duty_private.allocation_kept_baseline` (private, no role may execute it) and redefines
@@ -109,9 +109,9 @@ carry it as `weekendsFrom`, so the weekend rotation lets the member rejoin level
 member. Only the same checked RPC writes it. Focused checks (empty disposable LOCAL database only):
 
 ```powershell
-docker cp supabase/tests supabase_db_duty-scheduler:/tmp/duty-tests
-docker exec supabase_db_duty-scheduler psql -U postgres -q -v ON_ERROR_STOP=1 -f /tmp/duty-tests/non-weekend.sql
-node supabase/tests/generation.mjs supabase_db_duty-scheduler
+docker cp supabase/tests supabase_db_miko:/tmp/duty-tests
+docker exec supabase_db_miko psql -U postgres -q -v ON_ERROR_STOP=1 -f /tmp/duty-tests/non-weekend.sql
+node supabase/tests/generation.mjs supabase_db_miko
 ```
 
 ## Viewer members
@@ -136,8 +136,8 @@ skips Viewers unless they are admins, and deadline reminders skip every Viewer. 
 (empty disposable LOCAL database only):
 
 ```powershell
-docker cp supabase/tests supabase_db_duty-scheduler:/tmp/duty-tests
-docker exec supabase_db_duty-scheduler psql -U postgres -q -v ON_ERROR_STOP=1 -f /tmp/duty-tests/viewer.sql
+docker cp supabase/tests supabase_db_miko:/tmp/duty-tests
+docker exec supabase_db_miko psql -U postgres -q -v ON_ERROR_STOP=1 -f /tmp/duty-tests/viewer.sql
 node --test tests/viewer.test.mjs
 ```
 
@@ -158,8 +158,8 @@ member IDs), or NULL for an unknown, reset, inactive, declined or temporary memb
 application function. Focused checks (empty disposable LOCAL database only):
 
 ```powershell
-docker cp supabase/tests supabase_db_duty-scheduler:/tmp/duty-tests
-docker exec supabase_db_duty-scheduler psql -U postgres -q -v ON_ERROR_STOP=1 -f /tmp/duty-tests/calendar-feed.sql
+docker cp supabase/tests supabase_db_miko:/tmp/duty-tests
+docker exec supabase_db_miko psql -U postgres -q -v ON_ERROR_STOP=1 -f /tmp/duty-tests/calendar-feed.sql
 node --test tests/calendar-feed.test.mjs
 ```
 
@@ -200,7 +200,7 @@ pnpm push:setup local
 ```
 
 For the isolated LOCAL stack that `pnpm start:local` and `pnpm local:reset` use (database container
-`supabase_db_duty-scheduler-app`), once its migrations are applied: adds `VAPID_PUBLIC_KEY`,
+`supabase_db_miko-app`), once its migrations are applied: adds `VAPID_PUBLIC_KEY`,
 `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT` and `DUTY_PUSH_SECRET` to the gitignored `.env.local` (existing
 values are kept), enables pg_net and pg_cron when absent, and writes the Vault secrets and the 15-minute
 job targeting `http://host.docker.internal:5173/api/push/dispatch`. It is idempotent, touches no
@@ -230,8 +230,8 @@ from a second account (for example a swap request).
 Focused checks (empty disposable LOCAL database only; the sending checks stub pg_net):
 
 ```powershell
-docker cp supabase/tests supabase_db_duty-scheduler:/tmp/duty-tests
-docker exec supabase_db_duty-scheduler psql -U postgres -q -v ON_ERROR_STOP=1 -f /tmp/duty-tests/push.sql
+docker cp supabase/tests supabase_db_miko:/tmp/duty-tests
+docker exec supabase_db_miko psql -U postgres -q -v ON_ERROR_STOP=1 -f /tmp/duty-tests/push.sql
 node --test tests/push.test.mjs
 pnpm exec playwright test settings.spec.ts
 ```
@@ -534,12 +534,12 @@ open the ngrok phone link when it is configured (otherwise they run on the PC on
 | `pnpm local:reset` | **Discards only the isolated local app database**, replays the current branch and recreates synthetic accounts. Use after incompatible branch migration changes or to restore pending fixtures. |
 
 LOCAL requires Docker Desktop and the pinned CLI (`pnpm dlx supabase@2.119.0`).
-It uses ignored `work/local-supabase`, project `duty-scheduler-app`, ports
+It uses ignored `work/local-supabase`, project `miko-app`, ports
 48320–48324 (below Windows' dynamic/excluded range), and container
-`supabase_db_duty-scheduler-app`. A stack still running on the former ports
+`supabase_db_miko-app`. A stack still running on the former ports
 58320–58324 is refused; stop it once, keeping its data, with
-`pnpm dlx supabase@2.119.0 stop --project-id duty-scheduler-app`. This stack is separate
-from Quality's empty `duty-scheduler` SQL-test database. Auth/API/Studio/mail run;
+`pnpm dlx supabase@2.119.0 stop --project-id miko-app`. This stack is separate
+from Quality's empty `miko` SQL-test database. Auth/API/Studio/mail run;
 unneeded analytics, pooling, Realtime, Storage and Edge services are excluded.
 No hosted links, service-role keys, Google secrets or live data are copied.
 The disposable migration copy is refreshed from the current branch; migration
@@ -921,18 +921,18 @@ Studio/Auth/API services. No hosted credentials or external `psql` client are ne
 
 ```powershell
 pnpm dlx supabase@2.119.0 db start
-node scripts/database-baseline.mjs --verify-local supabase_db_duty-scheduler
-docker cp supabase/tests supabase_db_duty-scheduler:/tmp/duty-tests
-docker cp supabase/archive supabase_db_duty-scheduler:/tmp/archive
-docker exec supabase_db_duty-scheduler psql -U postgres -q -v ON_ERROR_STOP=1 -f /tmp/duty-tests/access.sql
-docker exec supabase_db_duty-scheduler psql -U postgres -q -v ON_ERROR_STOP=1 -f /tmp/duty-tests/swaps.sql
-docker exec supabase_db_duty-scheduler psql -U postgres -q -v ON_ERROR_STOP=1 -f /tmp/duty-tests/swap-upgrade.sql
-node supabase/tests/first-admin.mjs supabase_db_duty-scheduler
-node supabase/tests/swap-races.mjs supabase_db_duty-scheduler
-node supabase/tests/lifecycle-races.mjs supabase_db_duty-scheduler
-node supabase/tests/lifecycle-upgrade.mjs supabase_db_duty-scheduler
-node supabase/tests/lifecycle-release.mjs supabase_db_duty-scheduler
-pnpm dlx supabase@2.119.0 stop --project-id duty-scheduler --no-backup
+node scripts/database-baseline.mjs --verify-local supabase_db_miko
+docker cp supabase/tests supabase_db_miko:/tmp/duty-tests
+docker cp supabase/archive supabase_db_miko:/tmp/archive
+docker exec supabase_db_miko psql -U postgres -q -v ON_ERROR_STOP=1 -f /tmp/duty-tests/access.sql
+docker exec supabase_db_miko psql -U postgres -q -v ON_ERROR_STOP=1 -f /tmp/duty-tests/swaps.sql
+docker exec supabase_db_miko psql -U postgres -q -v ON_ERROR_STOP=1 -f /tmp/duty-tests/swap-upgrade.sql
+node supabase/tests/first-admin.mjs supabase_db_miko
+node supabase/tests/swap-races.mjs supabase_db_miko
+node supabase/tests/lifecycle-races.mjs supabase_db_miko
+node supabase/tests/lifecycle-upgrade.mjs supabase_db_miko
+node supabase/tests/lifecycle-release.mjs supabase_db_miko
+pnpm dlx supabase@2.119.0 stop --project-id miko --no-backup
 ```
 
 These are LOCAL commands. Never pass `--linked`, a hosted URL or hosted credentials.

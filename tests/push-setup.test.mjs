@@ -7,7 +7,7 @@ import {LOCAL_DISPATCH_URL, applyLocalPush, hasPushKeys, setupSql} from '../scri
 
 test('push:setup local targets the same database container as pnpm start:local and local:reset', () => {
   assert.equal(DEFAULT_LOCAL_CONTAINER, LOCAL_CONTAINER);
-  assert.equal(LOCAL_CONTAINER, 'supabase_db_duty-scheduler-app');
+  assert.equal(LOCAL_CONTAINER, 'supabase_db_miko-app');
   assert.equal(LOCAL_DISPATCH_URL, 'http://host.docker.internal:5173/api/push/dispatch');
 });
 

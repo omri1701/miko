@@ -296,47 +296,47 @@ jobs:
       - name: Fresh local database and permission regressions
         run: |
           supabase db start
-          node scripts/database-baseline.mjs --verify-local supabase_db_duty-scheduler
+          node scripts/database-baseline.mjs --verify-local supabase_db_miko
           mkdir -p work
-          node scripts/database-contract.mjs supabase_db_duty-scheduler "$GITHUB_SHA" work/database-contract.json
-          docker cp supabase/tests supabase_db_duty-scheduler:/tmp/duty-tests
-          docker cp supabase/archive supabase_db_duty-scheduler:/tmp/archive
-          docker exec supabase_db_duty-scheduler psql -U postgres -q -v ON_ERROR_STOP=1 -f /tmp/duty-tests/access.sql
-          docker exec supabase_db_duty-scheduler psql -U postgres -q -v ON_ERROR_STOP=1 -f /tmp/duty-tests/stale-revision.sql
-          docker exec supabase_db_duty-scheduler psql -U postgres -q -v ON_ERROR_STOP=1 -f /tmp/duty-tests/swaps.sql
-          docker exec supabase_db_duty-scheduler psql -U postgres -q -v ON_ERROR_STOP=1 -f /tmp/duty-tests/swap-upgrade.sql
-          docker exec supabase_db_duty-scheduler psql -U postgres -q -v ON_ERROR_STOP=1 -f /tmp/duty-tests/balance.sql
-          docker exec supabase_db_duty-scheduler psql -U postgres -q -v ON_ERROR_STOP=1 -f /tmp/duty-tests/compensation-snapshots.sql
-          docker exec supabase_db_duty-scheduler psql -U postgres -q -v ON_ERROR_STOP=1 -f /tmp/duty-tests/non-weekend.sql
-          docker exec supabase_db_duty-scheduler psql -U postgres -q -v ON_ERROR_STOP=1 -f /tmp/duty-tests/viewer.sql
-          docker exec supabase_db_duty-scheduler psql -U postgres -q -v ON_ERROR_STOP=1 -f /tmp/duty-tests/calendar-feed.sql
-          docker exec supabase_db_duty-scheduler psql -U postgres -q -v ON_ERROR_STOP=1 -f /tmp/duty-tests/published-edit.sql
-          docker exec supabase_db_duty-scheduler psql -U postgres -q -v ON_ERROR_STOP=1 -f /tmp/duty-tests/published-split.sql
-          docker exec supabase_db_duty-scheduler psql -U postgres -q -v ON_ERROR_STOP=1 -f /tmp/duty-tests/push.sql
-          docker exec supabase_db_duty-scheduler psql -U postgres -q -v ON_ERROR_STOP=1 -f /tmp/duty-tests/link-temporary.sql
+          node scripts/database-contract.mjs supabase_db_miko "$GITHUB_SHA" work/database-contract.json
+          docker cp supabase/tests supabase_db_miko:/tmp/duty-tests
+          docker cp supabase/archive supabase_db_miko:/tmp/archive
+          docker exec supabase_db_miko psql -U postgres -q -v ON_ERROR_STOP=1 -f /tmp/duty-tests/access.sql
+          docker exec supabase_db_miko psql -U postgres -q -v ON_ERROR_STOP=1 -f /tmp/duty-tests/stale-revision.sql
+          docker exec supabase_db_miko psql -U postgres -q -v ON_ERROR_STOP=1 -f /tmp/duty-tests/swaps.sql
+          docker exec supabase_db_miko psql -U postgres -q -v ON_ERROR_STOP=1 -f /tmp/duty-tests/swap-upgrade.sql
+          docker exec supabase_db_miko psql -U postgres -q -v ON_ERROR_STOP=1 -f /tmp/duty-tests/balance.sql
+          docker exec supabase_db_miko psql -U postgres -q -v ON_ERROR_STOP=1 -f /tmp/duty-tests/compensation-snapshots.sql
+          docker exec supabase_db_miko psql -U postgres -q -v ON_ERROR_STOP=1 -f /tmp/duty-tests/non-weekend.sql
+          docker exec supabase_db_miko psql -U postgres -q -v ON_ERROR_STOP=1 -f /tmp/duty-tests/viewer.sql
+          docker exec supabase_db_miko psql -U postgres -q -v ON_ERROR_STOP=1 -f /tmp/duty-tests/calendar-feed.sql
+          docker exec supabase_db_miko psql -U postgres -q -v ON_ERROR_STOP=1 -f /tmp/duty-tests/published-edit.sql
+          docker exec supabase_db_miko psql -U postgres -q -v ON_ERROR_STOP=1 -f /tmp/duty-tests/published-split.sql
+          docker exec supabase_db_miko psql -U postgres -q -v ON_ERROR_STOP=1 -f /tmp/duty-tests/push.sql
+          docker exec supabase_db_miko psql -U postgres -q -v ON_ERROR_STOP=1 -f /tmp/duty-tests/link-temporary.sql
           # Parity runs the real compensation/settlement SQL RPC fixtures too.
-          node supabase/tests/compensation-parity.mjs supabase_db_duty-scheduler
-          node supabase/tests/generation.mjs supabase_db_duty-scheduler
-          node supabase/tests/published-edit-lifecycle.mjs supabase_db_duty-scheduler
-          node supabase/tests/ledger-hunt.mjs supabase_db_duty-scheduler
-          node supabase/tests/baseline-fit.mjs supabase_db_duty-scheduler
-          node supabase/tests/temporary-members.mjs supabase_db_duty-scheduler
-          node supabase/tests/allocation-fit.mjs supabase_db_duty-scheduler
-          node supabase/tests/generation-races.mjs supabase_db_duty-scheduler
-          node supabase/tests/compensation-upgrade.mjs supabase_db_duty-scheduler
-          node supabase/tests/compensation-races.mjs supabase_db_duty-scheduler
-          node supabase/tests/first-admin.mjs supabase_db_duty-scheduler
-          node supabase/tests/swap-races.mjs supabase_db_duty-scheduler
-          node supabase/tests/lifecycle-races.mjs supabase_db_duty-scheduler
-          node supabase/tests/lifecycle-upgrade.mjs supabase_db_duty-scheduler
+          node supabase/tests/compensation-parity.mjs supabase_db_miko
+          node supabase/tests/generation.mjs supabase_db_miko
+          node supabase/tests/published-edit-lifecycle.mjs supabase_db_miko
+          node supabase/tests/ledger-hunt.mjs supabase_db_miko
+          node supabase/tests/baseline-fit.mjs supabase_db_miko
+          node supabase/tests/temporary-members.mjs supabase_db_miko
+          node supabase/tests/allocation-fit.mjs supabase_db_miko
+          node supabase/tests/generation-races.mjs supabase_db_miko
+          node supabase/tests/compensation-upgrade.mjs supabase_db_miko
+          node supabase/tests/compensation-races.mjs supabase_db_miko
+          node supabase/tests/first-admin.mjs supabase_db_miko
+          node supabase/tests/swap-races.mjs supabase_db_miko
+          node supabase/tests/lifecycle-races.mjs supabase_db_miko
+          node supabase/tests/lifecycle-upgrade.mjs supabase_db_miko
       - name: Incremental upgrade preserves existing data
         env:
           DATABASE_BASE: ${{ needs.scope.outputs.base }}
-        run: node scripts/database-upgrade.mjs "$DATABASE_BASE" supabase_db_duty-scheduler
+        run: node scripts/database-upgrade.mjs "$DATABASE_BASE" supabase_db_miko
       - name: Isolated deployment ordering and failure verification
         run: |
-          node supabase/tests/lifecycle-release.mjs supabase_db_duty-scheduler
-          node scripts/release-local-test.mjs supabase_db_duty-scheduler --discard-container
+          node supabase/tests/lifecycle-release.mjs supabase_db_miko
+          node scripts/release-local-test.mjs supabase_db_miko --discard-container
       - name: Retain database contract for this exact commit
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
@@ -346,7 +346,7 @@ jobs:
           if-no-files-found: error
       - name: Discard disposable database without replay or backup
         if: always()
-        run: supabase stop --project-id duty-scheduler --no-backup
+        run: supabase stop --project-id miko --no-backup
 
   # Preserve the existing branch-protection check. Fail closed on missing checks:
   # every selected job must succeed and every unselected job must be skipped.

@@ -1,5 +1,5 @@
 # Local Supabase only. Hosted project links and credentials are never committed.
-project_id = "duty-scheduler"
+project_id = "miko"
 
 [api]
 enabled = true

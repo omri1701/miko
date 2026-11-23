@@ -12,7 +12,7 @@ import {verifyProductionActivation} from '../scripts/release.mjs';
 
 test('Quality executes the real lifecycle concurrency and conversion regressions',()=>{
  const workflow=readFileSync('.github/workflows/quality.yml','utf8');
- for(const file of ['lifecycle-races.mjs','lifecycle-upgrade.mjs'])assert(workflow.includes(`node supabase/tests/${file} supabase_db_duty-scheduler`));
+ for(const file of ['lifecycle-races.mjs','lifecycle-upgrade.mjs'])assert(workflow.includes(`node supabase/tests/${file} supabase_db_miko`));
 });
 
 test('database job installs locked application dependencies before the real HiGHS integration test',()=>{
@@ -21,7 +21,7 @@ test('database job installs locked application dependencies before the real HiGH
  const setup=database.indexOf('uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1');
  const install=database.indexOf('run: pnpm install --frozen-lockfile');
  const regressions=database.indexOf('name: Fresh local database and permission regressions');
- const integration=database.indexOf('node supabase/tests/temporary-members.mjs supabase_db_duty-scheduler');
+ const integration=database.indexOf('node supabase/tests/temporary-members.mjs supabase_db_miko');
  assert(setup>=0&&setup<install&&install<regressions&&regressions<integration);
  assert(!database.includes('continue-on-error'));
 });
